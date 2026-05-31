@@ -2,7 +2,7 @@ import{useState,useEffect}from'react'
 import{db,auth}from'../firebase'
 import{collection,onSnapshot,getDocs,query,where,doc,deleteDoc,updateDoc,addDoc,serverTimestamp}from'firebase/firestore'
 import Layout from'../components/Layout'
-import{FileText,FileCheck,Users,Plus,TrendingUp,CheckCircle,Clock,AlertCircle,Edit,Trash2,RefreshCcw,Link,Printer,CheckSquare,CopyPlus}from'lucide-react'
+import{FileText,FileCheck,Users,Plus,TrendingUp,CheckCircle,Clock,AlertCircle,Edit,Trash2,RefreshCcw,Link,Printer,CheckSquare,CopyPlus,DollarSign,X}from'lucide-react'
 import{useNavigate}from'react-router-dom'
 
 export default function Dashboard(){
@@ -12,6 +12,9 @@ const[invoices,setInvoices]=useState([])
 const[quotations,setQuotations]=useState([])
 const[customers,setCustomers]=useState([])
 const[loading,setLoading]=useState(true)
+const[paymentModal,setPaymentModal]=useState(null)
+const[paymentForm,setPaymentForm]=useState({amount:'',date:new Date().toISOString().split('T')[0],method:'Cash',note:''})
+const[savingPayment,setSavingPayment]=useState(false)
 const navigate=useNavigate()
 
 useEffect(()=>{
@@ -74,10 +77,6 @@ const handleStatus=async(id,status)=>{
 await updateDoc(doc(db,'companies',companyId,collName,id),{status})
 }
 
-const handleCopy=(item)=>{
-navigator.clipboard.writeText(item.invoiceNumber||item.quotationNumber||item.name||'')
-}
-
 const handleShareLink=(item)=>{
 const url=`${window.location.origin}/verify/${companyId}/${item.securityCode||item.id}`
 navigator.clipboard.writeText(url)
@@ -100,10 +99,113 @@ alert('Duplicated!')
 }catch(e){alert(e.message)}
 }
 
+const openPaymentModal=(item)=>{
+setPaymentModal(item)
+setPaymentForm({amount:'',date:new Date().toISOString().split('T')[0],method:'Cash',note:''})
+}
+
+const handleSavePayment=async()=>{
+if(!paymentForm.amount||Number(paymentForm.amount)<=0){alert('Enter valid amount');return}
+setSavingPayment(true)
+try{
+const item=paymentModal
+const payments=[...(item.payments||[]),{
+amount:Number(paymentForm.amount),
+date:paymentForm.date,
+method:paymentForm.method,
+note:paymentForm.note,
+createdAt:new Date().toISOString(),
+}]
+const totalPaid=payments.reduce((s,p)=>s+p.amount,0)
+const remaining=Number(item.totalAmount||0)-totalPaid
+const newStatus=remaining<=0?'paid':totalPaid>0?'partial':'pending'
+await updateDoc(doc(db,'companies',companyId,'invoices',item.id),{
+payments,
+paidAmount:totalPaid,
+remainingAmount:remaining<0?0:remaining,
+status:newStatus,
+lastPaymentDate:paymentForm.date,
+})
+setPaymentModal(null)
+}catch(e){alert(e.message)}
+setSavingPayment(false)
+}
+
 if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh'}}>Loading...</div>
 
 return(
 <Layout title="Dashboard">
+
+{/* Payment Modal */}
+{paymentModal&&(
+<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+<div style={{background:'white',borderRadius:16,width:'100%',maxWidth:440,boxShadow:'0 20px 60px rgba(0,0,0,0.2)'}}>
+<div style={{padding:'20px 24px',borderBottom:'0.5px solid #f1f5f9',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+<div>
+<div style={{fontWeight:600,fontSize:15}}>Record Payment</div>
+<div style={{fontSize:12,color:'var(--text-3)',marginTop:2}}>
+{paymentModal.invoiceNumber} — Total: {Number(paymentModal.totalAmount||0).toLocaleString()} Ks
+{paymentModal.paidAmount>0&&<span style={{color:'#16a34a'}}> | Paid: {Number(paymentModal.paidAmount).toLocaleString()} Ks</span>}
+{paymentModal.remainingAmount>0&&<span style={{color:'#d97706'}}> | Due: {Number(paymentModal.remainingAmount).toLocaleString()} Ks</span>}
+</div>
+</div>
+<button onClick={()=>setPaymentModal(null)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-3)'}}>
+<X size={18}/>
+</button>
+</div>
+<div style={{padding:24}}>
+<div style={{marginBottom:12}}>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Amount (Ks) *</label>
+<div style={{display:'flex',gap:8,marginBottom:6}}>
+<button onClick={()=>setPaymentForm(f=>({...f,amount:String(paymentModal.remainingAmount||paymentModal.totalAmount||0)}))} className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px'}}>Full Amount</button>
+{paymentModal.remainingAmount>0&&<button onClick={()=>setPaymentForm(f=>({...f,amount:String(paymentModal.remainingAmount)}))} className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px'}}>Remaining</button>}
+</div>
+<input className="form-input" type="number" value={paymentForm.amount} onChange={e=>setPaymentForm(f=>({...f,amount:e.target.value}))} placeholder="Enter amount..."/>
+</div>
+<div style={{marginBottom:12}}>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Payment Date *</label>
+<input className="form-input" type="date" value={paymentForm.date} onChange={e=>setPaymentForm(f=>({...f,date:e.target.value}))}/>
+</div>
+<div style={{marginBottom:12}}>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Payment Method</label>
+<select className="form-input" value={paymentForm.method} onChange={e=>setPaymentForm(f=>({...f,method:e.target.value}))}>
+<option>Cash</option>
+<option>KBZ Pay</option>
+<option>AYA Pay</option>
+<option>Wave Pay</option>
+<option>CB Pay</option>
+<option>Bank Transfer</option>
+<option>Other</option>
+</select>
+</div>
+<div style={{marginBottom:16}}>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Note</label>
+<input className="form-input" value={paymentForm.note} onChange={e=>setPaymentForm(f=>({...f,note:e.target.value}))} placeholder="Optional note..."/>
+</div>
+
+{/* Payment History */}
+{paymentModal.payments?.length>0&&(
+<div style={{marginBottom:16,padding:12,background:'#f8fafc',borderRadius:8}}>
+<div style={{fontSize:11,fontWeight:600,color:'var(--text-3)',marginBottom:8,textTransform:'uppercase'}}>Payment History</div>
+{paymentModal.payments.map((p,i)=>(
+<div key={i} style={{display:'flex',justifyContent:'space-between',fontSize:12,padding:'4px 0',borderBottom:'0.5px solid #e2e8f0'}}>
+<span style={{color:'var(--text-2)'}}>{p.date} — {p.method}</span>
+<span style={{fontWeight:500,color:'#16a34a'}}>{Number(p.amount).toLocaleString()} Ks</span>
+</div>
+))}
+</div>
+)}
+
+<div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+<button onClick={()=>setPaymentModal(null)} className="btn btn-ghost">Cancel</button>
+<button onClick={handleSavePayment} disabled={savingPayment} className="btn btn-primary">
+<CheckSquare size={14}/>{savingPayment?'Saving...':'Save Payment'}
+</button>
+</div>
+</div>
+</div>
+</div>
+)}
 
 {/* Stats */}
 <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:20}}>
@@ -160,7 +262,7 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600
 {activeTab==='customer'?<>
 <th>ID</th><th>Name</th><th>Phone</th><th>Email</th><th style={{textAlign:'center'}}>Actions</th>
 </>:<>
-<th>Number</th><th>Client</th><th style={{textAlign:'right'}}>Amount</th><th style={{textAlign:'center'}}>Status</th><th>Date</th><th style={{textAlign:'center'}}>Actions</th>
+<th>Number</th><th>Client</th><th style={{textAlign:'right'}}>Amount</th><th style={{textAlign:'right'}}>Paid</th><th style={{textAlign:'center'}}>Status</th><th>Date</th><th style={{textAlign:'center'}}>Actions</th>
 </>}
 </tr>
 </thead>
@@ -176,18 +278,23 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600
 <td style={{color:'var(--primary)',fontFamily:'monospace',fontWeight:500,fontSize:12}}>{item.invoiceNumber||item.quotationNumber}</td>
 <td style={{fontWeight:500}}>{item.clientName}</td>
 <td style={{textAlign:'right',fontWeight:500}}>{Number(item.totalAmount||0).toLocaleString()} Ks</td>
+<td style={{textAlign:'right',fontSize:12}}>
+{item.paidAmount>0?<span style={{color:'#16a34a',fontWeight:500}}>{Number(item.paidAmount).toLocaleString()} Ks</span>:<span style={{color:'var(--text-3)'}}>-</span>}
+</td>
 <td style={{textAlign:'center'}}>{statusBadge(item.status)}</td>
-<td style={{color:'var(--text-3)',fontSize:12}}>{item.createdAt?.seconds?new Date(item.createdAt.seconds*1000).toLocaleDateString():'-'}</td>
+<td style={{color:'var(--text-3)',fontSize:12}}>
+<div>{item.createdAt?.seconds?new Date(item.createdAt.seconds*1000).toLocaleDateString():'-'}</div>
+{item.lastPaymentDate&&<div style={{color:'#16a34a',fontSize:11}}>Paid: {item.lastPaymentDate}</div>}
+</td>
 </>}
 <td style={{textAlign:'center'}}>
 <div style={{display:'flex',gap:4,justifyContent:'center',alignItems:'center'}}>
 <button onClick={()=>navigate(`/invoice/${item.id}`)} title="View/Print" style={{background:'none',border:'none',cursor:'pointer',color:'var(--primary)',padding:4,borderRadius:6}}><Printer size={14}/></button>
-
 <button onClick={()=>navigate(`/edit/${item.id}`)} title="Edit" style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Edit size={14}/></button>
 {activeTab!=='customer'&&<>
 <button onClick={()=>handleDuplicate(item)} title="Duplicate" style={{background:'none',border:'none',cursor:'pointer',color:'#8b5cf6',padding:4,borderRadius:6}}><CopyPlus size={14}/></button>
 <button onClick={()=>handleShareLink(item)} title="Share link" style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Link size={14}/></button>
-<button onClick={()=>handleStatus(item.id,'paid')} title="Mark paid" style={{background:'none',border:'none',cursor:'pointer',color:'#16a34a',padding:4,borderRadius:6}}><CheckSquare size={14}/></button>
+<button onClick={()=>openPaymentModal(item)} title="Record payment" style={{background:'none',border:'none',cursor:'pointer',color:'#16a34a',padding:4,borderRadius:6}}><DollarSign size={14}/></button>
 <button onClick={()=>handleStatus(item.id,'refunded')} title="Refund" style={{background:'none',border:'none',cursor:'pointer',color:'#d97706',padding:4,borderRadius:6}}><RefreshCcw size={14}/></button>
 </>}
 <button onClick={()=>handleDelete(item.id)} title="Delete" style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)',padding:4,borderRadius:6}}><Trash2 size={14}/></button>
