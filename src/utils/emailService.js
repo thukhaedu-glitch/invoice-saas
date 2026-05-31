@@ -1,15 +1,16 @@
-import emailjs from'@emailjs/browser'
-
-const SERVICE_ID='service_5hait3m'
-const TEMPLATE_ID='template_lpm6xzo'
-const PUBLIC_KEY='_x4olwB-Hfyx9iXkl'
-
 export const sendInvoiceReminder=async({
 clientName,clientEmail,invoiceNumber,amount,status,
 companyName,companyEmail,companyPhone,paymentMethods
 })=>{
 try{
-await emailjs.send(SERVICE_ID,TEMPLATE_ID,{
+const response=await fetch('https://api.emailjs.com/api/v1.0/email/send',{
+method:'POST',
+headers:{'Content-Type':'application/json'},
+body:JSON.stringify({
+service_id:'service_5hait3m',
+template_id:'template_lpm6xzo',
+user_id:'_x4olwB-Hfyx9iXkl',
+template_params:{
 client_name:clientName,
 to_email:clientEmail,
 invoice_number:invoiceNumber,
@@ -19,8 +20,11 @@ company_name:companyName||'',
 company_email:companyEmail||'',
 company_phone:companyPhone||'',
 payment_methods:paymentMethods||'',
-},PUBLIC_KEY)
-return{success:true}
+}
+})
+})
+if(response.ok)return{success:true}
+else return{success:false,error:'Failed to send'}
 }catch(e){
 console.error(e)
 return{success:false,error:e.message}
