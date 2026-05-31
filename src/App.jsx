@@ -1,10 +1,10 @@
-
 import{BrowserRouter,Routes,Route,Navigate}from'react-router-dom'
 import{useEffect,useState}from'react'
 import{auth}from'./firebase'
 import{onAuthStateChanged}from'firebase/auth'
 import Login from'./pages/Login'
 import Dashboard from'./pages/Dashboard'
+import CreateInvoice from'./pages/CreateInvoice'
 
 export default function App(){
 const[user,setUser]=useState(null)
@@ -24,7 +24,9 @@ return(
 <BrowserRouter>
 <Routes>
 <Route path="/login" element={!user?<Login/>:<Navigate to="/"/>}/>
-<Route path="/*" element={user?<Dashboard/>:<Navigate to="/login"/>}/>
+<Route path="/" element={user?<Dashboard/>:<Navigate to="/login"/>}/>
+<Route path="/create-invoice" element={user?<CreateInvoice/>:<Navigate to="/login"/>}/>
+<Route path="/*" element={<Navigate to="/"/>}/>
 </Routes>
 </BrowserRouter>
 )
