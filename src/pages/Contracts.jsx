@@ -1,34 +1,66 @@
-import{useState,useEffect}from'react'
-import{db,auth}from'../firebase'
-import{collection,onSnapshot,getDocs,query,where,doc,deleteDoc,addDoc,updateDoc,serverTimestamp}from'firebase/firestore'
+import{useState,useEffect,useRef}from'react'
+import{db,auth,storage}from'../firebase'
+import{collection,onSnapshot,getDocs,query,where,doc,deleteDoc,addDoc,updateDoc,serverTimestamp,getDoc}from'firebase/firestore'
+import{ref,uploadBytes,getDownloadURL}from'firebase/storage'
 import Layout from'../components/Layout'
-import{Plus,Trash2,Edit,X,Save,ScrollText,Search,Eye}from'lucide-react'
+import{Plus,Trash2,Edit,X,ScrollText,Search,Eye,Printer,Download,ArrowLeft,QrCode}from'lucide-react'
+import{QRCodeSVG}from'qrcode.react'
+import html2canvas from'html2canvas'
+import jsPDF from'jspdf'
+import ReactQuill from'react-quill'
+import'react-quill/dist/quill.snow.css'
 
 const STATUS=['draft','active','expired','cancelled']
 
+const statusColor={draft:'#64748b',active:'#16a34a',expired:'#d97706',cancelled:'#dc2626'}
+const statusBg={draft:'#f1f5f9',active:'#eaf3de',expired:'#faeeda',cancelled:'#fcebeb'}
+
+const DEFAULT_CONTENT=`<h2>Service Agreement</h2>
+<p>This agreement is made between the parties listed below.</p>
+<h3>1. Services</h3>
+<p>The service provider agrees to provide the following services:</p>
+<ul><li>Service item 1</li><li>Service item 2</li></ul>
+<h3>2. Payment Terms</h3>
+<p>Payment shall be made as agreed upon by both parties.</p>
+<h3>3. Terms & Conditions</h3>
+<p>Both parties agree to the terms outlined in this contract.</p>`
+
 export default function Contracts(){
 const[companyId,setCompanyId]=useState(null)
+const[company,setCompany]=useState(null)
+const[settings,setSettings]=useState({})
 const[contracts,setContracts]=useState([])
 const[customers,setCustomers]=useState([])
 const[loading,setLoading]=useState(true)
 const[search,setSearch]=useState('')
-const[modal,setModal]=useState(null)
-const[viewModal,setViewModal]=useState(null)
+const[view,setView]=useState('list') // list | editor | detail
 const[selected,setSelected]=useState(null)
 const[saving,setSaving]=useState(false)
+const[downloading,setDownloading]=useState(false)
 const[form,setForm]=useState({
-title:'',clientName:'',startDate:'',endDate:'',
-value:0,status:'draft',description:'',terms:''
+title:'Service Agreement',
+clientName:'',clientEmail:'',clientPhone:'',
+startDate:'',endDate:'',
+value:0,status:'draft',
+content:DEFAULT_CONTENT,
+partyASign:'',partyBSign:'',
 })
+const printRef=useRef()
 
 useEffect(()=>{
 const load=async()=>{
 const snap=await getDocs(query(collection(db,'companies'),where(`members.${auth.currentUser.uid}`,'!=',null)))
 if(!snap.empty){
 const cid=snap.docs[0].id
+const cData=snap.docs[0].data()
 setCompanyId(cid)
-const cusSnap=await getDocs(collection(db,'companies',cid,'customers'))
+setCompany({id:cid,...cData})
+const[cusSnap,sSnap]=await Promise.all([
+getDocs(collection(db,'companies',cid,'customers')),
+getDoc(doc(db,'companies',cid,'_config','invoiceSettings'))
+])
 setCustomers(cusSnap.docs.map(d=>({id:d.id,...d.data()})))
+if(sSnap.exists())setSettings(sSnap.data())
 onSnapshot(collection(db,'companies',cid,'contracts'),snap=>{
 setContracts(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0)))
 setLoading(false)
@@ -38,26 +70,51 @@ setLoading(false)
 load()
 },[])
 
-const openAdd=()=>{
-setForm({title:'',clientName:'',startDate:new Date().toISOString().split('T')[0],endDate:'',value:0,status:'draft',description:'',terms:''})
+const openNew=()=>{
+setForm({
+title:'Service Agreement',
+clientName:'',clientEmail:'',clientPhone:'',
+startDate:new Date().toISOString().split('T')[0],
+endDate:'',value:0,status:'draft',
+content:DEFAULT_CONTENT,
+partyASign:'',partyBSign:'',
+})
 setSelected(null)
-setModal('add')
+setView('editor')
 }
 
 const openEdit=(c)=>{
-setForm({title:c.title||'',clientName:c.clientName||'',startDate:c.startDate||'',endDate:c.endDate||'',value:c.value||0,status:c.status||'draft',description:c.description||'',terms:c.terms||''})
+setForm({
+title:c.title||'',
+clientName:c.clientName||'',
+clientEmail:c.clientEmail||'',
+clientPhone:c.clientPhone||'',
+startDate:c.startDate||'',
+endDate:c.endDate||'',
+value:c.value||0,
+status:c.status||'draft',
+content:c.content||DEFAULT_CONTENT,
+partyASign:c.partyASign||'',
+partyBSign:c.partyBSign||'',
+})
 setSelected(c)
-setModal('edit')
+setView('editor')
+}
+
+const openDetail=(c)=>{
+setSelected(c)
+setView('detail')
 }
 
 const handleSave=async()=>{
 if(!form.title||!form.clientName){alert('Title and client required');return}
 setSaving(true)
 try{
-if(modal==='add'){
+if(!selected){
 await addDoc(collection(db,'companies',companyId,'contracts'),{
 ...form,value:Number(form.value),
 contractNumber:'CON-'+Date.now().toString().slice(-6),
+securityCode:'SEC-'+Math.random().toString(36).substring(2,8).toUpperCase(),
 createdAt:serverTimestamp(),
 createdBy:auth.currentUser.uid,
 })
@@ -66,7 +123,7 @@ await updateDoc(doc(db,'companies',companyId,'contracts',selected.id),{
 ...form,value:Number(form.value),updatedAt:serverTimestamp()
 })
 }
-setModal(null)
+setView('list')
 }catch(e){alert(e.message)}
 setSaving(false)
 }
@@ -76,8 +133,20 @@ if(!confirm('Delete this contract?'))return
 await deleteDoc(doc(db,'companies',companyId,'contracts',id))
 }
 
-const statusColor={draft:'#64748b',active:'#16a34a',expired:'#d97706',cancelled:'#dc2626'}
-const statusBg={draft:'#f1f5f9',active:'#eaf3de',expired:'#faeeda',cancelled:'#fcebeb'}
+const handleDownloadPDF=async()=>{
+setDownloading(true)
+try{
+const el=printRef.current
+const canvas=await html2canvas(el,{scale:2,useCORS:true,backgroundColor:'#ffffff'})
+const imgData=canvas.toDataURL('image/png')
+const pdf=new jsPDF('p','mm','a4')
+const pdfWidth=pdf.internal.pageSize.getWidth()
+const pdfHeight=(canvas.height*pdfWidth)/canvas.width
+pdf.addImage(imgData,'PNG',0,0,pdfWidth,pdfHeight)
+pdf.save(`${selected?.contractNumber||'contract'}.pdf`)
+}catch(e){console.error(e)}
+setDownloading(false)
+}
 
 const filtered=contracts.filter(c=>
 c.title?.toLowerCase().includes(search.toLowerCase())||
@@ -85,29 +154,48 @@ c.clientName?.toLowerCase().includes(search.toLowerCase())||
 c.contractNumber?.toLowerCase().includes(search.toLowerCase())
 )
 
+const modules={
+toolbar:[
+[{header:[1,2,3,false]}],
+['bold','italic','underline','strike'],
+[{align:[]}],
+[{list:'ordered'},{list:'bullet'}],
+[{indent:'-1'},{indent:'+1'}],
+['blockquote'],
+[{color:[]},{background:[]}],
+['clean']
+]
+}
+
 if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh'}}>Loading...</div>
 
-return(
-<Layout title="Contracts">
-
-{/* Modal */}
-{modal&&(
-<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
-<div style={{background:'white',borderRadius:16,width:'100%',maxWidth:560,boxShadow:'0 20px 60px rgba(0,0,0,0.2)',maxHeight:'90vh',overflowY:'auto'}}>
-<div style={{padding:'20px 24px',borderBottom:'0.5px solid #f1f5f9',display:'flex',justifyContent:'space-between',alignItems:'center',position:'sticky',top:0,background:'white',zIndex:1}}>
-<div style={{fontWeight:600,fontSize:15}}>{modal==='add'?'New Contract':'Edit Contract'}</div>
-<button type="button" onClick={()=>setModal(null)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-3)'}}><X size={18}/></button>
+// Editor View
+if(view==='editor')return(
+<Layout title={selected?'Edit Contract':'New Contract'}>
+<div style={{maxWidth:860,margin:'0 auto'}}>
+<div style={{display:'flex',alignItems:'center',gap:12,marginBottom:20}}>
+<button type="button" onClick={()=>setView('list')} className="btn btn-ghost" style={{padding:'8px 12px'}}><ArrowLeft size={16}/></button>
+<h2 style={{fontSize:18,fontWeight:600,flex:1}}>{selected?'Edit Contract':'New Contract'}</h2>
+<button type="button" onClick={handleSave} disabled={saving} className="btn btn-primary">
+{saving?'Saving...':'Save Contract'}
+</button>
 </div>
-<div style={{padding:24}}>
-<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:12}}>
+
+{/* Meta */}
+<div className="card" style={{padding:20,marginBottom:16}}>
+<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
 <div style={{gridColumn:'1/-1'}}>
 <label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Contract Title *</label>
 <input className="form-input" value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="Contract title..."/>
 </div>
-<div style={{gridColumn:'1/-1'}}>
-<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Client *</label>
+<div>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Client Name *</label>
 <input className="form-input" list="client-list" value={form.clientName} onChange={e=>setForm(f=>({...f,clientName:e.target.value}))} placeholder="Client name..."/>
 <datalist id="client-list">{customers.map(c=><option key={c.id} value={c.name}/>)}</datalist>
+</div>
+<div>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Client Email</label>
+<input className="form-input" value={form.clientEmail} onChange={e=>setForm(f=>({...f,clientEmail:e.target.value}))} placeholder="email@example.com"/>
 </div>
 <div>
 <label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Start Date</label>
@@ -127,74 +215,146 @@ return(
 {STATUS.map(s=><option key={s} value={s} style={{textTransform:'capitalize'}}>{s}</option>)}
 </select>
 </div>
-<div style={{gridColumn:'1/-1'}}>
-<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Description</label>
-<textarea className="form-input" value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} placeholder="Contract description..." rows={3} style={{resize:'vertical'}}/>
-</div>
-<div style={{gridColumn:'1/-1'}}>
-<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Terms & Conditions</label>
-<textarea className="form-input" value={form.terms} onChange={e=>setForm(f=>({...f,terms:e.target.value}))} placeholder="Terms and conditions..." rows={4} style={{resize:'vertical'}}/>
 </div>
 </div>
-<div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
-<button type="button" onClick={()=>setModal(null)} className="btn btn-ghost">Cancel</button>
-<button type="button" onClick={handleSave} disabled={saving} className="btn btn-primary">
-<Save size={14}/>{saving?'Saving...':modal==='add'?'Create Contract':'Update'}
+
+{/* Editor */}
+<div className="card" style={{padding:20,marginBottom:16}}>
+<div style={{fontSize:12,fontWeight:600,color:'var(--text-2)',marginBottom:12,textTransform:'uppercase',letterSpacing:'0.05em'}}>Contract Content</div>
+<ReactQuill
+theme="snow"
+value={form.content}
+onChange={v=>setForm(f=>({...f,content:v}))}
+modules={modules}
+style={{minHeight:400,fontSize:14}}
+/>
+</div>
+
+{/* Signatures */}
+<div className="card" style={{padding:20,marginBottom:16}}>
+<div style={{fontSize:12,fontWeight:600,color:'var(--text-2)',marginBottom:12,textTransform:'uppercase',letterSpacing:'0.05em'}}>Signatures</div>
+<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
+<div>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Party A — {company?.name}</label>
+<input className="form-input" value={form.partyASign} onChange={e=>setForm(f=>({...f,partyASign:e.target.value}))} placeholder="Signatory name..."/>
+</div>
+<div>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Party B — {form.clientName||'Client'}</label>
+<input className="form-input" value={form.partyBSign} onChange={e=>setForm(f=>({...f,partyBSign:e.target.value}))} placeholder="Signatory name..."/>
+</div>
+</div>
+</div>
+</div>
+</Layout>
+)
+
+// Detail/Print View
+if(view==='detail'&&selected)return(
+<>
+<style>{`
+@media print{
+.no-print{display:none!important}
+body{background:white!important;margin:0}
+.print-area{box-shadow:none!important;border-radius:0!important;max-width:100%!important;margin:0!important}
+@page{size:A4;margin:15mm}
+}
+.ql-editor{padding:0!important}
+`}</style>
+
+<div className="no-print" style={{position:'fixed',top:0,left:0,right:0,zIndex:100,background:'rgba(255,255,255,0.95)',backdropFilter:'blur(12px)',borderBottom:'0.5px solid #e2e8f0',padding:'12px 24px',display:'flex',alignItems:'center',gap:12}}>
+<button type="button" onClick={()=>setView('list')} className="btn btn-ghost" style={{padding:'8px 12px'}}><ArrowLeft size={16}/></button>
+<span style={{flex:1,fontWeight:500,fontSize:15}}>{selected.contractNumber} — {selected.title}</span>
+<button type="button" onClick={()=>window.print()} className="btn btn-ghost no-print"><Printer size={15}/>Print</button>
+<button type="button" onClick={handleDownloadPDF} disabled={downloading} className="btn btn-primary no-print">
+<Download size={15}/>{downloading?'Generating...':'Download PDF'}
 </button>
 </div>
-</div>
-</div>
-</div>
-)}
 
-{/* View Modal */}
-{viewModal&&(
-<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
-<div style={{background:'white',borderRadius:16,width:'100%',maxWidth:560,boxShadow:'0 20px 60px rgba(0,0,0,0.2)',maxHeight:'90vh',overflowY:'auto'}}>
-<div style={{padding:'20px 24px',borderBottom:'0.5px solid #f1f5f9',display:'flex',justifyContent:'space-between',alignItems:'center',position:'sticky',top:0,background:'white'}}>
-<div style={{fontWeight:600,fontSize:15}}>{viewModal.contractNumber}</div>
-<button type="button" onClick={()=>setViewModal(null)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-3)'}}><X size={18}/></button>
-</div>
-<div style={{padding:24}}>
-<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
-<div style={{fontWeight:700,fontSize:18,color:'var(--text-1)'}}>{viewModal.title}</div>
-<span style={{background:statusBg[viewModal.status],color:statusColor[viewModal.status],padding:'4px 12px',borderRadius:20,fontSize:12,fontWeight:600,textTransform:'capitalize'}}>{viewModal.status}</span>
-</div>
-{[
-{label:'Client',value:viewModal.clientName},
-{label:'Contract Value',value:`${Number(viewModal.value||0).toLocaleString()} Ks`},
-{label:'Start Date',value:viewModal.startDate||'-'},
-{label:'End Date',value:viewModal.endDate||'-'},
-].map(({label,value})=>(
-<div key={label} style={{display:'flex',justifyContent:'space-between',padding:'8px 0',borderBottom:'0.5px solid #f1f5f9'}}>
-<span style={{fontSize:13,color:'var(--text-2)'}}>{label}</span>
-<span style={{fontSize:13,fontWeight:500}}>{value}</span>
-</div>
-))}
-{viewModal.description&&(
-<div style={{marginTop:16}}>
-<div style={{fontSize:11,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase',marginBottom:6}}>Description</div>
-<div style={{fontSize:13,color:'var(--text-1)',lineHeight:1.6}}>{viewModal.description}</div>
-</div>
-)}
-{viewModal.terms&&(
-<div style={{marginTop:16}}>
-<div style={{fontSize:11,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase',marginBottom:6}}>Terms & Conditions</div>
-<div style={{fontSize:13,color:'var(--text-1)',lineHeight:1.6,whiteSpace:'pre-wrap'}}>{viewModal.terms}</div>
-</div>
-)}
-</div>
-</div>
-</div>
-)}
+<div style={{minHeight:'100vh',background:'#f1f5f9',padding:'80px 24px 40px',display:'flex',justifyContent:'center'}}>
+<div ref={printRef} className="print-area" style={{width:'210mm',background:'white',boxShadow:'0 4px 32px rgba(0,0,0,0.08)',padding:'40px 50px',fontFamily:'Georgia,serif'}}>
 
 {/* Header */}
+<div style={{textAlign:'center',marginBottom:32,borderBottom:'2px solid #1a1d2e',paddingBottom:24}}>
+{settings.logoUrl&&<img src={settings.logoUrl} style={{height:60,objectFit:'contain',marginBottom:12}}/>}
+<div style={{fontSize:22,fontWeight:700,color:'#1a1d2e',letterSpacing:1}}>{selected.title}</div>
+<div style={{fontSize:13,color:'#64748b',marginTop:6}}>{selected.contractNumber}</div>
+</div>
+
+{/* Parties */}
+<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:32,marginBottom:28,padding:'16px 0',borderBottom:'0.5px solid #e2e8f0'}}>
+<div>
+<div style={{fontSize:10,fontWeight:700,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:6}}>Party A (Service Provider)</div>
+<div style={{fontWeight:600,fontSize:15}}>{company?.name}</div>
+{settings.companyAddress&&<div style={{fontSize:12,color:'#64748b',marginTop:2}}>{settings.companyAddress}</div>}
+{settings.companyEmail&&<div style={{fontSize:12,color:'#64748b'}}>{settings.companyEmail}</div>}
+{settings.companyPhone&&<div style={{fontSize:12,color:'#64748b'}}>{settings.companyPhone}</div>}
+</div>
+<div>
+<div style={{fontSize:10,fontWeight:700,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:6}}>Party B (Client)</div>
+<div style={{fontWeight:600,fontSize:15}}>{selected.clientName}</div>
+{selected.clientEmail&&<div style={{fontSize:12,color:'#64748b',marginTop:2}}>{selected.clientEmail}</div>}
+{selected.clientPhone&&<div style={{fontSize:12,color:'#64748b'}}>{selected.clientPhone}</div>}
+</div>
+</div>
+
+{/* Details */}
+<div style={{display:'flex',gap:24,marginBottom:28,fontSize:13}}>
+{selected.startDate&&<div><span style={{color:'#9aa0b4'}}>Start Date: </span><strong>{selected.startDate}</strong></div>}
+{selected.endDate&&<div><span style={{color:'#9aa0b4'}}>End Date: </span><strong>{selected.endDate}</strong></div>}
+{selected.value>0&&<div><span style={{color:'#9aa0b4'}}>Contract Value: </span><strong>{Number(selected.value).toLocaleString()} Ks</strong></div>}
+<div><span style={{color:'#9aa0b4'}}>Status: </span><strong style={{color:statusColor[selected.status],textTransform:'capitalize'}}>{selected.status}</strong></div>
+</div>
+
+{/* Content */}
+<div style={{marginBottom:40,lineHeight:1.8,fontSize:13}} dangerouslySetInnerHTML={{__html:selected.content}}/>
+
+{/* Signatures */}
+<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:40,marginTop:40,paddingTop:24,borderTop:'0.5px solid #e2e8f0'}}>
+<div>
+<div style={{borderBottom:'1.5px solid #1a1d2e',paddingBottom:4,marginBottom:8,minHeight:48,display:'flex',alignItems:'flex-end'}}>
+<span style={{fontSize:13,color:'#64748b',fontStyle:'italic'}}>{selected.partyASign||''}</span>
+</div>
+<div style={{fontSize:11,color:'#9aa0b4'}}>Party A Signature</div>
+<div style={{fontSize:12,fontWeight:500,marginTop:2}}>{company?.name}</div>
+</div>
+<div>
+<div style={{borderBottom:'1.5px solid #1a1d2e',paddingBottom:4,marginBottom:8,minHeight:48,display:'flex',alignItems:'flex-end'}}>
+<span style={{fontSize:13,color:'#64748b',fontStyle:'italic'}}>{selected.partyBSign||''}</span>
+</div>
+<div style={{fontSize:11,color:'#9aa0b4'}}>Party B Signature</div>
+<div style={{fontSize:12,fontWeight:500,marginTop:2}}>{selected.clientName}</div>
+</div>
+</div>
+
+{/* Footer + QR */}
+<div style={{marginTop:32,paddingTop:16,borderTop:'0.5px solid #e2e8f0',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+<div>
+<div style={{fontSize:11,color:'#9aa0b4'}}>Generated by Invoice SaaS</div>
+<div style={{fontSize:11,color:'#9aa0b4',marginTop:2}}>System By: Ankora-X</div>
+<div style={{fontSize:11,color:'#9aa0b4',marginTop:2}}>SEC: {selected.securityCode}</div>
+</div>
+{selected.securityCode&&(
+<div style={{textAlign:'center'}}>
+<QRCodeSVG value={`${window.location.origin}/verify/${companyId}/${selected.securityCode}`} size={64} fgColor="#1a1d2e"/>
+<div style={{fontSize:9,color:'#9aa0b4',marginTop:4}}>Scan to verify</div>
+</div>
+)}
+</div>
+
+</div>
+</div>
+</>
+)
+
+// List View
+return(
+<Layout title="Contracts">
 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16,gap:12}}>
 <div style={{position:'relative',flex:1,maxWidth:320}}>
 <Search size={14} style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text-3)'}}/>
 <input className="form-input" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search contracts..." style={{paddingLeft:32}}/>
 </div>
-<button type="button" onClick={openAdd} className="btn btn-primary">
+<button type="button" onClick={openNew} className="btn btn-primary">
 <Plus size={15}/>New Contract
 </button>
 </div>
@@ -215,20 +375,13 @@ return(
 {filtered.length===0?(
 <div style={{padding:64,textAlign:'center',color:'var(--text-3)'}}>
 <ScrollText size={40} style={{margin:'0 auto 12px',opacity:0.3}}/>
-<div>{search?'No results found':'No contracts yet'}</div>
+<div>{search?'No results':'No contracts yet'}</div>
 </div>
 ):(
 <table>
 <thead>
 <tr>
-<th>Number</th>
-<th>Title</th>
-<th>Client</th>
-<th style={{textAlign:'right'}}>Value</th>
-<th>Start</th>
-<th>End</th>
-<th style={{textAlign:'center'}}>Status</th>
-<th style={{textAlign:'center'}}>Actions</th>
+<th>Number</th><th>Title</th><th>Client</th><th style={{textAlign:'right'}}>Value</th><th>Start</th><th>End</th><th style={{textAlign:'center'}}>Status</th><th style={{textAlign:'center'}}>Actions</th>
 </tr>
 </thead>
 <tbody>
@@ -245,7 +398,7 @@ return(
 </td>
 <td style={{textAlign:'center'}}>
 <div style={{display:'flex',gap:4,justifyContent:'center'}}>
-<button type="button" onClick={()=>setViewModal(c)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--primary)',padding:4,borderRadius:6}}><Eye size={14}/></button>
+<button type="button" onClick={()=>openDetail(c)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--primary)',padding:4,borderRadius:6}}><Eye size={14}/></button>
 <button type="button" onClick={()=>openEdit(c)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Edit size={14}/></button>
 <button type="button" onClick={()=>handleDelete(c.id)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)',padding:4,borderRadius:6}}><Trash2 size={14}/></button>
 </div>
