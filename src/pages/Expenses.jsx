@@ -7,6 +7,7 @@ import{Plus,Trash2,Edit,X,Save,Wallet,TrendingDown,Search}from'lucide-react'
 export default function Expenses(){
 const[companyId,setCompanyId]=useState(null)
 const[expenses,setExpenses]=useState([])
+const[projects,setProjects]=useState([])
 const[categories,setCategories]=useState(['Office','Transport','Food','Utilities','Marketing','Salary','Equipment','Software','Other'])
 const[paymentMethods,setPaymentMethods]=useState(['Cash','KBZ Pay','AYA Pay','Wave Pay','CB Pay','Bank Transfer','Other'])
 const[loading,setLoading]=useState(true)
@@ -19,7 +20,7 @@ const[saving,setSaving]=useState(false)
 const[form,setForm]=useState({
 title:'',amount:0,category:'',
 date:new Date().toISOString().split('T')[0],
-paymentMethod:'Cash',note:''
+paymentMethod:'Cash',note:'',projectId:''
 })
 
 useEffect(()=>{
@@ -28,12 +29,16 @@ const snap=await getDocs(query(collection(db,'companies'),where(`members.${auth.
 if(!snap.empty){
 const cid=snap.docs[0].id
 setCompanyId(cid)
-const sSnap=await getDoc(doc(db,'companies',cid,'_config','invoiceSettings'))
+const[sSnap,pSnap]=await Promise.all([
+getDoc(doc(db,'companies',cid,'_config','invoiceSettings')),
+getDocs(collection(db,'companies',cid,'projects'))
+])
 if(sSnap.exists()){
 const sd=sSnap.data()
 if(sd.expenseCategories?.length)setCategories(sd.expenseCategories)
 if(sd.paymentMethods?.length)setPaymentMethods(sd.paymentMethods.map(m=>m.bankName||m).filter(Boolean))
 }
+setProjects(pSnap.docs.map(d=>({id:d.id,...d.data()})))
 onSnapshot(collection(db,'companies',cid,'expenses'),snap=>{
 setExpenses(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.date||'').localeCompare(a.date||'')))
 setLoading(false)
@@ -44,13 +49,13 @@ load()
 },[])
 
 const openAdd=()=>{
-setForm({title:'',amount:0,category:categories[0]||'',date:new Date().toISOString().split('T')[0],paymentMethod:paymentMethods[0]||'Cash',note:''})
+setForm({title:'',amount:0,category:categories[0]||'',date:new Date().toISOString().split('T')[0],paymentMethod:paymentMethods[0]||'Cash',note:'',projectId:''})
 setSelected(null)
 setModal('add')
 }
 
 const openEdit=(e)=>{
-setForm({title:e.title||'',amount:e.amount||0,category:e.category||categories[0]||'',date:e.date||'',paymentMethod:e.paymentMethod||paymentMethods[0]||'Cash',note:e.note||''})
+setForm({title:e.title||'',amount:e.amount||0,category:e.category||categories[0]||'',date:e.date||'',paymentMethod:e.paymentMethod||paymentMethods[0]||'Cash',note:e.note||'',projectId:e.projectId||''})
 setSelected(e)
 setModal('edit')
 }
@@ -100,13 +105,12 @@ if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:
 return(
 <Layout title="Expenses">
 
-{/* Modal */}
 {modal&&(
 <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
 <div style={{background:'white',borderRadius:16,width:'100%',maxWidth:440,boxShadow:'0 20px 60px rgba(0,0,0,0.2)'}}>
 <div style={{padding:'20px 24px',borderBottom:'0.5px solid #f1f5f9',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
 <div style={{fontWeight:600,fontSize:15}}>{modal==='add'?'Add Expense':'Edit Expense'}</div>
-<button onClick={()=>setModal(null)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-3)'}}><X size={18}/></button>
+<button type="button" onClick={()=>setModal(null)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-3)'}}><X size={18}/></button>
 </div>
 <div style={{padding:24}}>
 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:16}}>
@@ -135,13 +139,20 @@ return(
 </select>
 </div>
 <div style={{gridColumn:'1/-1'}}>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Link to Project (optional)</label>
+<select className="form-input" value={form.projectId} onChange={e=>setForm(f=>({...f,projectId:e.target.value}))}>
+<option value="">— No Project —</option>
+{projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+</select>
+</div>
+<div style={{gridColumn:'1/-1'}}>
 <label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Note</label>
 <input className="form-input" value={form.note} onChange={e=>setForm(f=>({...f,note:e.target.value}))} placeholder="Optional..."/>
 </div>
 </div>
 <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
-<button onClick={()=>setModal(null)} className="btn btn-ghost">Cancel</button>
-<button onClick={handleSave} disabled={saving} className="btn btn-primary">
+<button type="button" onClick={()=>setModal(null)} className="btn btn-ghost">Cancel</button>
+<button type="button" onClick={handleSave} disabled={saving} className="btn btn-primary">
 <Save size={14}/>{saving?'Saving...':modal==='add'?'Add Expense':'Update'}
 </button>
 </div>
@@ -150,7 +161,6 @@ return(
 </div>
 )}
 
-{/* Header */}
 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16,gap:12,flexWrap:'wrap'}}>
 <div style={{display:'flex',gap:8,flex:1,flexWrap:'wrap'}}>
 <div style={{position:'relative',minWidth:180}}>
@@ -166,12 +176,11 @@ return(
 {categories.map(c=><option key={c} value={c}>{c}</option>)}
 </select>
 </div>
-<button onClick={openAdd} className="btn btn-primary">
+<button type="button" onClick={openAdd} className="btn btn-primary">
 <Plus size={15}/>Add Expense
 </button>
 </div>
 
-{/* Stats */}
 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:16}}>
 <div className="card" style={{padding:16}}>
 <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
@@ -194,7 +203,6 @@ return(
 </div>
 </div>
 
-{/* Table */}
 <div className="card" style={{overflow:'hidden'}}>
 {filtered.length===0?(
 <div style={{padding:64,textAlign:'center',color:'var(--text-3)'}}>
@@ -208,9 +216,9 @@ return(
 <th>Date</th>
 <th>Title</th>
 <th>Category</th>
+<th>Project</th>
 <th>Method</th>
 <th style={{textAlign:'right'}}>Amount</th>
-<th>Note</th>
 <th style={{textAlign:'center'}}>Actions</th>
 </tr>
 </thead>
@@ -220,13 +228,15 @@ return(
 <td style={{color:'var(--text-3)',fontSize:12,whiteSpace:'nowrap'}}>{e.date||'-'}</td>
 <td style={{fontWeight:500}}>{e.title}</td>
 <td><span style={{background:'var(--primary-light)',color:'var(--primary)',padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:500}}>{e.category}</span></td>
+<td style={{fontSize:12,color:'var(--text-2)'}}>
+{e.projectId?projects.find(p=>p.id===e.projectId)?.name||'-':'-'}
+</td>
 <td style={{color:'var(--text-2)',fontSize:12}}>{e.paymentMethod||'-'}</td>
 <td style={{textAlign:'right',fontWeight:500,color:'#dc2626'}}>{Number(e.amount||0).toLocaleString()} Ks</td>
-<td style={{color:'var(--text-2)',fontSize:12}}>{e.note||'-'}</td>
 <td style={{textAlign:'center'}}>
 <div style={{display:'flex',gap:4,justifyContent:'center'}}>
-<button onClick={()=>openEdit(e)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Edit size={14}/></button>
-<button onClick={()=>handleDelete(e.id)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)',padding:4,borderRadius:6}}><Trash2 size={14}/></button>
+<button type="button" onClick={()=>openEdit(e)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Edit size={14}/></button>
+<button type="button" onClick={()=>handleDelete(e.id)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)',padding:4,borderRadius:6}}><Trash2 size={14}/></button>
 </div>
 </td>
 </tr>
