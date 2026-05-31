@@ -9,15 +9,13 @@ import Verify from'./pages/Verify'
 export default function App(){
 const[user,setUser]=useState(null)
 const[loading,setLoading]=useState(true)
-useEffect(()=>{
-return onAuthStateChanged(auth,u=>{setUser(u);setLoading(false)})
-},[])
+useEffect(()=>{return onAuthStateChanged(auth,u=>{setUser(u);setLoading(false)})},[])
 if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',color:'#9aa0b4'}}>Loading...</div>
 return(
 <BrowserRouter>
 <Routes>
 <Route path="/login" element={!user?<Login/>:<Navigate to="/"/>}/>
-<Route path="/verify/:code" element={<Verify/>}/>
+<Route path="/verify/:companyId/:code" element={<Verify/>}/>
 <Route path="/*" element={user?<Dashboard/>:<Navigate to="/login"/>}/>
 </Routes>
 </BrowserRouter>
