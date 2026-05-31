@@ -5,6 +5,7 @@ import{onAuthStateChanged}from'firebase/auth'
 import Login from'./pages/Login'
 import Dashboard from'./pages/Dashboard'
 import Verify from'./pages/Verify'
+import InvoiceDetail from'./pages/InvoiceDetail'
 
 export default function App(){
 const[user,setUser]=useState(null)
@@ -17,7 +18,12 @@ return(
 <Route path="/login" element={!user?<Login/>:<Navigate to="/"/>}/>
 <Route path="/verify/:companyId/:code" element={<Verify/>}/>
 <Route path="/*" element={user?<Dashboard/>:<Navigate to="/login"/>}/>
+<Route path="/invoice/:id" element={user?<InvoiceDetail/>:<Navigate to="/login"/>}/>
 </Routes>
 </BrowserRouter>
 )
 }
+
+
+
+// Routes ထဲ
