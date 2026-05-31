@@ -2,7 +2,7 @@ import{useState,useEffect,useMemo}from'react'
 import{db,auth}from'../firebase'
 import{collection,onSnapshot,getDocs,query,where,doc,deleteDoc,updateDoc,addDoc,serverTimestamp,getDoc}from'firebase/firestore'
 import Layout from'../components/Layout'
-import{FileText,FileCheck,Users,Plus,TrendingUp,CheckCircle,Clock,AlertCircle,Edit,Trash2,RefreshCcw,Link,Printer,CheckSquare,CopyPlus,DollarSign,X,Search,Filter}from'lucide-react'
+import{FileText,FileCheck,Users,Plus,TrendingUp,CheckCircle,Clock,AlertCircle,Edit,Trash2,RefreshCcw,Link,Printer,CheckSquare,CopyPlus,DollarSign,X,Search,Briefcase,Wallet}from'lucide-react'
 import{useNavigate,useSearchParams}from'react-router-dom'
 
 const BAR_H=100
@@ -16,6 +16,8 @@ const[companyId,setCompanyId]=useState(null)
 const[invoices,setInvoices]=useState([])
 const[quotations,setQuotations]=useState([])
 const[customers,setCustomers]=useState([])
+const[expenses,setExpenses]=useState([])
+const[projects,setProjects]=useState([])
 const[loading,setLoading]=useState(true)
 const[paymentModal,setPaymentModal]=useState(null)
 const[paymentForm,setPaymentForm]=useState({amount:'',date:new Date().toISOString().split('T')[0],method:'',note:''})
@@ -59,8 +61,13 @@ setPaymentForm(f=>({...f,method:methods[0]}))
 }
 loadSettings()
 const unsubs=[]
-;[{name:'invoices',setter:setInvoices},{name:'quotations',setter:setQuotations},{name:'customers',setter:setCustomers}]
-.forEach(({name,setter})=>{
+;[
+{name:'invoices',setter:setInvoices},
+{name:'quotations',setter:setQuotations},
+{name:'customers',setter:setCustomers},
+{name:'expenses',setter:setExpenses},
+{name:'projects',setter:setProjects},
+].forEach(({name,setter})=>{
 const u=onSnapshot(collection(db,'companies',companyId,name),snap=>
 setter(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0))))
 unsubs.push(u)
@@ -70,7 +77,6 @@ return()=>unsubs.forEach(u=>u())
 
 const getInvDate=inv=>inv.date||(inv.createdAt?.seconds?new Date(inv.createdAt.seconds*1000).toISOString().split('T')[0]:null)
 
-// Filter invoices
 const filteredInvoices=useMemo(()=>invoices.filter(inv=>{
 const d=getInvDate(inv)||''
 if(filterYear&&!d.startsWith(filterYear))return false
@@ -93,6 +99,50 @@ const chartMax=Math.max(...chartData.map(m=>Math.max(m.revenue,m.pending)),1)
 
 const uniqueYears=[...new Set(invoices.map(i=>getInvDate(i)?.slice(0,4)).filter(Boolean))].sort().reverse()
 const uniqueCustomers=[...new Set(invoices.map(i=>i.clientName).filter(Boolean))].sort()
+
+// Widget data
+const top5Clients=useMemo(()=>{
+const map={}
+invoices.filter(i=>i.status==='paid'||i.status==='partial').forEach(i=>{
+if(!map[i.clientName])map[i.clientName]=0
+map[i.clientName]+=Number(i.paidAmount||i.totalAmount||0)
+})
+return Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([name,amount])=>({name,amount}))
+},[invoices])
+
+const recentPayments=useMemo(()=>{
+const payments=[]
+invoices.forEach(inv=>{
+(inv.payments||[]).forEach(p=>{
+payments.push({...p,invoiceNumber:inv.invoiceNumber,clientName:inv.clientName})
+})
+})
+return payments.sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,5)
+},[invoices])
+
+const upcomingDue=useMemo(()=>{
+const now=new Date()
+return invoices.filter(i=>(i.status==='pending'||i.status==='partial')&&i.createdAt?.seconds).map(i=>{
+const days=Math.floor((now-new Date(i.createdAt.seconds*1000))/(1000*60*60*24))
+return{...i,daysOld:days}
+}).sort((a,b)=>b.daysOld-a.daysOld).slice(0,5)
+},[invoices])
+
+const expenseByCategory=useMemo(()=>{
+const map={}
+expenses.forEach(e=>{
+if(!map[e.category])map[e.category]=0
+map[e.category]+=Number(e.amount||0)
+})
+const total=Object.values(map).reduce((s,v)=>s+v,0)
+return Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([cat,amount])=>({cat,amount,pct:total>0?Math.round(amount/total*100):0}))
+},[expenses])
+
+const projectStats=useMemo(()=>{
+const statusCount={planning:0,active:0,'on-hold':0,completed:0,cancelled:0}
+projects.forEach(p=>statusCount[p.status]=(statusCount[p.status]||0)+1)
+return statusCount
+},[projects])
 
 const tabs=[
 {id:'invoice',label:'Invoices',icon:FileText,data:filteredInvoices},
@@ -323,9 +373,127 @@ return(
 )}
 </div>
 
+{/* Widgets Row 1 — Top Clients + Recent Payments */}
+<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}>
+
+{/* Top 5 Clients */}
+<div className="card" style={{padding:20}}>
+<div style={{display:'flex',alignItems:'center',gap:8,fontWeight:600,fontSize:13,marginBottom:16,color:'var(--text-1)'}}>
+<Users size={15} color="var(--primary)"/>Top 5 Clients
+</div>
+{top5Clients.length===0?(
+<div style={{textAlign:'center',color:'var(--text-3)',fontSize:12,padding:20}}>No data yet</div>
+):top5Clients.map((c,i)=>{
+const maxAmt=top5Clients[0]?.amount||1
+return(
+<div key={c.name} style={{marginBottom:12}}>
+<div style={{display:'flex',justifyContent:'space-between',fontSize:13,marginBottom:4}}>
+<div style={{display:'flex',alignItems:'center',gap:6}}>
+<span style={{width:18,height:18,borderRadius:'50%',background:'var(--primary-light)',color:'var(--primary)',fontSize:10,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center'}}>{i+1}</span>
+<span style={{fontWeight:500}}>{c.name}</span>
+</div>
+<span style={{fontWeight:600,color:'#16a34a',fontSize:12}}>{c.amount.toLocaleString()} Ks</span>
+</div>
+<div style={{height:4,background:'#f1f5f9',borderRadius:2}}>
+<div style={{height:4,borderRadius:2,background:'var(--primary)',width:`${Math.round(c.amount/maxAmt*100)}%`,transition:'width 0.3s'}}/>
+</div>
+</div>
+)
+})}
+</div>
+
+{/* Recent Payments */}
+<div className="card" style={{padding:20}}>
+<div style={{display:'flex',alignItems:'center',gap:8,fontWeight:600,fontSize:13,marginBottom:16,color:'var(--text-1)'}}>
+<CheckCircle size={15} color="#16a34a"/>Recent Payments
+</div>
+{recentPayments.length===0?(
+<div style={{textAlign:'center',color:'var(--text-3)',fontSize:12,padding:20}}>No payments yet</div>
+):recentPayments.map((p,i)=>(
+<div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom:'0.5px solid #f1f5f9'}}>
+<div>
+<div style={{fontSize:13,fontWeight:500,color:'var(--text-1)'}}>{p.clientName}</div>
+<div style={{fontSize:11,color:'var(--text-3)',marginTop:1}}>{p.invoiceNumber} · {p.date} · {p.method}</div>
+</div>
+<span style={{fontWeight:600,color:'#16a34a',fontSize:13}}>{Number(p.amount).toLocaleString()} Ks</span>
+</div>
+))}
+</div>
+</div>
+
+{/* Widgets Row 2 — Upcoming Due + Expense Breakdown */}
+<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}>
+
+{/* Upcoming Due */}
+<div className="card" style={{padding:20}}>
+<div style={{display:'flex',alignItems:'center',gap:8,fontWeight:600,fontSize:13,marginBottom:16,color:'var(--text-1)'}}>
+<AlertCircle size={15} color="#dc2626"/>Outstanding Invoices
+</div>
+{upcomingDue.length===0?(
+<div style={{textAlign:'center',color:'var(--text-3)',fontSize:12,padding:20}}>All invoices paid 🎉</div>
+):upcomingDue.map(inv=>(
+<div key={inv.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom:'0.5px solid #f1f5f9',cursor:'pointer'}} onClick={()=>navigate(`/invoice/${inv.id}`)}>
+<div>
+<div style={{fontSize:13,fontWeight:500,color:'var(--text-1)'}}>{inv.clientName}</div>
+<div style={{fontSize:11,color:'var(--text-3)',marginTop:1}}>{inv.invoiceNumber}</div>
+</div>
+<div style={{textAlign:'right'}}>
+<div style={{fontWeight:600,color:'#dc2626',fontSize:13}}>{Number(inv.remainingAmount||inv.totalAmount||0).toLocaleString()} Ks</div>
+<span style={{fontSize:10,background:inv.daysOld>30?'#fcebeb':'#faeeda',color:inv.daysOld>30?'#dc2626':'#d97706',padding:'1px 6px',borderRadius:20,fontWeight:500}}>{inv.daysOld}d old</span>
+</div>
+</div>
+))}
+</div>
+
+{/* Expense Breakdown */}
+<div className="card" style={{padding:20}}>
+<div style={{display:'flex',alignItems:'center',gap:8,fontWeight:600,fontSize:13,marginBottom:16,color:'var(--text-1)'}}>
+<Wallet size={15} color="#dc2626"/>Expense Breakdown
+</div>
+{expenseByCategory.length===0?(
+<div style={{textAlign:'center',color:'var(--text-3)',fontSize:12,padding:20}}>No expenses yet</div>
+):expenseByCategory.map(({cat,amount,pct})=>(
+<div key={cat} style={{marginBottom:10}}>
+<div style={{display:'flex',justifyContent:'space-between',fontSize:12,marginBottom:3}}>
+<span style={{color:'var(--text-2)',fontWeight:500}}>{cat}</span>
+<div style={{display:'flex',gap:8,alignItems:'center'}}>
+<span style={{color:'#dc2626',fontWeight:600}}>{amount.toLocaleString()} Ks</span>
+<span style={{fontSize:10,color:'var(--text-3)'}}>{pct}%</span>
+</div>
+</div>
+<div style={{height:4,background:'#f1f5f9',borderRadius:2}}>
+<div style={{height:4,borderRadius:2,background:'#ef4444',width:`${pct}%`,transition:'width 0.3s'}}/>
+</div>
+</div>
+))}
+</div>
+</div>
+
+{/* Widget Row 3 — Project Status */}
+{projects.length>0&&(
+<div className="card" style={{padding:20,marginBottom:16}}>
+<div style={{display:'flex',alignItems:'center',gap:8,fontWeight:600,fontSize:13,marginBottom:16,color:'var(--text-1)'}}>
+<Briefcase size={15} color="#8b5cf6"/>Project Status
+</div>
+<div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
+{[
+{key:'planning',label:'Planning',color:'#8b5cf6',bg:'rgba(139,92,246,0.1)'},
+{key:'active',label:'Active',color:'#16a34a',bg:'rgba(22,163,74,0.1)'},
+{key:'on-hold',label:'On Hold',color:'#d97706',bg:'rgba(217,119,6,0.1)'},
+{key:'completed',label:'Completed',color:'#4F6EF7',bg:'rgba(79,110,247,0.1)'},
+{key:'cancelled',label:'Cancelled',color:'#dc2626',bg:'rgba(220,38,38,0.1)'},
+].map(({key,label,color,bg})=>(
+<div key={key} style={{flex:1,minWidth:80,padding:'12px 16px',background:bg,borderRadius:12,textAlign:'center',cursor:'pointer'}} onClick={()=>navigate('/projects')}>
+<div style={{fontSize:22,fontWeight:700,color}}>{projectStats[key]||0}</div>
+<div style={{fontSize:11,color,marginTop:2,fontWeight:500}}>{label}</div>
+</div>
+))}
+</div>
+</div>
+)}
+
 {/* Filters + Tabs + New */}
 <div style={{marginBottom:12}}>
-{/* Tabs */}
 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
 <div style={{display:'flex',gap:4,background:'rgba(255,255,255,0.7)',border:'0.5px solid var(--border)',borderRadius:12,padding:4}}>
 {tabs.map(({id,label,icon:Icon,data})=>(
@@ -349,7 +517,6 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600
 </button>
 </div>
 
-{/* Invoice Filters */}
 {activeTab==='invoice'&&(
 <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
 <div style={{position:'relative'}}>
