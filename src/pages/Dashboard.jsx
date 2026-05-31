@@ -48,7 +48,6 @@ setPaymentForm(f=>({...f,method:methods[0]}))
 }catch(e){console.error(e)}
 }
 loadSettings()
-
 const unsubs=[]
 ;[{name:'invoices',setter:setInvoices},{name:'quotations',setter:setQuotations},{name:'customers',setter:setCustomers}]
 .forEach(({name,setter})=>{
@@ -116,6 +115,25 @@ createdAt:serverTimestamp(),
 createdBy:auth.currentUser.uid,
 })
 alert('Duplicated!')
+}catch(e){alert(e.message)}
+}
+
+const handleConvertToInvoice=async(item)=>{
+if(!confirm('Convert this quotation to invoice?'))return
+try{
+const{id:_,quotationNumber,...data}=item
+await addDoc(collection(db,'companies',companyId,'invoices'),{
+...data,
+invoiceNumber:'INV-'+Date.now().toString().slice(-6),
+status:'pending',
+securityCode:'SEC-'+Math.random().toString(36).substring(2,8).toUpperCase(),
+convertedFrom:item.id,
+convertedFromNumber:quotationNumber,
+createdAt:serverTimestamp(),
+createdBy:auth.currentUser.uid,
+})
+alert('Converted to Invoice!')
+navigate('/?tab=invoice')
 }catch(e){alert(e.message)}
 }
 
@@ -306,6 +324,7 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600
 <button type="button" onClick={()=>handleDuplicate(item)} title="Duplicate" style={{background:'none',border:'none',cursor:'pointer',color:'#8b5cf6',padding:4,borderRadius:6}}><CopyPlus size={14}/></button>
 <button type="button" onClick={()=>handleShareLink(item)} title="Share link" style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Link size={14}/></button>
 {activeTab==='invoice'&&<button type="button" onClick={()=>openPaymentModal(item)} title="Record payment" style={{background:'none',border:'none',cursor:'pointer',color:'#16a34a',padding:4,borderRadius:6}}><DollarSign size={14}/></button>}
+{activeTab==='quotation'&&<button type="button" onClick={()=>handleConvertToInvoice(item)} title="Convert to Invoice" style={{background:'none',border:'none',cursor:'pointer',color:'#4F6EF7',padding:4,borderRadius:6}}><FileText size={14}/></button>}
 <button type="button" onClick={()=>handleStatus(item.id,'refunded')} title="Refund" style={{background:'none',border:'none',cursor:'pointer',color:'#d97706',padding:4,borderRadius:6}}><RefreshCcw size={14}/></button>
 </>}
 <button type="button" onClick={()=>handleDelete(item.id)} title="Delete" style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)',padding:4,borderRadius:6}}><Trash2 size={14}/></button>
