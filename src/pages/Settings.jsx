@@ -22,6 +22,7 @@ companyWebsite:'',
 trnNumber:'',
 paymentTerms:'',
 paymentMethods:[],
+expenseCategories:['Office','Transport','Food','Utilities','Marketing','Salary','Equipment','Software','Other'],
 })
 
 useEffect(()=>{
@@ -59,6 +60,14 @@ arr[i]={...arr[i],[k]:v}
 setSettings(s=>({...s,paymentMethods:arr}))
 }
 const removePaymentMethod=i=>setSettings(s=>({...s,paymentMethods:s.paymentMethods.filter((_,j)=>j!==i)}))
+
+const addCategory=()=>setSettings(s=>({...s,expenseCategories:[...s.expenseCategories,'New Category']}))
+const updateCategory=(i,v)=>{
+const arr=[...settings.expenseCategories]
+arr[i]=v
+setSettings(s=>({...s,expenseCategories:arr}))
+}
+const removeCategory=i=>setSettings(s=>({...s,expenseCategories:s.expenseCategories.filter((_,j)=>j!==i)}))
 
 const templates=['classic','modern','minimal','elegant']
 const colors=['#4F6EF7','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#1a1d2e']
@@ -129,7 +138,7 @@ transition:'all 0.15s'
 <input type="file" accept="image/*" onChange={handleLogo} style={{display:'none'}}/>
 <span className="btn btn-ghost" style={{cursor:'pointer',fontSize:13}}>Upload Logo</span>
 </label>
-{settings.logoUrl&&<button onClick={()=>setSettings(s=>({...s,logoUrl:''}))} style={{background:'none',border:'none',color:'var(--danger)',fontSize:12,cursor:'pointer'}}>Remove</button>}
+{settings.logoUrl&&<button type="button" onClick={()=>setSettings(s=>({...s,logoUrl:''}))} style={{background:'none',border:'none',color:'var(--danger)',fontSize:12,cursor:'pointer'}}>Remove</button>}
 </div>
 </div>
 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
@@ -137,7 +146,7 @@ transition:'all 0.15s'
 <label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:8}}>Logo Position</label>
 <div style={{display:'flex',gap:6}}>
 {positions.map(p=>(
-<button key={p} onClick={()=>setSettings(s=>({...s,logoPosition:p}))} className="btn" style={{fontSize:11,padding:'5px 10px',background:settings.logoPosition===p?'var(--primary)':'transparent',color:settings.logoPosition===p?'white':'var(--text-2)',border:`0.5px solid ${settings.logoPosition===p?'var(--primary)':'var(--border)'}`,textTransform:'capitalize'}}>{p}</button>
+<button type="button" key={p} onClick={()=>setSettings(s=>({...s,logoPosition:p}))} className="btn" style={{fontSize:11,padding:'5px 10px',background:settings.logoPosition===p?'var(--primary)':'transparent',color:settings.logoPosition===p?'white':'var(--text-2)',border:`0.5px solid ${settings.logoPosition===p?'var(--primary)':'var(--border)'}`,textTransform:'capitalize'}}>{p}</button>
 ))}
 </div>
 </div>
@@ -145,7 +154,7 @@ transition:'all 0.15s'
 <label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:8}}>Title Position</label>
 <div style={{display:'flex',gap:6}}>
 {positions.map(p=>(
-<button key={p} onClick={()=>setSettings(s=>({...s,titlePosition:p}))} className="btn" style={{fontSize:11,padding:'5px 10px',background:settings.titlePosition===p?'var(--primary)':'transparent',color:settings.titlePosition===p?'white':'var(--text-2)',border:`0.5px solid ${settings.titlePosition===p?'var(--primary)':'var(--border)'}`,textTransform:'capitalize'}}>{p}</button>
+<button type="button" key={p} onClick={()=>setSettings(s=>({...s,titlePosition:p}))} className="btn" style={{fontSize:11,padding:'5px 10px',background:settings.titlePosition===p?'var(--primary)':'transparent',color:settings.titlePosition===p?'white':'var(--text-2)',border:`0.5px solid ${settings.titlePosition===p?'var(--primary)':'var(--border)'}`,textTransform:'capitalize'}}>{p}</button>
 ))}
 </div>
 </div>
@@ -193,7 +202,7 @@ transition:'all 0.15s'
 <td style={{padding:'6px 8px'}}><input className="form-input" value={m.accountNo} onChange={e=>updatePaymentMethod(i,'accountNo',e.target.value)} placeholder="0001234567"/></td>
 <td style={{padding:'6px 8px'}}><input className="form-input" value={m.accountName} onChange={e=>updatePaymentMethod(i,'accountName',e.target.value)} placeholder="John Doe"/></td>
 <td style={{padding:'6px 8px',textAlign:'center'}}>
-<button onClick={()=>removePaymentMethod(i)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)'}}>
+<button type="button" onClick={()=>removePaymentMethod(i)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)'}}>
 <Trash2 size={14}/>
 </button>
 </td>
@@ -202,34 +211,29 @@ transition:'all 0.15s'
 </tbody>
 </table>
 )}
-<button onClick={addPaymentMethod} className="btn btn-ghost" style={{fontSize:13}}>
+<button type="button" onClick={addPaymentMethod} className="btn btn-ghost" style={{fontSize:13}}>
 <Plus size={14}/>Add Payment Method
 </button>
 </div>
 </Section>
+
 {/* Expense Categories */}
 <Section title="Expense Categories" icon={Wallet}>
 <div style={{marginBottom:12}}>
-{(settings.expenseCategories||['Office','Transport','Food','Utilities','Marketing','Salary','Equipment','Software','Other']).map((cat,i)=>(
+{settings.expenseCategories.map((cat,i)=>(
 <div key={i} style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
-<input className="form-input" value={cat} onChange={e=>{
-const arr=[...(settings.expenseCategories||['Office','Transport','Food','Utilities','Marketing','Salary','Equipment','Software','Other'])]
-arr[i]=e.target.value
-setSettings(s=>({...s,expenseCategories:arr}))
-}}/>
-<button onClick={()=>{
-const arr=(settings.expenseCategories||['Office','Transport','Food','Utilities','Marketing','Salary','Equipment','Software','Other']).filter((_,j)=>j!==i)
-setSettings(s=>({...s,expenseCategories:arr}))
-}} style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)',flexShrink:0}}>
+<input className="form-input" value={cat} onChange={e=>updateCategory(i,e.target.value)}/>
+<button type="button" onClick={()=>removeCategory(i)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)',flexShrink:0}}>
 <Trash2 size={14}/>
 </button>
 </div>
 ))}
-<button onClick={()=>setSettings(s=>({...s,expenseCategories:[...(s.expenseCategories||[]),'New Category']}))} className="btn btn-ghost" style={{fontSize:13}}>
+<button type="button" onClick={addCategory} className="btn btn-ghost" style={{fontSize:13}}>
 <Plus size={14}/>Add Category
 </button>
 </div>
 </Section>
+
 {/* Payment Terms */}
 <Section title="Payment Terms" icon={CreditCard}>
 <Field label="Terms">
@@ -249,7 +253,7 @@ setSettings(s=>({...s,expenseCategories:arr}))
 </Section>
 
 <div style={{display:'flex',justifyContent:'flex-end'}}>
-<button onClick={save} disabled={saving} className="btn btn-primary">
+<button type="button" onClick={save} disabled={saving} className="btn btn-primary">
 <Save size={15}/>{saving?'Saving...':'Save Settings'}
 </button>
 </div>
