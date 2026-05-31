@@ -6,6 +6,9 @@ import{FileText,FileCheck,ScrollText,Users,Wallet,Briefcase,BarChart2,User,Setti
 import{getDocs,collection,query,where}from'firebase/firestore'
 import Notifications from'./Notifications'
 import{useNotifications}from'../hooks/useNotifications'
+import{useRecurring}from'../hooks/useRecurring'
+
+
 
 const navItems=[
 {path:'/',tab:'invoice',label:'Invoices',icon:FileText},
@@ -35,7 +38,7 @@ load()
 },[])
 
 useNotifications(companyId)
-
+useRecurring(companyId)
 const isActive=(item)=>{
 if(item.tab){
 const currentTab=searchParams.get('tab')||'invoice'
