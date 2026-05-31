@@ -6,7 +6,7 @@ import Login from'./pages/Login'
 import Dashboard from'./pages/Dashboard'
 import Verify from'./pages/Verify'
 import InvoiceDetail from'./pages/InvoiceDetail'
-import Settings from'./pages/Settings'
+import Settings from'./pages/Settings' 
 import CreateInvoice from'./pages/CreateInvoice'
 import EditInvoice from'./pages/EditInvoice'
 import Customers from'./pages/Customers'
@@ -16,6 +16,9 @@ import Contracts from'./pages/Contracts'
 import CreateQuotation from'./pages/CreateQuotation'
 import Profile from'./pages/Profile'
 import Projects from'./pages/Projects'
+import Signup from'./pages/Signup'
+import JoinCompany from'./pages/JoinCompany'
+
 
 
 export default function App(){
@@ -41,6 +44,9 @@ return(
 <Route path="/settings" element={user?<Settings/>:<Navigate to="/login"/>}/>
 <Route path="*" element={<Navigate to="/"/>}/>
 <Route path="/projects" element={user?<Projects/>:<Navigate to="/login"/>}/>
+
+<Route path="/signup" element={!user?<Signup/>:<Navigate to="/"/>}/>
+<Route path="/join" element={!user?<JoinCompany/>:<Navigate to="/"/>}/>
 </Routes>
 </BrowserRouter>
 )
