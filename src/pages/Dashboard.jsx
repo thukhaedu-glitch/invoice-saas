@@ -82,7 +82,7 @@ setMenuOpen(null)
 }
 
 const handleShareLink=(item)=>{
-const url=`${window.location.origin}/verify/${item.id}`
+const url=`${window.location.origin}/verify/${companyId}/${item.securityCode||item.id}`
 navigator.clipboard.writeText(url)
 alert('Link copied!')
 setMenuOpen(null)
