@@ -1,20 +1,22 @@
 import{useState,useEffect}from'react'
 import{db,auth}from'../firebase'
-import{collection,onSnapshot,getDocs,query,where,doc,deleteDoc,updateDoc,addDoc,serverTimestamp}from'firebase/firestore'
+import{collection,onSnapshot,getDocs,query,where,doc,deleteDoc,updateDoc,addDoc,serverTimestamp,getDoc}from'firebase/firestore'
 import Layout from'../components/Layout'
 import{FileText,FileCheck,Users,Plus,TrendingUp,CheckCircle,Clock,AlertCircle,Edit,Trash2,RefreshCcw,Link,Printer,CheckSquare,CopyPlus,DollarSign,X}from'lucide-react'
-import{useNavigate}from'react-router-dom'
+import{useNavigate,useSearchParams}from'react-router-dom'
 
 export default function Dashboard(){
-const[activeTab,setActiveTab]=useState('invoice')
+const[searchParams]=useSearchParams()
+const[activeTab,setActiveTab]=useState(searchParams.get('tab')||'invoice')
 const[companyId,setCompanyId]=useState(null)
 const[invoices,setInvoices]=useState([])
 const[quotations,setQuotations]=useState([])
 const[customers,setCustomers]=useState([])
 const[loading,setLoading]=useState(true)
 const[paymentModal,setPaymentModal]=useState(null)
-const[paymentForm,setPaymentForm]=useState({amount:'',date:new Date().toISOString().split('T')[0],method:'Cash',note:''})
+const[paymentForm,setPaymentForm]=useState({amount:'',date:new Date().toISOString().split('T')[0],method:'',note:''})
 const[savingPayment,setSavingPayment]=useState(false)
+const[paymentMethodOptions,setPaymentMethodOptions]=useState(['Cash','KBZ Pay','AYA Pay','Wave Pay','CB Pay','Bank Transfer','Other'])
 const navigate=useNavigate()
 
 useEffect(()=>{
@@ -30,6 +32,23 @@ load()
 
 useEffect(()=>{
 if(!companyId)return
+const loadSettings=async()=>{
+try{
+const sSnap=await getDoc(doc(db,'companies',companyId,'_config','invoiceSettings'))
+if(sSnap.exists()){
+const sd=sSnap.data()
+if(sd.paymentMethods?.length){
+const methods=sd.paymentMethods.map(m=>m.bankName||m).filter(Boolean)
+if(methods.length){
+setPaymentMethodOptions(methods)
+setPaymentForm(f=>({...f,method:methods[0]}))
+}
+}
+}
+}catch(e){console.error(e)}
+}
+loadSettings()
+
 const unsubs=[]
 ;[{name:'invoices',setter:setInvoices},{name:'quotations',setter:setQuotations},{name:'customers',setter:setCustomers}]
 .forEach(({name,setter})=>{
@@ -102,7 +121,7 @@ alert('Duplicated!')
 
 const openPaymentModal=(item)=>{
 setPaymentModal(item)
-setPaymentForm({amount:'',date:new Date().toISOString().split('T')[0],method:'Cash',note:''})
+setPaymentForm({amount:'',date:new Date().toISOString().split('T')[0],method:paymentMethodOptions[0]||'Cash',note:''})
 }
 
 const handleSavePayment=async()=>{
@@ -170,13 +189,7 @@ return(
 <div style={{marginBottom:12}}>
 <label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Payment Method</label>
 <select className="form-input" value={paymentForm.method} onChange={e=>setPaymentForm(f=>({...f,method:e.target.value}))}>
-<option>Cash</option>
-<option>KBZ Pay</option>
-<option>AYA Pay</option>
-<option>Wave Pay</option>
-<option>CB Pay</option>
-<option>Bank Transfer</option>
-<option>Other</option>
+{paymentMethodOptions.map(m=><option key={m} value={m}>{m}</option>)}
 </select>
 </div>
 <div style={{marginBottom:16}}>
@@ -225,7 +238,7 @@ return(
 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
 <div style={{display:'flex',gap:4,background:'rgba(255,255,255,0.7)',border:'0.5px solid var(--border)',borderRadius:12,padding:4}}>
 {tabs.map(({id,label,icon:Icon,data})=>(
-<button type="button" key={id} onClick={()=>setActiveTab(id)} className="btn" style={{
+<button type="button" key={id} onClick={()=>{setActiveTab(id);navigate(`/?tab=${id}`)}} className="btn" style={{
 padding:'7px 14px',borderRadius:8,fontSize:13,
 background:activeTab===id?'var(--primary)':'transparent',
 color:activeTab===id?'#fff':'var(--text-2)',
