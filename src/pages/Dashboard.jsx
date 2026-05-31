@@ -5,6 +5,8 @@ import Layout from'../components/Layout'
 import{FileText,FileCheck,Users,Plus,TrendingUp,CheckCircle,Clock,AlertCircle,Edit,Trash2,RefreshCcw,Link,Printer,CheckSquare,CopyPlus,DollarSign,X,Search,Briefcase,Wallet,Mail}from'lucide-react'
 import{useNavigate,useSearchParams}from'react-router-dom'
 import{sendInvoiceReminder}from'../utils/emailService'
+import{useRole}from'../hooks/useRole'
+import ConfirmPassword from'../components/ConfirmPassword'
 
 const BAR_H=100
 const months=['01','02','03','04','05','06','07','08','09','10','11','12']
@@ -32,7 +34,9 @@ const[search,setSearch]=useState('')
 const[showChart,setShowChart]=useState(true)
 const[companyInfo,setCompanyInfo]=useState({})
 const[sendingReminder,setSendingReminder]=useState(null)
+const[confirmAction,setConfirmAction]=useState(null)
 const navigate=useNavigate()
+const{role,canEdit,canDelete}=useRole()
 
 useEffect(()=>{
 const load=async()=>{
@@ -181,8 +185,20 @@ return<span className={`badge ${map[s]||'badge-warning'}`}>{s||'pending'}</span>
 const collName=activeTab==='invoice'?'invoices':activeTab==='quotation'?'quotations':'customers'
 
 const handleDelete=async(id)=>{
-if(!confirm('Delete this item?'))return
 await deleteDoc(doc(db,'companies',companyId,collName,id))
+}
+
+const handleDeleteWithAuth=(id)=>{
+if(!canDelete){alert('You do not have permission to delete');return}
+setConfirmAction({action:()=>handleDelete(id),label:'delete this item'})
+}
+
+const handleEditNav=(item)=>{
+if(!canEdit){alert('You do not have permission to edit');return}
+setConfirmAction({
+action:()=>navigate(activeTab==='quotation'?`/edit-quotation/${item.id}`:`/edit/${item.id}`),
+label:'edit this item'
+})
 }
 
 const handleStatus=async(id,status)=>{
@@ -262,11 +278,8 @@ setSavingPayment(false)
 }
 
 const handleSendReminder=async(item)=>{
-if(!item.clientEmail){
-alert('This client has no email address. Please add email in customer profile.')
-return
-}
-if(!confirm(`Send payment reminder to ${item.clientName} (${item.clientEmail})?`))return
+if(!item.clientEmail){alert('This client has no email address.');return}
+if(!confirm(`Send reminder to ${item.clientName} (${item.clientEmail})?`))return
 setSendingReminder(item.id)
 try{
 const result=await sendInvoiceReminder({
@@ -280,11 +293,8 @@ companyEmail:companyInfo.email,
 companyPhone:companyInfo.phone,
 paymentMethods:companyInfo.paymentMethods,
 })
-if(result.success){
-alert(`Reminder sent to ${item.clientEmail} ✓`)
-}else{
-alert('Failed to send: '+result.error)
-}
+if(result.success)alert(`Reminder sent to ${item.clientEmail} ✓`)
+else alert('Failed: '+result.error)
 }catch(e){alert(e.message)}
 setSendingReminder(null)
 }
@@ -293,6 +303,15 @@ if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:
 
 return(
 <Layout title="Dashboard">
+
+{/* Confirm Password Modal */}
+{confirmAction&&(
+<ConfirmPassword
+action={confirmAction.label}
+onConfirm={()=>{confirmAction.action();setConfirmAction(null)}}
+onCancel={()=>setConfirmAction(null)}
+/>
+)}
 
 {/* Payment Modal */}
 {paymentModal&&(
@@ -435,7 +454,6 @@ return(
 )
 })}
 </div>
-
 <div className="card" style={{padding:20}}>
 <div style={{display:'flex',alignItems:'center',gap:8,fontWeight:600,fontSize:13,marginBottom:16,color:'var(--text-1)'}}>
 <CheckCircle size={15} color="#16a34a"/>Recent Payments
@@ -475,7 +493,6 @@ return(
 </div>
 ))}
 </div>
-
 <div className="card" style={{padding:20}}>
 <div style={{display:'flex',alignItems:'center',gap:8,fontWeight:600,fontSize:13,marginBottom:16,color:'var(--text-1)'}}>
 <Wallet size={15} color="#dc2626"/>Expense Breakdown
@@ -519,6 +536,19 @@ return(
 </div>
 ))}
 </div>
+</div>
+)}
+
+{/* Role Badge */}
+{role&&(
+<div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
+<span style={{fontSize:11,color:'var(--text-3)'}}>Your role:</span>
+<span style={{
+background:role==='owner'?'rgba(79,110,247,0.1)':role==='admin'?'rgba(22,163,74,0.1)':'rgba(217,119,6,0.1)',
+color:role==='owner'?'#4F6EF7':role==='admin'?'#16a34a':'#d97706',
+padding:'2px 10px',borderRadius:20,fontSize:11,fontWeight:600,textTransform:'capitalize'
+}}>{role}</span>
+{!canEdit&&<span style={{fontSize:11,color:'var(--text-3)'}}>— View only mode</span>}
 </div>
 )}
 
@@ -621,20 +651,20 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600
 <td style={{textAlign:'center'}}>
 <div style={{display:'flex',gap:4,justifyContent:'center',alignItems:'center'}}>
 <button type="button" onClick={()=>navigate(activeTab==='quotation'?`/quotation/${item.id}`:`/invoice/${item.id}`)} title="View/Print" style={{background:'none',border:'none',cursor:'pointer',color:'var(--primary)',padding:4,borderRadius:6}}><Printer size={14}/></button>
-<button type="button" onClick={()=>navigate(activeTab==='quotation'?`/edit-quotation/${item.id}`:`/edit/${item.id}`)} title="Edit" style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Edit size={14}/></button>
+<button type="button" onClick={()=>handleEditNav(item)} title="Edit" style={{background:'none',border:'none',cursor:canEdit?'pointer':'not-allowed',color:canEdit?'var(--text-2)':'var(--text-3)',padding:4,borderRadius:6,opacity:canEdit?1:0.4}}><Edit size={14}/></button>
 {activeTab!=='customer'&&<>
 <button type="button" onClick={()=>handleDuplicate(item)} title="Duplicate" style={{background:'none',border:'none',cursor:'pointer',color:'#8b5cf6',padding:4,borderRadius:6}}><CopyPlus size={14}/></button>
 <button type="button" onClick={()=>handleShareLink(item)} title="Share link" style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Link size={14}/></button>
 {activeTab==='invoice'&&<>
 <button type="button" onClick={()=>openPaymentModal(item)} title="Record payment" style={{background:'none',border:'none',cursor:'pointer',color:'#16a34a',padding:4,borderRadius:6}}><DollarSign size={14}/></button>
-<button type="button" onClick={()=>handleSendReminder(item)} title="Send reminder email" disabled={sendingReminder===item.id} style={{background:'none',border:'none',cursor:'pointer',color:'#4F6EF7',padding:4,borderRadius:6,opacity:sendingReminder===item.id?0.5:1}}>
+<button type="button" onClick={()=>handleSendReminder(item)} title="Send reminder" disabled={sendingReminder===item.id} style={{background:'none',border:'none',cursor:'pointer',color:'#4F6EF7',padding:4,borderRadius:6,opacity:sendingReminder===item.id?0.5:1}}>
 {sendingReminder===item.id?<Clock size={14}/>:<Mail size={14}/>}
 </button>
 </>}
 {activeTab==='quotation'&&<button type="button" onClick={()=>handleConvertToInvoice(item)} title="Convert to Invoice" style={{background:'none',border:'none',cursor:'pointer',color:'#4F6EF7',padding:4,borderRadius:6}}><FileText size={14}/></button>}
 <button type="button" onClick={()=>handleStatus(item.id,'refunded')} title="Refund" style={{background:'none',border:'none',cursor:'pointer',color:'#d97706',padding:4,borderRadius:6}}><RefreshCcw size={14}/></button>
 </>}
-<button type="button" onClick={()=>handleDelete(item.id)} title="Delete" style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)',padding:4,borderRadius:6}}><Trash2 size={14}/></button>
+<button type="button" onClick={()=>handleDeleteWithAuth(item.id)} title="Delete" style={{background:'none',border:'none',cursor:canDelete?'pointer':'not-allowed',color:canDelete?'var(--danger)':'var(--text-3)',padding:4,borderRadius:6,opacity:canDelete?1:0.4}}><Trash2 size={14}/></button>
 </div>
 </td>
 </tr>
