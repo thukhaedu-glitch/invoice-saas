@@ -14,18 +14,25 @@ const snap=await getDocs(query(collection(db,'companies'),where(`members.${auth.
 if(!snap.empty){
 const cData=snap.docs[0].data()
 setCompanyId(snap.docs[0].id)
-setRole(cData.members?.[auth.currentUser.uid]||'staff')
+const userRole=cData.members?.[auth.currentUser.uid]
+setRole(userRole||'staff')
+}else{
+setRole('staff')
 }
-}catch(e){console.error(e)}
+}catch(e){
+console.error(e)
+setRole('staff')
+}
 setLoading(false)
 }
 load()
 },[])
 
-const canEdit=role==='owner'||role==='admin'
-const canDelete=role==='owner'||role==='admin'
-const canSettings=role==='owner'
-const canReports=role==='owner'||role==='admin'
+// Role loaded မဖြစ်သေးရင် false ပဲ return
+const canEdit=loading?false:role==='owner'||role==='admin'
+const canDelete=loading?false:role==='owner'||role==='admin'
+const canSettings=loading?false:role==='owner'
+const canReports=loading?false:role==='owner'||role==='admin'
 
 return{role,companyId,loading,canEdit,canDelete,canSettings,canReports}
 }
