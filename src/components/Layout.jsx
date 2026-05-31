@@ -3,7 +3,6 @@ import{auth}from'../firebase'
 import{signOut}from'firebase/auth'
 import{useLocation,useNavigate}from'react-router-dom'
 import{FileText,FileCheck,ScrollText,Users,Wallet,Briefcase,BarChart2,User,Settings,LogOut,Menu,X}from'lucide-react'
-
 const navItems=[
 {path:'/',label:'Invoices',icon:FileText},
 {path:'/quotations',label:'Quotations',icon:FileCheck},
@@ -13,17 +12,13 @@ const navItems=[
 {path:'/projects',label:'Projects',icon:Briefcase},
 {path:'/reports',label:'Reports',icon:BarChart2},
 ]
-
 export default function Layout({children,title}){
 const[open,setOpen]=useState(false)
 const location=useLocation()
 const navigate=useNavigate()
-
 return(
 <div style={{display:'flex',minHeight:'100vh'}}>
-
 {open&&<div onClick={()=>setOpen(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.3)',zIndex:98}}/>}
-
 <aside className={`sidebar${open?' open':''}`}>
 <div style={{padding:'20px 18px 16px',borderBottom:'0.5px solid var(--border)'}}>
 <div style={{display:'flex',alignItems:'center',gap:10}}>
@@ -36,7 +31,6 @@ return(
 </div>
 </div>
 </div>
-
 <nav style={{flex:1,padding:'12px 10px',overflowY:'auto'}}>
 <div style={{fontSize:10,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.07em',padding:'8px 8px 4px'}}>Main</div>
 {navItems.map(({path,label,icon:Icon})=>(
@@ -52,17 +46,15 @@ return(
 <Settings size={17}/><span>Settings</span>
 </div>
 </nav>
-
 <div style={{padding:10,borderTop:'0.5px solid var(--border)'}}>
 <div className="nav-item" style={{color:'#ef4444'}} onClick={()=>signOut(auth)}>
 <LogOut size={17}/><span>Logout</span>
 </div>
 </div>
 </aside>
-
 <div className="main-area">
 <div className="topbar">
-<button onClick={()=>setOpen(v=>!v)} className="btn btn-ghost" style={{padding:'6px 8px'}}>
+<button id="hamburger" onClick={()=>setOpen(v=>!v)} className="btn btn-ghost" style={{padding:'6px 8px'}}>
 {open?<X size={18}/>:<Menu size={18}/>}
 </button>
 <div style={{flex:1,fontWeight:500,fontSize:15,color:'var(--text-1)'}}>{title}</div>
