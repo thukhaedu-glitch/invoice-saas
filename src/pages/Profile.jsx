@@ -4,7 +4,7 @@ import{doc,getDoc,setDoc,getDocs,collection,query,where,updateDoc}from'firebase/
 import{updatePassword,reauthenticateWithCredential,EmailAuthProvider}from'firebase/auth'
 import{ref,uploadBytes,getDownloadURL}from'firebase/storage'
 import Layout from'../components/Layout'
-import{Save,Upload,User,Lock,Building2,X,Shield,Users}from'lucide-react'
+import{Save,Upload,User,Lock,Building2,X,Shield,Users,Copy,Check}from'lucide-react'
 
 const Section=({title,icon:Icon,children})=>(
 <div className="card" style={{padding:24,marginBottom:16}}>
@@ -21,12 +21,13 @@ const[saving,setSaving]=useState(false)
 const[uploadingAvatar,setUploadingAvatar]=useState(false)
 const[pwModal,setPwModal]=useState(false)
 const[profile,setProfile]=useState({displayName:'',avatarUrl:'',phone:'',role:'staff'})
-const[company,setCompany]=useState({name:'',plan:'free'})
+const[company,setCompany]=useState({name:'',plan:'free',inviteCode:''})
 const[members,setMembers]=useState([])
 const[pwForm,setPwForm]=useState({current:'',newPw:'',confirm:''})
 const[pwError,setPwError]=useState('')
 const[savingPw,setSavingPw]=useState(false)
 const[myRole,setMyRole]=useState('staff')
+const[copied,setCopied]=useState(false)
 
 useEffect(()=>{
 const load=async()=>{
@@ -36,23 +37,16 @@ if(!snap.empty){
 const cid=snap.docs[0].id
 const cData=snap.docs[0].data()
 setCompanyId(cid)
-setCompany({name:cData.name||'',plan:cData.plan||'free'})
+setCompany({name:cData.name||'',plan:cData.plan||'free',inviteCode:cData.inviteCode||''})
 const role=cData.members?.[user.uid]||'staff'
 setMyRole(role)
-
-// Load all members
 const memberIds=Object.keys(cData.members||{})
 const memberRoles=cData.members||{}
 const memberProfiles=await Promise.all(memberIds.map(async uid=>{
 const pSnap=await getDoc(doc(db,'users',uid))
-return{
-uid,
-role:memberRoles[uid],
-...(pSnap.exists()?pSnap.data():{displayName:'Unknown',email:'-'})
-}
+return{uid,role:memberRoles[uid],...(pSnap.exists()?pSnap.data():{displayName:'Unknown',email:'-'})}
 }))
 setMembers(memberProfiles)
-
 const pSnap=await getDoc(doc(db,'users',user.uid))
 if(pSnap.exists())setProfile(p=>({...p,...pSnap.data(),role}))
 else setProfile(p=>({...p,displayName:user.displayName||'',avatarUrl:user.photoURL||'',role}))
@@ -105,6 +99,12 @@ try{
 await updateDoc(doc(db,'companies',companyId),{[`members.${uid}`]:newRole})
 setMembers(m=>m.map(mem=>mem.uid===uid?{...mem,role:newRole}:mem))
 }catch(e){alert(e.message)}
+}
+
+const handleCopyInvite=()=>{
+navigator.clipboard.writeText(company.inviteCode)
+setCopied(true)
+setTimeout(()=>setCopied(false),2000)
 }
 
 const roleColor={owner:'#4F6EF7',admin:'#16a34a',staff:'#d97706'}
@@ -189,9 +189,21 @@ return(
 <span style={{fontSize:13,fontWeight:500}}>{value}</span>
 </div>
 ))}
+{/* Invite Code */}
+<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderBottom:'0.5px solid #f1f5f9'}}>
+<span style={{fontSize:13,color:'var(--text-2)'}}>Invite Code</span>
+<div style={{display:'flex',alignItems:'center',gap:8}}>
+<span style={{fontFamily:'monospace',fontWeight:600,color:'var(--primary)',fontSize:14,letterSpacing:1}}>{company.inviteCode||'-'}</span>
+{company.inviteCode&&(
+<button type="button" onClick={handleCopyInvite} style={{background:'none',border:'none',cursor:'pointer',color:copied?'#16a34a':'var(--text-3)',padding:2}}>
+{copied?<Check size={14}/>:<Copy size={14}/>}
+</button>
+)}
+</div>
+</div>
 </Section>
 
-{/* Team / Organization */}
+{/* Organization */}
 <Section title="Organization" icon={Users}>
 <div style={{marginBottom:12,fontSize:12,color:'var(--text-3)'}}>
 {members.length} member{members.length!==1?'s':''} in {company.name}
