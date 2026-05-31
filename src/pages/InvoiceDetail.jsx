@@ -231,7 +231,42 @@ body{background:white!important;margin:0}
 <div style={{fontSize:13,color:'#64748b'}}>{invoice.note}</div>
 </div>
 )}
-
+{/* Payment History */}
+{invoice.payments?.length>0&&(
+<div style={{padding:'16px 40px',borderBottom:'0.5px solid #f1f5f9'}}>
+<div style={{fontSize:11,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',marginBottom:10,letterSpacing:'0.05em'}}>Payment History</div>
+<table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+<thead>
+<tr style={{borderBottom:`1px solid ${pc}30`}}>
+<th style={{textAlign:'left',padding:'6px 0',color:pc,fontWeight:600,fontSize:10,textTransform:'uppercase'}}>Date</th>
+<th style={{textAlign:'left',padding:'6px 8px',color:pc,fontWeight:600,fontSize:10,textTransform:'uppercase'}}>Method</th>
+<th style={{textAlign:'left',padding:'6px 8px',color:pc,fontWeight:600,fontSize:10,textTransform:'uppercase'}}>Note</th>
+<th style={{textAlign:'right',padding:'6px 0',color:pc,fontWeight:600,fontSize:10,textTransform:'uppercase'}}>Amount</th>
+</tr>
+</thead>
+<tbody>
+{invoice.payments.map((p,i)=>(
+<tr key={i} style={{borderBottom:'0.5px solid #f8fafc'}}>
+<td style={{padding:'7px 0',color:'#1a1d2e',fontWeight:500}}>{p.date||'-'}</td>
+<td style={{padding:'7px 8px',color:'#64748b'}}>{p.method||'-'}</td>
+<td style={{padding:'7px 8px',color:'#64748b'}}>{p.note||'-'}</td>
+<td style={{padding:'7px 0',textAlign:'right',fontWeight:600,color:'#16a34a'}}>{Number(p.amount||0).toLocaleString()} Ks</td>
+</tr>
+))}
+</tbody>
+</table>
+<div style={{display:'flex',justifyContent:'space-between',padding:'10px 0 4px',marginTop:8,borderTop:`1px solid ${pc}30`,fontSize:13}}>
+<span style={{color:'#9aa0b4'}}>Total Paid</span>
+<span style={{fontWeight:700,color:'#16a34a'}}>{Number(invoice.paidAmount||0).toLocaleString()} Ks</span>
+</div>
+{Number(invoice.remainingAmount||0)>0&&(
+<div style={{display:'flex',justifyContent:'space-between',padding:'4px 0',fontSize:13}}>
+<span style={{color:'#9aa0b4'}}>Remaining</span>
+<span style={{fontWeight:700,color:'#d97706'}}>{Number(invoice.remainingAmount||0).toLocaleString()} Ks</span>
+</div>
+)}
+</div>
+)}
 {/* Footer + QR */}
 <div style={{padding:'16px 40px',background:'#f8fafc',display:'flex',justifyContent:'space-between',alignItems:'center',gap:20}}>
 <div>
