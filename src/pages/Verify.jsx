@@ -1,21 +1,26 @@
 import{useEffect,useState}from'react'
 import{useParams}from'react-router-dom'
 import{db}from'../firebase'
-import{collection,getDocs,query,where}from'firebase/firestore'
-import{CheckCircle,XCircle,Clock,FileText}from'lucide-react'
+import{collection,getDocs,query,where,doc,getDoc}from'firebase/firestore'
+import{CheckCircle,XCircle,Clock,FileText,Building2}from'lucide-react'
 
 export default function Verify(){
 const{companyId,code}=useParams()
 const[invoice,setInvoice]=useState(null)
+const[company,setCompany]=useState(null)
 const[loading,setLoading]=useState(true)
 const[notFound,setNotFound]=useState(false)
 
 useEffect(()=>{
 const load=async()=>{
 try{
-const snap=await getDocs(query(collection(db,'companies',companyId,'invoices'),where('securityCode','==',code)))
-if(!snap.empty)setInvoice({id:snap.docs[0].id,...snap.docs[0].data()})
+const[invSnap,compSnap]=await Promise.all([
+getDocs(query(collection(db,'companies',companyId,'invoices'),where('securityCode','==',code))),
+getDoc(doc(db,'companies',companyId))
+])
+if(!invSnap.empty)setInvoice({id:invSnap.docs[0].id,...invSnap.docs[0].data()})
 else setNotFound(true)
+if(compSnap.exists())setCompany(compSnap.data())
 }catch(e){console.error(e);setNotFound(true)}
 setLoading(false)
 }
@@ -52,7 +57,9 @@ return(
 </div>
 <div>
 <div style={{fontWeight:700,fontSize:18}}>Invoice Verification</div>
-<div style={{fontSize:12,opacity:0.8}}>Invoice SaaS</div>
+<div style={{fontSize:12,opacity:0.8,display:'flex',alignItems:'center',gap:4}}>
+<Building2 size={11}/>{company?.name||'Invoice SaaS'}
+</div>
 </div>
 </div>
 <div style={{fontSize:13,opacity:0.9}}>Invoice #{invoice.invoiceNumber}</div>
@@ -68,6 +75,7 @@ return(
 </div>
 <div style={{padding:'24px 32px'}}>
 {[
+{label:'Company',value:company?.name||'-'},
 {label:'Client',value:invoice.clientName},
 {label:'Amount',value:`${Number(invoice.totalAmount||0).toLocaleString()} Ks`},
 {label:'Date',value:invoice.date||'-'},
