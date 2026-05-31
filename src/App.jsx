@@ -4,29 +4,19 @@ import{auth}from'./firebase'
 import{onAuthStateChanged}from'firebase/auth'
 import Login from'./pages/Login'
 import Dashboard from'./pages/Dashboard'
-import CreateInvoice from'./pages/CreateInvoice'
 
 export default function App(){
 const[user,setUser]=useState(null)
 const[loading,setLoading]=useState(true)
-
 useEffect(()=>{
 return onAuthStateChanged(auth,u=>{setUser(u);setLoading(false)})
 },[])
-
-if(loading)return(
-<div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',color:'#9aa0b4'}}>
-Loading...
-</div>
-)
-
+if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',color:'#9aa0b4'}}>Loading...</div>
 return(
 <BrowserRouter>
 <Routes>
 <Route path="/login" element={!user?<Login/>:<Navigate to="/"/>}/>
-<Route path="/" element={user?<Dashboard/>:<Navigate to="/login"/>}/>
-<Route path="/create-invoice" element={user?<CreateInvoice/>:<Navigate to="/login"/>}/>
-<Route path="/*" element={<Navigate to="/"/>}/>
+<Route path="/*" element={user?<Dashboard/>:<Navigate to="/login"/>}/>
 </Routes>
 </BrowserRouter>
 )
