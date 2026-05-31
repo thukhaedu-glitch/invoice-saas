@@ -1,23 +1,32 @@
 import{useState,useEffect}from'react'
 import{db,auth,storage}from'../firebase'
 import{doc,getDoc,setDoc,getDocs,collection,query,where,updateDoc}from'firebase/firestore'
-import{updatePassword,updateEmail,reauthenticateWithCredential,EmailAuthProvider}from'firebase/auth'
+import{updatePassword,reauthenticateWithCredential,EmailAuthProvider}from'firebase/auth'
 import{ref,uploadBytes,getDownloadURL}from'firebase/storage'
 import Layout from'../components/Layout'
-import{Save,Upload,User,Lock,Building2,X}from'lucide-react'
+import{Save,Upload,User,Lock,Building2,X,Shield,Users}from'lucide-react'
+
+const Section=({title,icon:Icon,children})=>(
+<div className="card" style={{padding:24,marginBottom:16}}>
+<div style={{display:'flex',alignItems:'center',gap:8,fontWeight:600,fontSize:13,color:'var(--text-2)',marginBottom:16,textTransform:'uppercase',letterSpacing:'0.05em'}}>
+<Icon size={15}/>{title}
+</div>
+{children}
+</div>
+)
 
 export default function Profile(){
 const[companyId,setCompanyId]=useState(null)
 const[saving,setSaving]=useState(false)
 const[uploadingAvatar,setUploadingAvatar]=useState(false)
 const[pwModal,setPwModal]=useState(false)
-const[profile,setProfile]=useState({
-displayName:'',avatarUrl:'',phone:'',
-})
+const[profile,setProfile]=useState({displayName:'',avatarUrl:'',phone:'',role:'staff'})
 const[company,setCompany]=useState({name:'',plan:'free'})
+const[members,setMembers]=useState([])
 const[pwForm,setPwForm]=useState({current:'',newPw:'',confirm:''})
 const[pwError,setPwError]=useState('')
 const[savingPw,setSavingPw]=useState(false)
+const[myRole,setMyRole]=useState('staff')
 
 useEffect(()=>{
 const load=async()=>{
@@ -28,9 +37,25 @@ const cid=snap.docs[0].id
 const cData=snap.docs[0].data()
 setCompanyId(cid)
 setCompany({name:cData.name||'',plan:cData.plan||'free'})
+const role=cData.members?.[user.uid]||'staff'
+setMyRole(role)
+
+// Load all members
+const memberIds=Object.keys(cData.members||{})
+const memberRoles=cData.members||{}
+const memberProfiles=await Promise.all(memberIds.map(async uid=>{
+const pSnap=await getDoc(doc(db,'users',uid))
+return{
+uid,
+role:memberRoles[uid],
+...(pSnap.exists()?pSnap.data():{displayName:'Unknown',email:'-'})
+}
+}))
+setMembers(memberProfiles)
+
 const pSnap=await getDoc(doc(db,'users',user.uid))
-if(pSnap.exists())setProfile(p=>({...p,...pSnap.data()}))
-else setProfile(p=>({...p,displayName:user.displayName||'',avatarUrl:user.photoURL||''}))
+if(pSnap.exists())setProfile(p=>({...p,...pSnap.data(),role}))
+else setProfile(p=>({...p,displayName:user.displayName||'',avatarUrl:user.photoURL||'',role}))
 }
 }
 load()
@@ -52,7 +77,7 @@ setUploadingAvatar(false)
 const save=async()=>{
 setSaving(true)
 try{
-await setDoc(doc(db,'users',auth.currentUser.uid),{...profile},{ merge:true})
+await setDoc(doc(db,'users',auth.currentUser.uid),{...profile},{merge:true})
 alert('Profile saved!')
 }catch(e){alert(e.message)}
 setSaving(false)
@@ -61,7 +86,7 @@ setSaving(false)
 const handleChangePassword=async()=>{
 setPwError('')
 if(pwForm.newPw!==pwForm.confirm){setPwError('Passwords do not match');return}
-if(pwForm.newPw.length<6){setPwError('Password must be at least 6 characters');return}
+if(pwForm.newPw.length<6){setPwError('Min 6 characters');return}
 setSavingPw(true)
 try{
 const credential=EmailAuthProvider.credential(auth.currentUser.email,pwForm.current)
@@ -74,18 +99,20 @@ alert('Password changed!')
 setSavingPw(false)
 }
 
-const Section=({title,icon:Icon,children})=>(
-<div className="card" style={{padding:24,marginBottom:16}}>
-<div style={{display:'flex',alignItems:'center',gap:8,fontWeight:600,fontSize:13,color:'var(--text-2)',marginBottom:16,textTransform:'uppercase',letterSpacing:'0.05em'}}>
-<Icon size={15}/>{title}
-</div>
-{children}
-</div>
-)
+const handleRoleChange=async(uid,newRole)=>{
+if(myRole!=='owner'){alert('Only owner can change roles');return}
+try{
+await updateDoc(doc(db,'companies',companyId),{[`members.${uid}`]:newRole})
+setMembers(m=>m.map(mem=>mem.uid===uid?{...mem,role:newRole}:mem))
+}catch(e){alert(e.message)}
+}
+
+const roleColor={owner:'#4F6EF7',admin:'#16a34a',staff:'#d97706'}
+const roleBg={owner:'rgba(79,110,247,0.1)',admin:'rgba(22,163,74,0.1)',staff:'rgba(217,119,6,0.1)'}
 
 return(
 <Layout title="Profile">
-<div style={{maxWidth:560,margin:'0 auto'}}>
+<div style={{maxWidth:600,margin:'0 auto'}}>
 
 {/* Password Modal */}
 {pwModal&&(
@@ -97,11 +124,7 @@ return(
 </div>
 <div style={{padding:24}}>
 {pwError&&<div style={{background:'#fcebeb',color:'#dc2626',padding:'8px 12px',borderRadius:8,fontSize:13,marginBottom:12}}>{pwError}</div>}
-{[
-{label:'Current Password',key:'current'},
-{label:'New Password',key:'newPw'},
-{label:'Confirm Password',key:'confirm'},
-].map(({label,key})=>(
+{[{label:'Current Password',key:'current'},{label:'New Password',key:'newPw'},{label:'Confirm Password',key:'confirm'}].map(({label,key})=>(
 <div key={key} style={{marginBottom:12}}>
 <label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>{label}</label>
 <input className="form-input" type="password" value={pwForm[key]} onChange={e=>setPwForm(f=>({...f,[key]:e.target.value}))} placeholder="••••••••"/>
@@ -118,8 +141,8 @@ return(
 </div>
 )}
 
-{/* Avatar */}
-<Section title="Profile" icon={User}>
+{/* Profile */}
+<Section title="My Profile" icon={User}>
 <div style={{display:'flex',alignItems:'center',gap:20,marginBottom:20}}>
 <div style={{position:'relative'}}>
 <div style={{width:80,height:80,borderRadius:'50%',background:'var(--primary-light)',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',border:'2px solid var(--primary)'}}>
@@ -135,7 +158,8 @@ return(
 <div>
 <div style={{fontWeight:600,fontSize:16,color:'var(--text-1)'}}>{profile.displayName||auth.currentUser?.email}</div>
 <div style={{fontSize:12,color:'var(--text-3)',marginTop:2}}>{auth.currentUser?.email}</div>
-<div style={{marginTop:8}}>
+<div style={{display:'flex',gap:6,marginTop:8,flexWrap:'wrap'}}>
+<span style={{background:roleBg[myRole]||'#f1f5f9',color:roleColor[myRole]||'#64748b',padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:600,textTransform:'capitalize'}}>{myRole}</span>
 <span style={{background:'var(--primary-light)',color:'var(--primary)',padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:600,textTransform:'capitalize'}}>{company.plan} Plan</span>
 </div>
 </div>
@@ -147,29 +171,55 @@ return(
 </div>
 <div style={{gridColumn:'1/-1'}}>
 <label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Phone</label>
-<input className="form-input" value={profile.phone} onChange={e=>setProfile(p=>({...p,phone:e.target.value}))} placeholder="09..."/>
+<input className="form-input" value={profile.phone||''} onChange={e=>setProfile(p=>({...p,phone:e.target.value}))} placeholder="09..."/>
 </div>
 </div>
 </Section>
 
 {/* Company */}
 <Section title="Company" icon={Building2}>
-<div style={{display:'flex',justifyContent:'space-between',padding:'8px 0',borderBottom:'0.5px solid #f1f5f9'}}>
-<span style={{fontSize:13,color:'var(--text-2)'}}>Company Name</span>
-<span style={{fontSize:13,fontWeight:500}}>{company.name}</span>
+{[
+{label:'Company Name',value:company.name},
+{label:'My Role',value:<span style={{background:roleBg[myRole]||'#f1f5f9',color:roleColor[myRole]||'#64748b',padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:600,textTransform:'capitalize'}}>{myRole}</span>},
+{label:'Plan',value:company.plan},
+{label:'Email',value:auth.currentUser?.email},
+].map(({label,value})=>(
+<div key={label} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom:'0.5px solid #f1f5f9'}}>
+<span style={{fontSize:13,color:'var(--text-2)'}}>{label}</span>
+<span style={{fontSize:13,fontWeight:500}}>{value}</span>
 </div>
-<div style={{display:'flex',justifyContent:'space-between',padding:'8px 0',borderBottom:'0.5px solid #f1f5f9'}}>
-<span style={{fontSize:13,color:'var(--text-2)'}}>Plan</span>
-<span style={{fontSize:13,fontWeight:500,textTransform:'capitalize'}}>{company.plan}</span>
+))}
+</Section>
+
+{/* Team / Organization */}
+<Section title="Organization" icon={Users}>
+<div style={{marginBottom:12,fontSize:12,color:'var(--text-3)'}}>
+{members.length} member{members.length!==1?'s':''} in {company.name}
 </div>
-<div style={{display:'flex',justifyContent:'space-between',padding:'8px 0'}}>
-<span style={{fontSize:13,color:'var(--text-2)'}}>Email</span>
-<span style={{fontSize:13,fontWeight:500}}>{auth.currentUser?.email}</span>
+{members.map(m=>(
+<div key={m.uid} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 0',borderBottom:'0.5px solid #f1f5f9'}}>
+<div style={{width:36,height:36,borderRadius:'50%',background:'var(--primary-light)',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',flexShrink:0}}>
+{m.avatarUrl?<img src={m.avatarUrl} style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<User size={18} color="var(--primary)"/>}
 </div>
+<div style={{flex:1}}>
+<div style={{fontSize:13,fontWeight:500,color:'var(--text-1)'}}>{m.displayName||m.email||m.uid.slice(0,8)}</div>
+<div style={{fontSize:11,color:'var(--text-3)'}}>{m.uid===auth.currentUser?.uid?'(You)':''}</div>
+</div>
+{myRole==='owner'&&m.uid!==auth.currentUser?.uid?(
+<select value={m.role} onChange={e=>handleRoleChange(m.uid,e.target.value)} className="form-input" style={{width:'auto',fontSize:12,padding:'4px 8px'}}>
+<option value="owner">Owner</option>
+<option value="admin">Admin</option>
+<option value="staff">Staff</option>
+</select>
+):(
+<span style={{background:roleBg[m.role]||'#f1f5f9',color:roleColor[m.role]||'#64748b',padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:600,textTransform:'capitalize'}}>{m.role}</span>
+)}
+</div>
+))}
 </Section>
 
 {/* Security */}
-<Section title="Security" icon={Lock}>
+<Section title="Security" icon={Shield}>
 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
 <div>
 <div style={{fontSize:13,fontWeight:500,color:'var(--text-1)'}}>Password</div>
