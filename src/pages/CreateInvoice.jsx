@@ -10,13 +10,14 @@ export default function CreateInvoice(){
 const navigate=useNavigate()
 const[companyId,setCompanyId]=useState(null)
 const[customers,setCustomers]=useState([])
+const[projects,setProjects]=useState([])
 const[saving,setSaving]=useState(false)
 const[uploadingIdx,setUploadingIdx]=useState(null)
 const[form,setForm]=useState({
 clientName:'',clientEmail:'',clientPhone:'',clientAddress:'',
 invoiceNumber:'INV-'+Date.now().toString().slice(-6),
 date:new Date().toISOString().split('T')[0],
-note:'',discount:0,taxRate:0,
+note:'',discount:0,taxRate:0,projectId:''
 })
 const[items,setItems]=useState([{desc:'',qty:1,price:0,imageUrl:''}])
 
@@ -26,8 +27,12 @@ const snap=await getDocs(query(collection(db,'companies'),where(`members.${auth.
 if(!snap.empty){
 const cid=snap.docs[0].id
 setCompanyId(cid)
-const cSnap=await getDocs(collection(db,'companies',cid,'customers'))
+const[cSnap,pSnap]=await Promise.all([
+getDocs(collection(db,'companies',cid,'customers')),
+getDocs(collection(db,'companies',cid,'projects')),
+])
 setCustomers(cSnap.docs.map(d=>({id:d.id,...d.data()})))
+setProjects(pSnap.docs.map(d=>({id:d.id,...d.data()})))
 }
 }
 load()
@@ -93,7 +98,7 @@ return(
 <Layout title="Create Invoice">
 <div style={{maxWidth:760,margin:'0 auto'}}>
 <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:24}}>
-<button onClick={()=>navigate('/')} className="btn btn-ghost" style={{padding:'8px 12px'}}>
+<button type="button" onClick={()=>navigate('/')} className="btn btn-ghost" style={{padding:'8px 12px'}}>
 <ArrowLeft size={16}/>
 </button>
 <h2 style={{fontSize:18,fontWeight:600,color:'var(--text-1)'}}>New Invoice</h2>
@@ -128,6 +133,14 @@ return(
 <label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Address</label>
 <input className="form-input" value={form.clientAddress} onChange={e=>setForm(f=>({...f,clientAddress:e.target.value}))} placeholder="Address..."/>
 </div>
+{/* Project Link */}
+<div style={{gridColumn:'1/-1'}}>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Link to Project (optional)</label>
+<select className="form-input" value={form.projectId} onChange={e=>setForm(f=>({...f,projectId:e.target.value}))}>
+<option value="">— No Project —</option>
+{projects.map(p=><option key={p.id} value={p.id}>{p.name}{p.clientName?` (${p.clientName})`:''}</option>)}
+</select>
+</div>
 </div>
 </div>
 
@@ -143,16 +156,15 @@ return(
 <div className="form-input" style={{display:'flex',alignItems:'center',justifyContent:'flex-end',fontWeight:500,background:'white'}}>
 {(item.qty*item.price).toLocaleString()} Ks
 </div>
-<button onClick={()=>items.length>1&&setItems(items.filter((_,j)=>j!==i))} style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+<button type="button" onClick={()=>items.length>1&&setItems(items.filter((_,j)=>j!==i))} style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)',display:'flex',alignItems:'center',justifyContent:'center'}}>
 <Trash2 size={15}/>
 </button>
 </div>
-{/* Image */}
 <div style={{display:'flex',alignItems:'center',gap:10}}>
 {item.imageUrl?(
 <div style={{position:'relative',display:'inline-block'}}>
 <img src={item.imageUrl} style={{height:64,width:64,objectFit:'cover',borderRadius:8,border:'0.5px solid var(--border)'}}/>
-<button onClick={()=>removeItemImage(i)} style={{position:'absolute',top:-6,right:-6,background:'#ef4444',border:'none',borderRadius:'50%',width:18,height:18,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',padding:0}}>
+<button type="button" onClick={()=>removeItemImage(i)} style={{position:'absolute',top:-6,right:-6,background:'#ef4444',border:'none',borderRadius:'50%',width:18,height:18,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',padding:0}}>
 <X size={10} color="white"/>
 </button>
 </div>
@@ -168,7 +180,7 @@ return(
 </div>
 </div>
 ))}
-<button onClick={()=>setItems([...items,{desc:'',qty:1,price:0,imageUrl:''}])} className="btn btn-ghost" style={{fontSize:13}}>
+<button type="button" onClick={()=>setItems([...items,{desc:'',qty:1,price:0,imageUrl:''}])} className="btn btn-ghost" style={{fontSize:13}}>
 <Plus size={15}/>Add Item
 </button>
 </div>
@@ -210,8 +222,8 @@ return(
 </div>
 
 <div style={{display:'flex',justifyContent:'flex-end',gap:8}}>
-<button onClick={()=>navigate('/')} className="btn btn-ghost">Cancel</button>
-<button onClick={save} disabled={saving} className="btn btn-primary">
+<button type="button" onClick={()=>navigate('/')} className="btn btn-ghost">Cancel</button>
+<button type="button" onClick={save} disabled={saving} className="btn btn-primary">
 <Save size={15}/>{saving?'Saving...':'Save Invoice'}
 </button>
 </div>
