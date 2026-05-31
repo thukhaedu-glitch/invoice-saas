@@ -7,7 +7,7 @@ import{getDocs,collection,query,where}from'firebase/firestore'
 import Notifications from'./Notifications'
 import{useNotifications}from'../hooks/useNotifications'
 import{useRecurring}from'../hooks/useRecurring'
-
+import{useRole}from'../hooks/useRole'
 
 
 const navItems=[
@@ -27,6 +27,7 @@ const location=useLocation()
 const navigate=useNavigate()
 const[searchParams]=useSearchParams()
 
+  
 useEffect(()=>{
 const load=async()=>{
 try{
@@ -52,6 +53,13 @@ if(item.tab)navigate(`/?tab=${item.tab}`)
 else navigate(item.path)
 setOpen(false)
 }
+const{canSettings}=useRole()
+{canSettings&&(
+<div className="nav-item" onClick={()=>{navigate('/settings');setOpen(false)}}>
+<Settings size={17}/><span>Settings</span>
+</div>
+)}
+
 
 return(
 <div style={{display:'flex',minHeight:'100vh'}}>
