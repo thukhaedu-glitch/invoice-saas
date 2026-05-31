@@ -2,7 +2,7 @@ import{useState,useEffect}from'react'
 import{db,auth}from'../firebase'
 import{doc,getDoc,setDoc,getDocs,collection,query,where}from'firebase/firestore'
 import Layout from'../components/Layout'
-import{Save,Upload,Building2,CreditCard,FileText}from'lucide-react'
+import{Save,Upload,Building2,CreditCard,FileText,Plus,Trash2}from'lucide-react'
 
 export default function Settings(){
 const[companyId,setCompanyId]=useState(null)
@@ -20,8 +20,8 @@ companyEmail:'',
 companyAddress:'',
 companyWebsite:'',
 trnNumber:'',
-paymentTerms:'Due on receipt',
-paymentMethods:'',
+paymentTerms:'',
+paymentMethods:[],
 })
 
 useEffect(()=>{
@@ -51,6 +51,14 @@ const reader=new FileReader()
 reader.onload=ev=>setSettings(s=>({...s,logoUrl:ev.target.result}))
 reader.readAsDataURL(file)
 }
+
+const addPaymentMethod=()=>setSettings(s=>({...s,paymentMethods:[...s.paymentMethods,{bankName:'',accountNo:'',accountName:''}]}))
+const updatePaymentMethod=(i,k,v)=>{
+const arr=[...settings.paymentMethods]
+arr[i]={...arr[i],[k]:v}
+setSettings(s=>({...s,paymentMethods:arr}))
+}
+const removePaymentMethod=i=>setSettings(s=>({...s,paymentMethods:s.paymentMethods.filter((_,j)=>j!==i)}))
 
 const templates=['classic','modern','minimal','elegant']
 const colors=['#4F6EF7','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#1a1d2e']
@@ -165,22 +173,46 @@ transition:'all 0.15s'
 </Field>
 </Section>
 
-{/* Payment */}
-<Section title="Payment" icon={CreditCard}>
-<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-<Field label="Payment Terms">
-<select className="form-input" value={settings.paymentTerms} onChange={e=>setSettings(s=>({...s,paymentTerms:e.target.value}))}>
-<option>Due on receipt</option>
-<option>Net 7</option>
-<option>Net 15</option>
-<option>Net 30</option>
-<option>Net 60</option>
-</select>
-</Field>
-<Field label="Payment Methods">
-<input className="form-input" value={settings.paymentMethods} onChange={e=>setSettings(s=>({...s,paymentMethods:e.target.value}))} placeholder="KBZ Pay, AYA Pay, Cash..."/>
-</Field>
+{/* Payment Methods */}
+<Section title="Payment Methods" icon={CreditCard}>
+<div style={{overflowX:'auto',marginBottom:12}}>
+{settings.paymentMethods.length>0&&(
+<table style={{width:'100%',borderCollapse:'collapse',fontSize:13,marginBottom:12}}>
+<thead>
+<tr style={{background:'#f8fafc'}}>
+<th style={{padding:'8px 10px',textAlign:'left',fontSize:11,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase'}}>Bank Name</th>
+<th style={{padding:'8px 10px',textAlign:'left',fontSize:11,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase'}}>Account No.</th>
+<th style={{padding:'8px 10px',textAlign:'left',fontSize:11,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase'}}>Account Name</th>
+<th style={{width:40}}></th>
+</tr>
+</thead>
+<tbody>
+{settings.paymentMethods.map((m,i)=>(
+<tr key={i} style={{borderBottom:'0.5px solid var(--border)'}}>
+<td style={{padding:'6px 8px'}}><input className="form-input" value={m.bankName} onChange={e=>updatePaymentMethod(i,'bankName',e.target.value)} placeholder="KBZ Bank..."/></td>
+<td style={{padding:'6px 8px'}}><input className="form-input" value={m.accountNo} onChange={e=>updatePaymentMethod(i,'accountNo',e.target.value)} placeholder="0001234567"/></td>
+<td style={{padding:'6px 8px'}}><input className="form-input" value={m.accountName} onChange={e=>updatePaymentMethod(i,'accountName',e.target.value)} placeholder="John Doe"/></td>
+<td style={{padding:'6px 8px',textAlign:'center'}}>
+<button onClick={()=>removePaymentMethod(i)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)'}}>
+<Trash2 size={14}/>
+</button>
+</td>
+</tr>
+))}
+</tbody>
+</table>
+)}
+<button onClick={addPaymentMethod} className="btn btn-ghost" style={{fontSize:13}}>
+<Plus size={14}/>Add Payment Method
+</button>
 </div>
+</Section>
+
+{/* Payment Terms */}
+<Section title="Payment Terms" icon={CreditCard}>
+<Field label="Terms">
+<input className="form-input" value={settings.paymentTerms} onChange={e=>setSettings(s=>({...s,paymentTerms:e.target.value}))} placeholder="e.g. Due on receipt, Net 30..."/>
+</Field>
 </Section>
 
 {/* Footer & QR */}
