@@ -9,12 +9,17 @@
     "lint": "eslint .",
     "preview": "vite preview"
   },
-   "dependencies": {
+  "dependencies": {
+    "@emailjs/browser": "^4.0.0",
     "firebase": "^12.14.0",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^2.5.1",
+    "lucide-react": "^0.511.0",
+    "qrcode.react": "^4.2.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
+    "react-quill": "^2.0.0",
     "react-router-dom": "^7.16.0"
-    "@emailjs/browser": "^4.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
