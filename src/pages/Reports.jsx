@@ -15,6 +15,10 @@ const TABS=[
 
 const BAR_H=160
 
+const monthNamesFull=['January','February','March','April','May','June','July','August','September','October','November','December']
+const monthNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+const months=['01','02','03','04','05','06','07','08','09','10','11','12']
+
 export default function Reports(){
 const[companyId,setCompanyId]=useState(null)
 const[invoices,setInvoices]=useState([])
@@ -24,6 +28,7 @@ const[loading,setLoading]=useState(true)
 const[activeTab,setActiveTab]=useState('pnl')
 const[filterYear,setFilterYear]=useState(new Date().getFullYear().toString())
 const[filterMonth,setFilterMonth]=useState('')
+const[expandedMonth,setExpandedMonth]=useState(null)
 
 useEffect(()=>{
 const load=async()=>{
@@ -68,10 +73,6 @@ const totalRevenue=paidInvoices.reduce((s,i)=>s+Number(i.paidAmount||i.totalAmou
 const totalExpenses=filteredExpenses.reduce((s,e)=>s+Number(e.amount||0),0)
 const netProfit=totalRevenue-totalExpenses
 
-const months=['01','02','03','04','05','06','07','08','09','10','11','12']
-const monthNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-const monthNamesFull=['January','February','March','April','May','June','July','August','September','October','November','December']
-
 const years=[...new Set([
 ...invoices.map(i=>getInvDate(i)?.slice(0,4)),
 ...expenses.map(e=>e.date?.slice(0,4))
@@ -82,11 +83,10 @@ const mInv=invoices.filter(i=>getInvDate(i)?.startsWith(`${filterYear}-${m}`))
 const mExp=expenses.filter(e=>e.date?.startsWith(`${filterYear}-${m}`))
 const revenue=mInv.filter(i=>i.status==='paid'||i.status==='partial').reduce((s,i)=>s+Number(i.paidAmount||i.totalAmount||0),0)
 const expense=mExp.reduce((s,e)=>s+Number(e.amount||0),0)
-return{month:monthNamesFull[idx],shortMonth:monthNames[idx],revenue,expense,profit:revenue-expense}
+return{month:monthNamesFull[idx],shortMonth:monthNames[idx],mNum:m,revenue,expense,profit:revenue-expense}
 }).filter(m=>m.revenue>0||m.expense>0)
 
-// Tax summary
-const totalTax=filteredInvoices.reduce((s,i)=>s+Number(i.taxRate||0)>0?s+(Number(i.totalAmount||0)*(Number(i.taxRate||0)/100)):s,0)
+const totalTax=filteredInvoices.reduce((s,i)=>Number(i.taxRate||0)>0?s+(Number(i.totalAmount||0)*(Number(i.taxRate||0)/100)):s,0)
 const taxByMonth=months.map((m,idx)=>{
 const mInv=invoices.filter(i=>getInvDate(i)?.startsWith(`${filterYear}-${m}`))
 const tax=mInv.reduce((s,i)=>s+(Number(i.totalAmount||0)*(Number(i.taxRate||0)/100)),0)
@@ -94,21 +94,17 @@ const taxable=mInv.filter(i=>Number(i.taxRate||0)>0)
 return{month:monthNamesFull[idx],tax,taxableInvoices:taxable.length,totalAmount:taxable.reduce((s,i)=>s+Number(i.totalAmount||0),0)}
 }).filter(m=>m.tax>0)
 
-// Project P&L
 const projectPnL=projects.map(p=>{
 const pInv=invoices.filter(i=>i.projectId===p.id&&(i.status==='paid'||i.status==='partial'))
 const pExp=expenses.filter(e=>e.projectId===p.id)
 const revenue=pInv.reduce((s,i)=>s+Number(i.paidAmount||i.totalAmount||0),0)
 const expense=pExp.reduce((s,e)=>s+Number(e.amount||0),0)
-const profit=revenue-expense
-return{...p,revenue,expense,profit,invoiceCount:pInv.length,expenseCount:pExp.length}
+return{...p,revenue,expense,profit:revenue-expense,invoiceCount:pInv.length,expenseCount:pExp.length}
 }).sort((a,b)=>b.profit-a.profit)
 
-// Journal
 const journalEntries=[
 ...filteredInvoices.map(i=>({
-date:getInvDate(i)||'-',
-type:'Invoice',ref:i.invoiceNumber||'-',
+date:getInvDate(i)||'-',type:'Invoice',ref:i.invoiceNumber||'-',
 description:`Invoice to ${i.clientName}`,
 debit:Number(i.totalAmount||0),credit:0,status:i.status,
 })),
@@ -118,7 +114,6 @@ description:e.title,debit:0,credit:Number(e.amount||0),status:'paid',
 })),
 ].sort((a,b)=>a.date.localeCompare(b.date))
 
-// Ledger
 const ledgerByClient=[...new Set(filteredInvoices.map(i=>i.clientName))].map(name=>{
 const clientInv=filteredInvoices.filter(i=>i.clientName===name)
 const totalBilled=clientInv.reduce((s,i)=>s+Number(i.totalAmount||0),0)
@@ -139,8 +134,6 @@ URL.revokeObjectURL(url)
 const th={padding:'10px 14px',textAlign:'left',fontSize:11,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.05em',borderBottom:'0.5px solid var(--border)',background:'#fafbff'}
 const td={padding:'10px 14px',fontSize:13,borderBottom:'0.5px solid #f1f5f9',color:'var(--text-1)'}
 const tdR={...td,textAlign:'right'}
-
-// Chart max value
 const chartMax=Math.max(...pnlMonths.map(m=>Math.max(m.revenue,m.expense)),1)
 
 if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh'}}>Loading...</div>
@@ -151,7 +144,7 @@ return(
 {/* Filters */}
 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20,flexWrap:'wrap',gap:12}}>
 <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-<select className="form-input" style={{width:'auto'}} value={filterYear} onChange={e=>{setFilterYear(e.target.value);setFilterMonth('')}}>
+<select className="form-input" style={{width:'auto'}} value={filterYear} onChange={e=>{setFilterYear(e.target.value);setFilterMonth('');setExpandedMonth(null)}}>
 {(years.length?years:[new Date().getFullYear().toString()]).map(y=><option key={y} value={y}>{y}</option>)}
 </select>
 <select className="form-input" style={{width:'auto'}} value={filterMonth} onChange={e=>setFilterMonth(e.target.value)}>
@@ -211,9 +204,19 @@ color:activeTab===t.id?'#fff':'var(--text-2)',
 <tbody>
 {pnlMonths.length===0?(
 <tr><td colSpan={5} style={{...td,textAlign:'center',color:'var(--text-3)',padding:40}}>No data</td></tr>
-):pnlMonths.map(m=>(
-<tr key={m.month}>
-<td style={{...td,fontWeight:500}}>{m.month}</td>
+):pnlMonths.map(m=>{
+const isExpanded=expandedMonth===m.month
+const mInvs=invoices.filter(i=>getInvDate(i)?.startsWith(`${filterYear}-${m.mNum}`)&&(i.status==='paid'||i.status==='partial'))
+const mExps=expenses.filter(e=>e.date?.startsWith(`${filterYear}-${m.mNum}`))
+return(
+<>
+<tr key={m.month} onClick={()=>setExpandedMonth(isExpanded?null:m.month)} style={{cursor:'pointer',background:isExpanded?'rgba(79,110,247,0.04)':'white'}}>
+<td style={{...td,fontWeight:500}}>
+<span style={{display:'inline-flex',alignItems:'center',gap:6}}>
+<span style={{fontSize:10,color:'var(--primary)'}}>{isExpanded?'▼':'▶'}</span>
+{m.month}
+</span>
+</td>
 <td style={{...tdR,color:'#4F6EF7'}}>{m.revenue.toLocaleString()}</td>
 <td style={{...tdR,color:'#dc2626'}}>{m.expense.toLocaleString()}</td>
 <td style={{...tdR,fontWeight:600,color:m.profit>=0?'#16a34a':'#dc2626'}}>{m.profit.toLocaleString()}</td>
@@ -221,7 +224,85 @@ color:activeTab===t.id?'#fff':'var(--text-2)',
 {m.revenue>0?`${Math.round(m.profit/m.revenue*100)}%`:'-'}
 </td>
 </tr>
+{isExpanded&&(
+<tr key={m.month+'_detail'}>
+<td colSpan={5} style={{padding:0,background:'#f8fafc'}}>
+<div style={{padding:16}}>
+
+{/* Invoices Detail */}
+{mInvs.length>0&&(
+<div style={{marginBottom:12}}>
+<div style={{fontSize:11,fontWeight:600,color:'#4F6EF7',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:8}}>
+Invoices ({mInvs.length})
+</div>
+<table style={{width:'100%',borderCollapse:'collapse',background:'white',borderRadius:8,overflow:'hidden'}}>
+<thead>
+<tr style={{background:'rgba(79,110,247,0.06)'}}>
+<th style={{...th,padding:'7px 12px'}}>Number</th>
+<th style={{...th,padding:'7px 12px'}}>Client</th>
+<th style={{...th,padding:'7px 12px',textAlign:'right'}}>Amount</th>
+<th style={{...th,padding:'7px 12px',textAlign:'right'}}>Paid</th>
+<th style={{...th,padding:'7px 12px',textAlign:'center'}}>Status</th>
+</tr>
+</thead>
+<tbody>
+{mInvs.map(i=>(
+<tr key={i.id}>
+<td style={{...td,padding:'7px 12px',fontFamily:'monospace',fontSize:11,color:'var(--primary)'}}>{i.invoiceNumber}</td>
+<td style={{...td,padding:'7px 12px',fontWeight:500}}>{i.clientName}</td>
+<td style={{...td,padding:'7px 12px',textAlign:'right'}}>{Number(i.totalAmount||0).toLocaleString()} Ks</td>
+<td style={{...td,padding:'7px 12px',textAlign:'right',color:'#16a34a',fontWeight:500}}>{Number(i.paidAmount||i.totalAmount||0).toLocaleString()} Ks</td>
+<td style={{...td,padding:'7px 12px',textAlign:'center'}}>
+<span style={{background:i.status==='paid'?'#eaf3de':'#e6f1fb',color:i.status==='paid'?'#16a34a':'#2563eb',padding:'2px 8px',borderRadius:20,fontSize:10,fontWeight:500}}>{i.status}</span>
+</td>
+</tr>
 ))}
+</tbody>
+</table>
+</div>
+)}
+
+{/* Expenses Detail */}
+{mExps.length>0&&(
+<div>
+<div style={{fontSize:11,fontWeight:600,color:'#dc2626',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:8}}>
+Expenses ({mExps.length})
+</div>
+<table style={{width:'100%',borderCollapse:'collapse',background:'white',borderRadius:8,overflow:'hidden'}}>
+<thead>
+<tr style={{background:'rgba(220,38,38,0.04)'}}>
+<th style={{...th,padding:'7px 12px'}}>Title</th>
+<th style={{...th,padding:'7px 12px'}}>Category</th>
+<th style={{...th,padding:'7px 12px'}}>Date</th>
+<th style={{...th,padding:'7px 12px',textAlign:'right'}}>Amount</th>
+</tr>
+</thead>
+<tbody>
+{mExps.map(e=>(
+<tr key={e.id}>
+<td style={{...td,padding:'7px 12px',fontWeight:500}}>{e.title}</td>
+<td style={{...td,padding:'7px 12px'}}>
+<span style={{background:'var(--primary-light)',color:'var(--primary)',padding:'2px 8px',borderRadius:20,fontSize:10}}>{e.category}</span>
+</td>
+<td style={{...td,padding:'7px 12px',color:'var(--text-3)',fontSize:12}}>{e.date}</td>
+<td style={{...td,padding:'7px 12px',textAlign:'right',color:'#dc2626',fontWeight:500}}>{Number(e.amount||0).toLocaleString()} Ks</td>
+</tr>
+))}
+</tbody>
+</table>
+</div>
+)}
+
+{mInvs.length===0&&mExps.length===0&&(
+<div style={{textAlign:'center',color:'var(--text-3)',fontSize:13,padding:20}}>No detailed records</div>
+)}
+</div>
+</td>
+</tr>
+)}
+</>
+)
+})}
 </tbody>
 {pnlMonths.length>0&&(
 <tfoot><tr style={{background:'#f8fafc'}}>
@@ -246,30 +327,17 @@ color:activeTab===t.id?'#fff':'var(--text-2)',
 <div style={{textAlign:'center',color:'var(--text-3)',padding:40}}>No data for selected period</div>
 ):(
 <>
-{/* Bar Chart */}
 <div style={{display:'flex',alignItems:'flex-end',gap:8,height:BAR_H+40,overflowX:'auto',paddingBottom:8}}>
 {pnlMonths.map(m=>(
 <div key={m.month} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4,minWidth:48,flex:1}}>
 <div style={{display:'flex',alignItems:'flex-end',gap:3,height:BAR_H}}>
-<div title={`Revenue: ${m.revenue.toLocaleString()} Ks`} style={{
-width:18,borderRadius:'4px 4px 0 0',background:'#4F6EF7',
-height:`${Math.round(m.revenue/chartMax*BAR_H)}px`,
-minHeight:m.revenue>0?4:0,cursor:'pointer',
-transition:'height 0.3s',
-}}/>
-<div title={`Expense: ${m.expense.toLocaleString()} Ks`} style={{
-width:18,borderRadius:'4px 4px 0 0',background:'#ef4444',
-height:`${Math.round(m.expense/chartMax*BAR_H)}px`,
-minHeight:m.expense>0?4:0,cursor:'pointer',
-transition:'height 0.3s',
-}}/>
+<div title={`Revenue: ${m.revenue.toLocaleString()} Ks`} style={{width:18,borderRadius:'4px 4px 0 0',background:'#4F6EF7',height:`${Math.round(m.revenue/chartMax*BAR_H)}px`,minHeight:m.revenue>0?4:0,cursor:'pointer',transition:'height 0.3s'}}/>
+<div title={`Expense: ${m.expense.toLocaleString()} Ks`} style={{width:18,borderRadius:'4px 4px 0 0',background:'#ef4444',height:`${Math.round(m.expense/chartMax*BAR_H)}px`,minHeight:m.expense>0?4:0,cursor:'pointer',transition:'height 0.3s'}}/>
 </div>
 <div style={{fontSize:10,color:'var(--text-3)',textAlign:'center'}}>{m.shortMonth}</div>
 </div>
 ))}
 </div>
-
-{/* Legend */}
 <div style={{display:'flex',gap:20,marginTop:8,justifyContent:'center'}}>
 <div style={{display:'flex',alignItems:'center',gap:6,fontSize:12,color:'var(--text-2)'}}>
 <div style={{width:12,height:12,borderRadius:3,background:'#4F6EF7'}}/>Revenue
@@ -278,8 +346,6 @@ transition:'height 0.3s',
 <div style={{width:12,height:12,borderRadius:3,background:'#ef4444'}}/>Expenses
 </div>
 </div>
-
-{/* Profit Line */}
 <div style={{marginTop:24,padding:16,background:'#f8fafc',borderRadius:12}}>
 <div style={{fontSize:12,fontWeight:600,color:'var(--text-2)',marginBottom:12,textTransform:'uppercase',letterSpacing:'0.05em'}}>Monthly Profit</div>
 <div style={{display:'flex',gap:8,overflowX:'auto'}}>
@@ -293,8 +359,6 @@ transition:'height 0.3s',
 ))}
 </div>
 </div>
-
-{/* Expense by Category */}
 {filteredExpenses.length>0&&(
 <div style={{marginTop:20}}>
 <div style={{fontSize:12,fontWeight:600,color:'var(--text-2)',marginBottom:12,textTransform:'uppercase',letterSpacing:'0.05em'}}>Expenses by Category</div>
@@ -335,9 +399,7 @@ return(
 ):(
 <table style={{width:'100%',borderCollapse:'collapse'}}>
 <thead><tr>
-<th style={th}>Project</th>
-<th style={th}>Client</th>
-<th style={th}>Status</th>
+<th style={th}>Project</th><th style={th}>Client</th><th style={th}>Status</th>
 <th style={{...th,textAlign:'center'}}>Inv</th>
 <th style={{...th,textAlign:'right'}}>Revenue (Ks)</th>
 <th style={{...th,textAlign:'right'}}>Expenses (Ks)</th>
@@ -350,19 +412,13 @@ return(
 <td style={{...td,fontWeight:500}}>{p.name}</td>
 <td style={{...td,color:'var(--text-2)'}}>{p.clientName||'-'}</td>
 <td style={td}>
-<span style={{
-background:p.status==='active'?'rgba(22,163,74,0.1)':p.status==='completed'?'rgba(79,110,247,0.1)':'#f1f5f9',
-color:p.status==='active'?'#16a34a':p.status==='completed'?'#4F6EF7':'#64748b',
-padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:500,textTransform:'capitalize'
-}}>{p.status}</span>
+<span style={{background:p.status==='active'?'rgba(22,163,74,0.1)':p.status==='completed'?'rgba(79,110,247,0.1)':'#f1f5f9',color:p.status==='active'?'#16a34a':p.status==='completed'?'#4F6EF7':'#64748b',padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:500,textTransform:'capitalize'}}>{p.status}</span>
 </td>
 <td style={{...td,textAlign:'center',fontSize:12}}>{p.invoiceCount}</td>
 <td style={{...tdR,color:'#4F6EF7',fontWeight:500}}>{p.revenue.toLocaleString()}</td>
 <td style={{...tdR,color:'#dc2626',fontWeight:500}}>{p.expense.toLocaleString()}</td>
 <td style={{...tdR,fontWeight:700,color:p.profit>=0?'#16a34a':'#dc2626'}}>{p.profit.toLocaleString()}</td>
-<td style={{...tdR,fontSize:12,color:p.profit>=0?'#16a34a':'#dc2626'}}>
-{p.revenue>0?`${Math.round(p.profit/p.revenue*100)}%`:'-'}
-</td>
+<td style={{...tdR,fontSize:12,color:p.profit>=0?'#16a34a':'#dc2626'}}>{p.revenue>0?`${Math.round(p.profit/p.revenue*100)}%`:'-'}</td>
 </tr>
 ))}
 </tbody>
@@ -492,7 +548,8 @@ padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:500,textTransform:'capi
 <table style={{width:'100%',borderCollapse:'collapse'}}>
 <thead><tr>
 <th style={th}>Client</th><th style={{...th,textAlign:'center'}}>Invoices</th>
-<th style={{...th,textAlign:'right'}}>Total Billed (Ks)</th><th style={{...th,textAlign:'right'}}>Total Paid (Ks)</th>
+<th style={{...th,textAlign:'right'}}>Total Billed (Ks)</th>
+<th style={{...th,textAlign:'right'}}>Total Paid (Ks)</th>
 <th style={{...th,textAlign:'right'}}>Balance Due (Ks)</th>
 </tr></thead>
 <tbody>
