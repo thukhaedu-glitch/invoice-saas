@@ -78,7 +78,7 @@ return(
 {label:'Company',value:company?.name||'-'},
 {label:'Client',value:invoice.clientName},
 {label:'Amount',value:`${Number(invoice.totalAmount||0).toLocaleString()} Ks`},
-{label:'Date',value:invoice.date||'-'},
+{label:'Date',value:invoice.date||(invoice.createdAt?.seconds?new Date(invoice.createdAt.seconds*1000).toLocaleDateString():'-')},
 {label:'Security Code',value:invoice.securityCode||'-'},
 ].map(({label,value})=>(
 <div key={label} style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'0.5px solid #f1f5f9'}}>
