@@ -59,7 +59,7 @@ box-shadow:0 4px 24px rgba(79,110,247,0.08);
 .badge-danger{background:#fcebeb;color:#A32D2D}
 .badge-info{background:#e6f1fb;color:#185FA5}
 .badge-gray{background:#f1f5f9;color:#64748b}
-table{width:100%;border-collapse:collapse;font-size:13px}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:600px}
 thead th{
 padding:10px 16px;text-align:left;
 font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;
