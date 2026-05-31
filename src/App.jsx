@@ -6,6 +6,7 @@ import Login from'./pages/Login'
 import Dashboard from'./pages/Dashboard'
 import Verify from'./pages/Verify'
 import InvoiceDetail from'./pages/InvoiceDetail'
+import Settings from'./pages/Settings'
 
 export default function App(){
 const[user,setUser]=useState(null)
@@ -17,13 +18,11 @@ return(
 <Routes>
 <Route path="/login" element={!user?<Login/>:<Navigate to="/"/>}/>
 <Route path="/verify/:companyId/:code" element={<Verify/>}/>
-<Route path="/*" element={user?<Dashboard/>:<Navigate to="/login"/>}/>
+<Route path="/" element={user?<Dashboard/>:<Navigate to="/login"/>}/>
 <Route path="/invoice/:id" element={user?<InvoiceDetail/>:<Navigate to="/login"/>}/>
+<Route path="/settings" element={user?<Settings/>:<Navigate to="/login"/>}/>
+<Route path="/*" element={<Navigate to="/"/>}/>
 </Routes>
 </BrowserRouter>
 )
 }
-
-
-
-// Routes ထဲ
