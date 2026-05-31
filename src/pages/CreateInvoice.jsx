@@ -4,7 +4,7 @@ import{collection,addDoc,getDocs,query,where,serverTimestamp}from'firebase/fires
 import{ref,uploadBytes,getDownloadURL}from'firebase/storage'
 import{useNavigate}from'react-router-dom'
 import Layout from'../components/Layout'
-import{Plus,Trash2,Save,ArrowLeft,Image,X}from'lucide-react'
+import{Plus,Trash2,Save,ArrowLeft,Image,X,RefreshCcw}from'lucide-react'
 
 export default function CreateInvoice(){
 const navigate=useNavigate()
@@ -17,7 +17,8 @@ const[form,setForm]=useState({
 clientName:'',clientEmail:'',clientPhone:'',clientAddress:'',
 invoiceNumber:'INV-'+Date.now().toString().slice(-6),
 date:new Date().toISOString().split('T')[0],
-note:'',discount:0,taxRate:0,projectId:''
+note:'',discount:0,taxRate:0,projectId:'',
+recurring:false,recurringInterval:'monthly',recurringEndDate:'',
 })
 const[items,setItems]=useState([{desc:'',qty:1,price:0,imageUrl:''}])
 
@@ -88,11 +89,14 @@ securityCode:'SEC-'+Math.random().toString(36).substring(2,8).toUpperCase(),
 createdBy:auth.currentUser.uid,
 createdAt:serverTimestamp(),
 source:'manual',
+...(form.recurring?{lastRecurringDate:form.date}:{}),
 })
 navigate('/')
 }catch(e){alert(e.message)}
 setSaving(false)
 }
+
+const intervalLabel={weekly:'Every Week',monthly:'Every Month',quarterly:'Every 3 Months',yearly:'Every Year'}
 
 return(
 <Layout title="Create Invoice">
@@ -102,6 +106,11 @@ return(
 <ArrowLeft size={16}/>
 </button>
 <h2 style={{fontSize:18,fontWeight:600,color:'var(--text-1)'}}>New Invoice</h2>
+{form.recurring&&(
+<span style={{background:'rgba(79,110,247,0.1)',color:'var(--primary)',padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:600,display:'flex',alignItems:'center',gap:4}}>
+<RefreshCcw size={11}/>{intervalLabel[form.recurringInterval]}
+</span>
+)}
 </div>
 
 {/* Client Info */}
@@ -133,7 +142,6 @@ return(
 <label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Address</label>
 <input className="form-input" value={form.clientAddress} onChange={e=>setForm(f=>({...f,clientAddress:e.target.value}))} placeholder="Address..."/>
 </div>
-{/* Project Link */}
 <div style={{gridColumn:'1/-1'}}>
 <label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Link to Project (optional)</label>
 <select className="form-input" value={form.projectId} onChange={e=>setForm(f=>({...f,projectId:e.target.value}))}>
@@ -219,6 +227,60 @@ return(
 </div>
 </div>
 </div>
+</div>
+
+{/* Recurring Section */}
+<div className="card" style={{padding:20,marginBottom:16,border:form.recurring?'0.5px solid rgba(79,110,247,0.3)':'0.5px solid var(--border)'}}>
+<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:form.recurring?16:0}}>
+<div style={{display:'flex',alignItems:'center',gap:10}}>
+<div style={{width:32,height:32,borderRadius:8,background:'rgba(79,110,247,0.1)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+<RefreshCcw size={15} color="var(--primary)"/>
+</div>
+<div>
+<div style={{fontSize:13,fontWeight:600,color:'var(--text-1)'}}>Recurring Invoice</div>
+<div style={{fontSize:11,color:'var(--text-3)',marginTop:1}}>Auto-generate invoice on schedule</div>
+</div>
+</div>
+<label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer'}}>
+<div style={{
+width:40,height:22,borderRadius:11,
+background:form.recurring?'var(--primary)':'#e2e8f0',
+position:'relative',transition:'background 0.2s',cursor:'pointer',
+}} onClick={()=>setForm(f=>({...f,recurring:!f.recurring}))}>
+<div style={{
+position:'absolute',top:3,
+left:form.recurring?20:3,
+width:16,height:16,borderRadius:'50%',
+background:'white',transition:'left 0.2s',
+boxShadow:'0 1px 3px rgba(0,0,0,0.2)',
+}}/>
+</div>
+<span style={{fontSize:12,fontWeight:500,color:form.recurring?'var(--primary)':'var(--text-3)'}}>
+{form.recurring?'Enabled':'Disabled'}
+</span>
+</label>
+</div>
+
+{form.recurring&&(
+<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,paddingTop:16,borderTop:'0.5px solid var(--border)'}}>
+<div>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Repeat Interval</label>
+<select className="form-input" value={form.recurringInterval} onChange={e=>setForm(f=>({...f,recurringInterval:e.target.value}))}>
+<option value="weekly">Every Week</option>
+<option value="monthly">Every Month</option>
+<option value="quarterly">Every 3 Months</option>
+<option value="yearly">Every Year</option>
+</select>
+</div>
+<div>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>End Date (optional)</label>
+<input className="form-input" type="date" value={form.recurringEndDate} onChange={e=>setForm(f=>({...f,recurringEndDate:e.target.value}))}/>
+</div>
+<div style={{gridColumn:'1/-1',padding:12,background:'rgba(79,110,247,0.06)',borderRadius:8,fontSize:12,color:'var(--text-2)'}}>
+<strong style={{color:'var(--primary)'}}>ℹ️ How it works:</strong> Invoice တစ်ခု save လုပ်ပြီးရင် {intervalLabel[form.recurringInterval]} အလိုက် invoice အသစ် auto-generate ဖြစ်မည်။ App ကို load လုပ်တိုင်း check လုပ်မည်။
+</div>
+</div>
+)}
 </div>
 
 <div style={{display:'flex',justifyContent:'flex-end',gap:8}}>
