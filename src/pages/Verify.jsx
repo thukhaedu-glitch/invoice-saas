@@ -48,6 +48,7 @@ if(notFound)return(
 
 const s=invoice.status||'pending'
 const items=invoice.items||[]
+const subtotal=items.reduce((s,i)=>s+(i.qty||1)*(i.price||i.rate||0),0)
 
 return(
 <div style={{minHeight:'100vh',width:'100%',background:'linear-gradient(135deg,#e8f0fe,#f0f4ff,#e8f8f0)',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
@@ -95,30 +96,32 @@ return(
 ))}
 </div>
 
-{/* Items Table */}
+{/* Items */}
 {items.length>0&&(
 <div style={{padding:'20px 32px',borderBottom:'1px solid #f1f5f9'}}>
 <div style={{fontSize:12,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:12}}>Items</div>
-<table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+<div style={{overflowX:'auto'}}>
+<table style={{width:'100%',borderCollapse:'collapse',fontSize:13,minWidth:380}}>
 <thead>
 <tr style={{borderBottom:'0.5px solid #e2e8f0'}}>
-<th style={{textAlign:'left',padding:'6px 0',color:'#9aa0b4',fontWeight:600,fontSize:11,textTransform:'uppercase'}}>Description</th>
-<th style={{textAlign:'center',padding:'6px 0',color:'#9aa0b4',fontWeight:600,fontSize:11,textTransform:'uppercase',width:50}}>Qty</th>
-<th style={{textAlign:'right',padding:'6px 0',color:'#9aa0b4',fontWeight:600,fontSize:11,textTransform:'uppercase',width:90}}>Rate</th>
-<th style={{textAlign:'right',padding:'6px 0',color:'#9aa0b4',fontWeight:600,fontSize:11,textTransform:'uppercase',width:90}}>Total</th>
+<th style={{textAlign:'left',padding:'6px 8px 6px 0',color:'#9aa0b4',fontWeight:600,fontSize:11,textTransform:'uppercase'}}>Description</th>
+<th style={{textAlign:'center',padding:'6px 8px',color:'#9aa0b4',fontWeight:600,fontSize:11,textTransform:'uppercase',width:50}}>Qty</th>
+<th style={{textAlign:'right',padding:'6px 8px',color:'#9aa0b4',fontWeight:600,fontSize:11,textTransform:'uppercase',width:100}}>Rate</th>
+<th style={{textAlign:'right',padding:'6px 0 6px 8px',color:'#9aa0b4',fontWeight:600,fontSize:11,textTransform:'uppercase',width:100}}>Total</th>
 </tr>
 </thead>
 <tbody>
 {items.map((item,i)=>(
 <tr key={i} style={{borderBottom:'0.5px solid #f8fafc'}}>
-<td style={{padding:'8px 0',color:'#1a1d2e'}}>{item.desc||item.description||'-'}</td>
-<td style={{padding:'8px 0',textAlign:'center',color:'#64748b'}}>{item.qty||1}</td>
-<td style={{padding:'8px 0',textAlign:'right',color:'#64748b'}}>{Number(item.price||item.rate||0).toLocaleString()} Ks</td>
-<td style={{padding:'8px 0',textAlign:'right',fontWeight:500,color:'#1a1d2e'}}>{Number((item.qty||1)*(item.price||item.rate||0)).toLocaleString()} Ks</td>
+<td style={{padding:'8px 8px 8px 0',color:'#1a1d2e'}}>{item.desc||item.description||'-'}</td>
+<td style={{padding:'8px',textAlign:'center',color:'#64748b'}}>{item.qty||1}</td>
+<td style={{padding:'8px',textAlign:'right',color:'#64748b',whiteSpace:'nowrap'}}>{Number(item.price||item.rate||0).toLocaleString()} Ks</td>
+<td style={{padding:'8px 0 8px 8px',textAlign:'right',fontWeight:500,color:'#1a1d2e',whiteSpace:'nowrap'}}>{Number((item.qty||1)*(item.price||item.rate||0)).toLocaleString()} Ks</td>
 </tr>
 ))}
 </tbody>
 </table>
+</div>
 </div>
 )}
 
@@ -126,23 +129,23 @@ return(
 <div style={{padding:'16px 32px',borderBottom:'1px solid #f1f5f9'}}>
 <div style={{display:'flex',justifyContent:'space-between',padding:'6px 0',fontSize:13}}>
 <span style={{color:'#9aa0b4'}}>Subtotal</span>
-<span>{items.reduce((s,i)=>s+(i.qty||1)*(i.price||i.rate||0),0).toLocaleString()} Ks</span>
+<span style={{whiteSpace:'nowrap'}}>{subtotal.toLocaleString()} Ks</span>
 </div>
 {Number(invoice.discount||0)>0&&(
 <div style={{display:'flex',justifyContent:'space-between',padding:'6px 0',fontSize:13}}>
 <span style={{color:'#9aa0b4'}}>Discount</span>
-<span style={{color:'#dc2626'}}>-{Number(invoice.discount).toLocaleString()} Ks</span>
+<span style={{color:'#dc2626',whiteSpace:'nowrap'}}>-{Number(invoice.discount).toLocaleString()} Ks</span>
 </div>
 )}
 {Number(invoice.taxRate||0)>0&&(
 <div style={{display:'flex',justifyContent:'space-between',padding:'6px 0',fontSize:13}}>
 <span style={{color:'#9aa0b4'}}>Tax ({invoice.taxRate}%)</span>
-<span>+{Math.round(items.reduce((s,i)=>s+(i.qty||1)*(i.price||i.rate||0),0)*invoice.taxRate/100).toLocaleString()} Ks</span>
+<span style={{whiteSpace:'nowrap'}}>+{Math.round(subtotal*invoice.taxRate/100).toLocaleString()} Ks</span>
 </div>
 )}
 <div style={{display:'flex',justifyContent:'space-between',padding:'10px 0 4px',fontSize:15,fontWeight:700,borderTop:'0.5px solid #e2e8f0',marginTop:6}}>
 <span style={{color:'#1a1d2e'}}>Total</span>
-<span style={{color:'#4F6EF7'}}>{Number(invoice.totalAmount||0).toLocaleString()} Ks</span>
+<span style={{color:'#4F6EF7',whiteSpace:'nowrap'}}>{Number(invoice.totalAmount||0).toLocaleString()} Ks</span>
 </div>
 </div>
 
