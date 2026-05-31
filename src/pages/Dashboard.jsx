@@ -2,22 +2,23 @@ import{useState,useEffect}from'react'
 import{db,auth}from'../firebase'
 import{collection,onSnapshot,getDocs,query,where}from'firebase/firestore'
 import Layout from'../components/Layout'
-import{FileText,FileCheck,Users,Plus}from'lucide-react'
+import{FileText,FileCheck,Users,Plus,TrendingUp,CheckCircle,Clock,AlertCircle}from'lucide-react'
+import{useNavigate}from'react-router-dom'
 
 export default function Dashboard(){
 const[activeTab,setActiveTab]=useState('invoice')
 const[companyId,setCompanyId]=useState(null)
-const[companyName,setCompanyName]=useState('')
 const[invoices,setInvoices]=useState([])
 const[quotations,setQuotations]=useState([])
 const[customers,setCustomers]=useState([])
 const[loading,setLoading]=useState(true)
+const navigate=useNavigate()
 
 useEffect(()=>{
 const load=async()=>{
 try{
 const snap=await getDocs(query(collection(db,'companies'),where(`members.${auth.currentUser.uid}`,'!=',null)))
-if(!snap.empty){setCompanyId(snap.docs[0].id);setCompanyName(snap.docs[0].data().name||'')}
+if(!snap.empty)setCompanyId(snap.docs[0].id)
 }catch(e){console.error(e)}
 setLoading(false)
 }
@@ -43,18 +44,48 @@ const tabs=[
 ]
 const activeData=tabs.find(t=>t.id===activeTab)?.data||[]
 
+const paid=invoices.filter(i=>i.status==='paid')
+const pending=invoices.filter(i=>i.status==='pending')
+const overdue=invoices.filter(i=>i.status==='overdue')
+const totalAmt=invoices.reduce((s,i)=>s+Number(i.totalAmount||0),0)
+const paidAmt=paid.reduce((s,i)=>s+Number(i.totalAmount||0),0)
+const pendingAmt=pending.reduce((s,i)=>s+Number(i.totalAmount||0),0)
+
+const statsCards=[
+{label:'Total Invoices',value:invoices.length,amount:totalAmt,icon:TrendingUp,color:'#4F6EF7',bg:'rgba(79,110,247,0.10)'},
+{label:'Paid',value:paid.length,amount:paidAmt,icon:CheckCircle,color:'#16a34a',bg:'rgba(22,163,74,0.10)'},
+{label:'Pending',value:pending.length,amount:pendingAmt,icon:Clock,color:'#d97706',bg:'rgba(217,119,6,0.10)'},
+{label:'Overdue',value:overdue.length,amount:overdue.reduce((s,i)=>s+Number(i.totalAmount||0),0),icon:AlertCircle,color:'#dc2626',bg:'rgba(220,38,38,0.10)'},
+]
+
 const statusBadge=s=>{
-const map={paid:'badge-success',partial:'badge-info',refunded:'badge-danger',pending:'badge-warning'}
+const map={paid:'badge-success',partial:'badge-info',refunded:'badge-danger',pending:'badge-warning',overdue:'badge-danger'}
 return<span className={`badge ${map[s]||'badge-warning'}`}>{s||'pending'}</span>
 }
 
 if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh'}}>Loading...</div>
 
-const tabTitles={invoice:'Invoices',quotation:'Quotations',customer:'Customers'}
-
 return(
-<Layout title={tabTitles[activeTab]}>
-<div style={{marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+<Layout title="Dashboard">
+
+{/* Stats Cards */}
+<div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:20}}>
+{statsCards.map(({label,value,amount,icon:Icon,color,bg})=>(
+<div key={label} className="card" style={{padding:16}}>
+<div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+<span style={{fontSize:12,fontWeight:500,color:'var(--text-2)'}}>{label}</span>
+<div style={{width:32,height:32,borderRadius:8,background:bg,display:'flex',alignItems:'center',justifyContent:'center'}}>
+<Icon size={16} color={color}/>
+</div>
+</div>
+<div style={{fontSize:24,fontWeight:700,color:'var(--text-1)',marginBottom:2}}>{value}</div>
+<div style={{fontSize:12,color:'var(--text-3)'}}>{amount.toLocaleString()} Ks</div>
+</div>
+))}
+</div>
+
+{/* Tabs + New button */}
+<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
 <div style={{display:'flex',gap:4,background:'rgba(255,255,255,0.7)',border:'0.5px solid var(--border)',borderRadius:12,padding:4}}>
 {tabs.map(({id,label,icon:Icon,data})=>(
 <button key={id} onClick={()=>setActiveTab(id)} className="btn" style={{
@@ -72,11 +103,12 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600
 </button>
 ))}
 </div>
-<button className="btn btn-primary" style={{display:'flex',alignItems:'center',gap:6}}>
+<button className="btn btn-primary" onClick={()=>navigate('/create-invoice')}>
 <Plus size={15}/>New
 </button>
 </div>
 
+{/* Table */}
 <div className="card" style={{overflow:'hidden'}}>
 {activeData.length===0?(
 <div style={{padding:64,textAlign:'center',color:'var(--text-3)'}}>
@@ -90,13 +122,13 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600
 {activeTab==='customer'?<>
 <th>ID</th><th>Name</th><th>Phone</th><th>Email</th>
 </>:<>
-<th>Number</th><th>Client</th><th style={{textAlign:'right'}}>Amount</th><th style={{textAlign:'center'}}>Status</th><th>Date</th>
+<th>Number</th><th>Client</th><th style={{textAlign:'right'}}>Amount</th><th style={{textAlign:'center'}}>Status</th><th>Date</th><th>Action</th>
 </>}
 </tr>
 </thead>
 <tbody>
 {activeData.map(item=>(
-<tr key={item.id}>
+<tr key={item.id} style={{cursor:'pointer'}} onClick={()=>activeTab!=='customer'&&navigate(`/invoice/${item.id}`)}>
 {activeTab==='customer'?<>
 <td style={{color:'var(--text-3)',fontFamily:'monospace',fontSize:11}}>{item.customerId||'-'}</td>
 <td style={{fontWeight:500}}>{item.name}</td>
@@ -108,6 +140,7 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600
 <td style={{textAlign:'right',fontWeight:500}}>{Number(item.totalAmount||0).toLocaleString()} Ks</td>
 <td style={{textAlign:'center'}}>{statusBadge(item.status)}</td>
 <td style={{color:'var(--text-3)',fontSize:12}}>{item.createdAt?.seconds?new Date(item.createdAt.seconds*1000).toLocaleDateString():'-'}</td>
+<td style={{color:'var(--text-3)',fontSize:12}}>View →</td>
 </>}
 </tr>
 ))}
