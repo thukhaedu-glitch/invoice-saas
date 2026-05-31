@@ -2,8 +2,9 @@ import{useState,useEffect,useMemo}from'react'
 import{db,auth}from'../firebase'
 import{collection,onSnapshot,getDocs,query,where,doc,deleteDoc,updateDoc,addDoc,serverTimestamp,getDoc}from'firebase/firestore'
 import Layout from'../components/Layout'
-import{FileText,FileCheck,Users,Plus,TrendingUp,CheckCircle,Clock,AlertCircle,Edit,Trash2,RefreshCcw,Link,Printer,CheckSquare,CopyPlus,DollarSign,X,Search,Briefcase,Wallet}from'lucide-react'
+import{FileText,FileCheck,Users,Plus,TrendingUp,CheckCircle,Clock,AlertCircle,Edit,Trash2,RefreshCcw,Link,Printer,CheckSquare,CopyPlus,DollarSign,X,Search,Briefcase,Wallet,Mail}from'lucide-react'
 import{useNavigate,useSearchParams}from'react-router-dom'
+import{sendInvoiceReminder}from'../utils/emailService'
 
 const BAR_H=100
 const months=['01','02','03','04','05','06','07','08','09','10','11','12']
@@ -29,6 +30,8 @@ const[filterCustomer,setFilterCustomer]=useState('')
 const[filterStatus,setFilterStatus]=useState('')
 const[search,setSearch]=useState('')
 const[showChart,setShowChart]=useState(true)
+const[companyInfo,setCompanyInfo]=useState({})
+const[sendingReminder,setSendingReminder]=useState(null)
 const navigate=useNavigate()
 
 useEffect(()=>{
@@ -56,6 +59,12 @@ setPaymentMethodOptions(methods)
 setPaymentForm(f=>({...f,method:methods[0]}))
 }
 }
+setCompanyInfo({
+name:sd.companyName||'',
+email:sd.companyEmail||'',
+phone:sd.companyPhone||'',
+paymentMethods:sd.paymentMethods?.map(m=>`${m.bankName}: ${m.accountNo} (${m.accountName})`).join('\n')||''
+})
 }
 }catch(e){console.error(e)}
 }
@@ -100,7 +109,6 @@ const chartMax=Math.max(...chartData.map(m=>Math.max(m.revenue,m.pending)),1)
 const uniqueYears=[...new Set(invoices.map(i=>getInvDate(i)?.slice(0,4)).filter(Boolean))].sort().reverse()
 const uniqueCustomers=[...new Set(invoices.map(i=>i.clientName).filter(Boolean))].sort()
 
-// Widget data
 const top5Clients=useMemo(()=>{
 const map={}
 invoices.filter(i=>i.status==='paid'||i.status==='partial').forEach(i=>{
@@ -253,6 +261,34 @@ setPaymentModal(null)
 setSavingPayment(false)
 }
 
+const handleSendReminder=async(item)=>{
+if(!item.clientEmail){
+alert('This client has no email address. Please add email in customer profile.')
+return
+}
+if(!confirm(`Send payment reminder to ${item.clientName} (${item.clientEmail})?`))return
+setSendingReminder(item.id)
+try{
+const result=await sendInvoiceReminder({
+clientName:item.clientName,
+clientEmail:item.clientEmail,
+invoiceNumber:item.invoiceNumber,
+amount:item.remainingAmount||item.totalAmount||0,
+status:item.status,
+companyName:companyInfo.name,
+companyEmail:companyInfo.email,
+companyPhone:companyInfo.phone,
+paymentMethods:companyInfo.paymentMethods,
+})
+if(result.success){
+alert(`Reminder sent to ${item.clientEmail} ✓`)
+}else{
+alert('Failed to send: '+result.error)
+}
+}catch(e){alert(e.message)}
+setSendingReminder(null)
+}
+
 if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh'}}>Loading...</div>
 
 return(
@@ -373,10 +409,8 @@ return(
 )}
 </div>
 
-{/* Widgets Row 1 — Top Clients + Recent Payments */}
+{/* Widgets Row 1 */}
 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}>
-
-{/* Top 5 Clients */}
 <div className="card" style={{padding:20}}>
 <div style={{display:'flex',alignItems:'center',gap:8,fontWeight:600,fontSize:13,marginBottom:16,color:'var(--text-1)'}}>
 <Users size={15} color="var(--primary)"/>Top 5 Clients
@@ -402,7 +436,6 @@ return(
 })}
 </div>
 
-{/* Recent Payments */}
 <div className="card" style={{padding:20}}>
 <div style={{display:'flex',alignItems:'center',gap:8,fontWeight:600,fontSize:13,marginBottom:16,color:'var(--text-1)'}}>
 <CheckCircle size={15} color="#16a34a"/>Recent Payments
@@ -421,10 +454,8 @@ return(
 </div>
 </div>
 
-{/* Widgets Row 2 — Upcoming Due + Expense Breakdown */}
+{/* Widgets Row 2 */}
 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}>
-
-{/* Upcoming Due */}
 <div className="card" style={{padding:20}}>
 <div style={{display:'flex',alignItems:'center',gap:8,fontWeight:600,fontSize:13,marginBottom:16,color:'var(--text-1)'}}>
 <AlertCircle size={15} color="#dc2626"/>Outstanding Invoices
@@ -445,7 +476,6 @@ return(
 ))}
 </div>
 
-{/* Expense Breakdown */}
 <div className="card" style={{padding:20}}>
 <div style={{display:'flex',alignItems:'center',gap:8,fontWeight:600,fontSize:13,marginBottom:16,color:'var(--text-1)'}}>
 <Wallet size={15} color="#dc2626"/>Expense Breakdown
@@ -469,7 +499,7 @@ return(
 </div>
 </div>
 
-{/* Widget Row 3 — Project Status */}
+{/* Project Status */}
 {projects.length>0&&(
 <div className="card" style={{padding:20,marginBottom:16}}>
 <div style={{display:'flex',alignItems:'center',gap:8,fontWeight:600,fontSize:13,marginBottom:16,color:'var(--text-1)'}}>
@@ -492,7 +522,7 @@ return(
 </div>
 )}
 
-{/* Filters + Tabs + New */}
+{/* Tabs + Filters */}
 <div style={{marginBottom:12}}>
 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
 <div style={{display:'flex',gap:4,background:'rgba(255,255,255,0.7)',border:'0.5px solid var(--border)',borderRadius:12,padding:4}}>
@@ -595,7 +625,12 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600
 {activeTab!=='customer'&&<>
 <button type="button" onClick={()=>handleDuplicate(item)} title="Duplicate" style={{background:'none',border:'none',cursor:'pointer',color:'#8b5cf6',padding:4,borderRadius:6}}><CopyPlus size={14}/></button>
 <button type="button" onClick={()=>handleShareLink(item)} title="Share link" style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Link size={14}/></button>
-{activeTab==='invoice'&&<button type="button" onClick={()=>openPaymentModal(item)} title="Record payment" style={{background:'none',border:'none',cursor:'pointer',color:'#16a34a',padding:4,borderRadius:6}}><DollarSign size={14}/></button>}
+{activeTab==='invoice'&&<>
+<button type="button" onClick={()=>openPaymentModal(item)} title="Record payment" style={{background:'none',border:'none',cursor:'pointer',color:'#16a34a',padding:4,borderRadius:6}}><DollarSign size={14}/></button>
+<button type="button" onClick={()=>handleSendReminder(item)} title="Send reminder email" disabled={sendingReminder===item.id} style={{background:'none',border:'none',cursor:'pointer',color:'#4F6EF7',padding:4,borderRadius:6,opacity:sendingReminder===item.id?0.5:1}}>
+{sendingReminder===item.id?<Clock size={14}/>:<Mail size={14}/>}
+</button>
+</>}
 {activeTab==='quotation'&&<button type="button" onClick={()=>handleConvertToInvoice(item)} title="Convert to Invoice" style={{background:'none',border:'none',cursor:'pointer',color:'#4F6EF7',padding:4,borderRadius:6}}><FileText size={14}/></button>}
 <button type="button" onClick={()=>handleStatus(item.id,'refunded')} title="Refund" style={{background:'none',border:'none',cursor:'pointer',color:'#d97706',padding:4,borderRadius:6}}><RefreshCcw size={14}/></button>
 </>}
