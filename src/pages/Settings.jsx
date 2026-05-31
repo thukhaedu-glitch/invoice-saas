@@ -207,7 +207,29 @@ transition:'all 0.15s'
 </button>
 </div>
 </Section>
-
+{/* Expense Categories */}
+<Section title="Expense Categories" icon={Wallet}>
+<div style={{marginBottom:12}}>
+{(settings.expenseCategories||['Office','Transport','Food','Utilities','Marketing','Salary','Equipment','Software','Other']).map((cat,i)=>(
+<div key={i} style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+<input className="form-input" value={cat} onChange={e=>{
+const arr=[...(settings.expenseCategories||['Office','Transport','Food','Utilities','Marketing','Salary','Equipment','Software','Other'])]
+arr[i]=e.target.value
+setSettings(s=>({...s,expenseCategories:arr}))
+}}/>
+<button onClick={()=>{
+const arr=(settings.expenseCategories||['Office','Transport','Food','Utilities','Marketing','Salary','Equipment','Software','Other']).filter((_,j)=>j!==i)
+setSettings(s=>({...s,expenseCategories:arr}))
+}} style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)',flexShrink:0}}>
+<Trash2 size={14}/>
+</button>
+</div>
+))}
+<button onClick={()=>setSettings(s=>({...s,expenseCategories:[...(s.expenseCategories||[]),'New Category']}))} className="btn btn-ghost" style={{fontSize:13}}>
+<Plus size={14}/>Add Category
+</button>
+</div>
+</Section>
 {/* Payment Terms */}
 <Section title="Payment Terms" icon={CreditCard}>
 <Field label="Terms">
