@@ -158,10 +158,13 @@ body{background:white!important;margin:0}
 <tbody>
 {items.map((item,i)=>(
 <tr key={i} style={{borderBottom:'0.5px solid #f8fafc',background:i%2===0?'white':'#fafbff'}}>
-<td style={{padding:'10px 0',color:'#1a1d2e'}}>{item.desc||'-'}</td>
-<td style={{padding:'10px 8px',textAlign:'center',color:'#64748b'}}>{item.qty||1}</td>
-<td style={{padding:'10px 8px',textAlign:'right',color:'#64748b'}}>{Number(item.price||0).toLocaleString()} Ks</td>
-<td style={{padding:'10px 0',textAlign:'right',fontWeight:500,color:'#1a1d2e'}}>{Number((item.qty||1)*(item.price||0)).toLocaleString()} Ks</td>
+<td style={{padding:'10px 0',color:'#1a1d2e'}}>
+<div>{item.desc||'-'}</div>
+{item.imageUrl&&<img src={item.imageUrl} style={{height:60,width:60,objectFit:'cover',borderRadius:6,marginTop:6,border:'0.5px solid #e2e8f0'}}/>}
+</td>
+<td style={{padding:'10px 8px',textAlign:'center',color:'#64748b',verticalAlign:'top'}}>{item.qty||1}</td>
+<td style={{padding:'10px 8px',textAlign:'right',color:'#64748b',verticalAlign:'top'}}>{Number(item.price||0).toLocaleString()} Ks</td>
+<td style={{padding:'10px 0',textAlign:'right',fontWeight:500,color:'#1a1d2e',verticalAlign:'top'}}>{Number((item.qty||1)*(item.price||0)).toLocaleString()} Ks</td>
 </tr>
 ))}
 </tbody>
