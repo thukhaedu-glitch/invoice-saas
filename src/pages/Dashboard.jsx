@@ -318,8 +318,8 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600
 </>}
 <td style={{textAlign:'center'}}>
 <div style={{display:'flex',gap:4,justifyContent:'center',alignItems:'center'}}>
-<button type="button" onClick={()=>navigate(`/invoice/${item.id}`)} title="View/Print" style={{background:'none',border:'none',cursor:'pointer',color:'var(--primary)',padding:4,borderRadius:6}}><Printer size={14}/></button>
-<button type="button" onClick={()=>navigate(`/edit/${item.id}`)} title="Edit" style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Edit size={14}/></button>
+<button type="button" onClick={()=>navigate(activeTab==='quotation'?`/quotation/${item.id}`:`/invoice/${item.id}`)} title="View/Print" style={{background:'none',border:'none',cursor:'pointer',color:'var(--primary)',padding:4,borderRadius:6}}><Printer size={14}/></button>
+<button type="button" onClick={()=>navigate(activeTab==='quotation'?`/edit-quotation/${item.id}`:`/edit/${item.id}`)} title="Edit" style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Edit size={14}/></button>
 {activeTab!=='customer'&&<>
 <button type="button" onClick={()=>handleDuplicate(item)} title="Duplicate" style={{background:'none',border:'none',cursor:'pointer',color:'#8b5cf6',padding:4,borderRadius:6}}><CopyPlus size={14}/></button>
 <button type="button" onClick={()=>handleShareLink(item)} title="Share link" style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Link size={14}/></button>
