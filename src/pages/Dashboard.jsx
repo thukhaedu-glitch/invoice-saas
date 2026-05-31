@@ -1,8 +1,8 @@
 import{useState,useEffect}from'react'
 import{db,auth}from'../firebase'
-import{collection,onSnapshot,getDocs,query,where,doc,deleteDoc,updateDoc}from'firebase/firestore'
+import{collection,onSnapshot,getDocs,query,where,doc,deleteDoc,updateDoc,addDoc,serverTimestamp}from'firebase/firestore'
 import Layout from'../components/Layout'
-import{FileText,FileCheck,Users,Plus,TrendingUp,CheckCircle,Clock,AlertCircle,Copy,Edit,Trash2,RefreshCcw,Link,Printer,CheckSquare}from'lucide-react'
+import{FileText,FileCheck,Users,Plus,TrendingUp,CheckCircle,Clock,AlertCircle,Copy,Edit,Trash2,RefreshCcw,Link,Printer,CheckSquare,CopyPlus}from'lucide-react'
 import{useNavigate}from'react-router-dom'
 
 export default function Dashboard(){
@@ -12,7 +12,6 @@ const[invoices,setInvoices]=useState([])
 const[quotations,setQuotations]=useState([])
 const[customers,setCustomers]=useState([])
 const[loading,setLoading]=useState(true)
-const[menuOpen,setMenuOpen]=useState(null)
 const navigate=useNavigate()
 
 useEffect(()=>{
@@ -73,26 +72,38 @@ await deleteDoc(doc(db,'companies',companyId,collName,id))
 
 const handleStatus=async(id,status)=>{
 await updateDoc(doc(db,'companies',companyId,collName,id),{status})
-setMenuOpen(null)
 }
 
 const handleCopy=(item)=>{
 navigator.clipboard.writeText(item.invoiceNumber||item.quotationNumber||item.name||'')
-setMenuOpen(null)
 }
 
 const handleShareLink=(item)=>{
 const url=`${window.location.origin}/verify/${companyId}/${item.securityCode||item.id}`
 navigator.clipboard.writeText(url)
 alert('Link copied!')
-setMenuOpen(null)
+}
+
+const handleDuplicate=async(item)=>{
+if(!confirm('Duplicate this invoice?'))return
+try{
+const{id:_,...data}=item
+await addDoc(collection(db,'companies',companyId,collName),{
+...data,
+invoiceNumber:(item.invoiceNumber||item.quotationNumber||'INV')+'-COPY',
+status:'pending',
+securityCode:'SEC-'+Math.random().toString(36).substring(2,8).toUpperCase(),
+createdAt:serverTimestamp(),
+createdBy:auth.currentUser.uid,
+})
+alert('Duplicated!')
+}catch(e){alert(e.message)}
 }
 
 if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh'}}>Loading...</div>
 
 return(
 <Layout title="Dashboard">
-{menuOpen&&<div onClick={()=>setMenuOpen(null)} style={{position:'fixed',inset:0,zIndex:49}}/>}
 
 {/* Stats */}
 <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:20}}>
@@ -168,12 +179,13 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600
 <td style={{textAlign:'center'}}>{statusBadge(item.status)}</td>
 <td style={{color:'var(--text-3)',fontSize:12}}>{item.createdAt?.seconds?new Date(item.createdAt.seconds*1000).toLocaleDateString():'-'}</td>
 </>}
-<td style={{textAlign:'center',position:'relative'}}>
+<td style={{textAlign:'center'}}>
 <div style={{display:'flex',gap:4,justifyContent:'center',alignItems:'center'}}>
-<button onClick={()=>navigate(`/invoice/${item.id}`)} title="View" style={{background:'none',border:'none',cursor:'pointer',color:'var(--primary)',padding:4,borderRadius:6}}><Printer size={14}/></button>
+<button onClick={()=>navigate(`/invoice/${item.id}`)} title="View/Print" style={{background:'none',border:'none',cursor:'pointer',color:'var(--primary)',padding:4,borderRadius:6}}><Printer size={14}/></button>
 <button onClick={()=>handleCopy(item)} title="Copy number" style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Copy size={14}/></button>
 <button onClick={()=>navigate(`/edit/${item.id}`)} title="Edit" style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Edit size={14}/></button>
 {activeTab!=='customer'&&<>
+<button onClick={()=>handleDuplicate(item)} title="Duplicate" style={{background:'none',border:'none',cursor:'pointer',color:'#8b5cf6',padding:4,borderRadius:6}}><CopyPlus size={14}/></button>
 <button onClick={()=>handleShareLink(item)} title="Share link" style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Link size={14}/></button>
 <button onClick={()=>handleStatus(item.id,'paid')} title="Mark paid" style={{background:'none',border:'none',cursor:'pointer',color:'#16a34a',padding:4,borderRadius:6}}><CheckSquare size={14}/></button>
 <button onClick={()=>handleStatus(item.id,'refunded')} title="Refund" style={{background:'none',border:'none',cursor:'pointer',color:'#d97706',padding:4,borderRadius:6}}><RefreshCcw size={14}/></button>
