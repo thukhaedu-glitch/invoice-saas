@@ -18,6 +18,9 @@ import Profile from'./pages/Profile'
 import Projects from'./pages/Projects'
 import Signup from'./pages/Signup'
 import JoinCompany from'./pages/JoinCompany'
+import QuotationDetail from'./pages/QuotationDetail'
+import EditQuotation from'./pages/EditQuotation'
+
 
 
 
@@ -47,6 +50,10 @@ return(
 
 <Route path="/signup" element={!user?<Signup/>:<Navigate to="/"/>}/>
 <Route path="/join" element={!user?<JoinCompany/>:<Navigate to="/"/>}/>
+<Route path="/quotation/:id" element={user?<QuotationDetail/>:<Navigate to="/login"/>}/>
+<Route path="/edit-quotation/:id" element={user?<EditQuotation/>:<Navigate to="/login"/>}/>
+
+  
 </Routes>
 </BrowserRouter>
 )
