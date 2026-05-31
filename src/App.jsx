@@ -11,11 +11,10 @@ import CreateInvoice from'./pages/CreateInvoice'
 import EditInvoice from'./pages/EditInvoice'
 import Customers from'./pages/Customers'
 import Expenses from'./pages/Expenses'
-import Profile from'./pages/Profile'
 import Reports from'./pages/Reports'
-
-
-
+import Contracts from'./pages/Contracts'
+import CreateQuotation from'./pages/CreateQuotation'
+import Profile from'./pages/Profile'
 
 export default function App(){
 const[user,setUser]=useState(null)
@@ -29,15 +28,16 @@ return(
 <Route path="/verify/:companyId/:code" element={<Verify/>}/>
 <Route path="/" element={user?<Dashboard/>:<Navigate to="/login"/>}/>
 <Route path="/invoice/:id" element={user?<InvoiceDetail/>:<Navigate to="/login"/>}/>
-<Route path="/settings" element={user?<Settings/>:<Navigate to="/login"/>}/>
 <Route path="/create-invoice" element={user?<CreateInvoice/>:<Navigate to="/login"/>}/>
-<Route path="*" element={<Navigate to="/"/>}/>
 <Route path="/edit/:id" element={user?<EditInvoice/>:<Navigate to="/login"/>}/>
+<Route path="/create-quotation" element={user?<CreateQuotation/>:<Navigate to="/login"/>}/>
 <Route path="/customers" element={user?<Customers/>:<Navigate to="/login"/>}/>
 <Route path="/expenses" element={user?<Expenses/>:<Navigate to="/login"/>}/>
-<Route path="/profile" element={user?<Profile/>:<Navigate to="/login"/>}/>
 <Route path="/reports" element={user?<Reports/>:<Navigate to="/login"/>}/>
-
+<Route path="/contracts" element={user?<Contracts/>:<Navigate to="/login"/>}/>
+<Route path="/profile" element={user?<Profile/>:<Navigate to="/login"/>}/>
+<Route path="/settings" element={user?<Settings/>:<Navigate to="/login"/>}/>
+<Route path="*" element={<Navigate to="/"/>}/>
 </Routes>
 </BrowserRouter>
 )
