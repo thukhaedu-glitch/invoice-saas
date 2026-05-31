@@ -4,6 +4,7 @@ import{auth}from'./firebase'
 import{onAuthStateChanged}from'firebase/auth'
 import Login from'./pages/Login'
 import Dashboard from'./pages/Dashboard'
+import Verify from'./pages/Verify'
 
 export default function App(){
 const[user,setUser]=useState(null)
@@ -16,6 +17,7 @@ return(
 <BrowserRouter>
 <Routes>
 <Route path="/login" element={!user?<Login/>:<Navigate to="/"/>}/>
+<Route path="/verify/:code" element={<Verify/>}/>
 <Route path="/*" element={user?<Dashboard/>:<Navigate to="/login"/>}/>
 </Routes>
 </BrowserRouter>
