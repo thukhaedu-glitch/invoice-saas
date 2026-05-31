@@ -3,6 +3,7 @@ import{db,auth}from'../firebase'
 import{doc,getDoc,setDoc,getDocs,collection,query,where}from'firebase/firestore'
 import Layout from'../components/Layout'
 import{Save,Upload,Building2,CreditCard,FileText,Plus,Trash2}from'lucide-react'
+import{Save,Upload,Building2,CreditCard,FileText,Plus,Trash2,Wallet}from'lucide-react'
 
 export default function Settings(){
 const[companyId,setCompanyId]=useState(null)
