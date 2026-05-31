@@ -84,12 +84,13 @@ alert('Link copied!')
 }
 
 const handleDuplicate=async(item)=>{
-if(!confirm('Duplicate this invoice?'))return
+if(!confirm('Duplicate this?'))return
 try{
 const{id:_,...data}=item
 await addDoc(collection(db,'companies',companyId,collName),{
 ...data,
 invoiceNumber:(item.invoiceNumber||item.quotationNumber||'INV')+'-COPY',
+quotationNumber:(item.quotationNumber||'QUO')+'-COPY',
 status:'pending',
 securityCode:'SEC-'+Math.random().toString(36).substring(2,8).toUpperCase(),
 createdAt:serverTimestamp(),
@@ -149,7 +150,7 @@ return(
 {paymentModal.remainingAmount>0&&<span style={{color:'#d97706'}}> | Due: {Number(paymentModal.remainingAmount).toLocaleString()} Ks</span>}
 </div>
 </div>
-<button onClick={()=>setPaymentModal(null)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-3)'}}>
+<button type="button" onClick={()=>setPaymentModal(null)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-3)'}}>
 <X size={18}/>
 </button>
 </div>
@@ -157,8 +158,8 @@ return(
 <div style={{marginBottom:12}}>
 <label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Amount (Ks) *</label>
 <div style={{display:'flex',gap:8,marginBottom:6}}>
-<button onClick={()=>setPaymentForm(f=>({...f,amount:String(paymentModal.remainingAmount||paymentModal.totalAmount||0)}))} className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px'}}>Full Amount</button>
-{paymentModal.remainingAmount>0&&<button onClick={()=>setPaymentForm(f=>({...f,amount:String(paymentModal.remainingAmount)}))} className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px'}}>Remaining</button>}
+<button type="button" onClick={()=>setPaymentForm(f=>({...f,amount:String(paymentModal.remainingAmount||paymentModal.totalAmount||0)}))} className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px'}}>Full Amount</button>
+{paymentModal.remainingAmount>0&&<button type="button" onClick={()=>setPaymentForm(f=>({...f,amount:String(paymentModal.remainingAmount)}))} className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px'}}>Remaining</button>}
 </div>
 <input className="form-input" type="number" value={paymentForm.amount} onChange={e=>setPaymentForm(f=>({...f,amount:e.target.value}))} placeholder="Enter amount..."/>
 </div>
@@ -182,8 +183,6 @@ return(
 <label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Note</label>
 <input className="form-input" value={paymentForm.note} onChange={e=>setPaymentForm(f=>({...f,note:e.target.value}))} placeholder="Optional note..."/>
 </div>
-
-{/* Payment History */}
 {paymentModal.payments?.length>0&&(
 <div style={{marginBottom:16,padding:12,background:'#f8fafc',borderRadius:8}}>
 <div style={{fontSize:11,fontWeight:600,color:'var(--text-3)',marginBottom:8,textTransform:'uppercase'}}>Payment History</div>
@@ -195,10 +194,9 @@ return(
 ))}
 </div>
 )}
-
 <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
-<button onClick={()=>setPaymentModal(null)} className="btn btn-ghost">Cancel</button>
-<button onClick={handleSavePayment} disabled={savingPayment} className="btn btn-primary">
+<button type="button" onClick={()=>setPaymentModal(null)} className="btn btn-ghost">Cancel</button>
+<button type="button" onClick={handleSavePayment} disabled={savingPayment} className="btn btn-primary">
 <CheckSquare size={14}/>{savingPayment?'Saving...':'Save Payment'}
 </button>
 </div>
@@ -223,11 +221,11 @@ return(
 ))}
 </div>
 
-{/* Tabs */}
+{/* Tabs + New */}
 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
 <div style={{display:'flex',gap:4,background:'rgba(255,255,255,0.7)',border:'0.5px solid var(--border)',borderRadius:12,padding:4}}>
 {tabs.map(({id,label,icon:Icon,data})=>(
-<button key={id} onClick={()=>setActiveTab(id)} className="btn" style={{
+<button type="button" key={id} onClick={()=>setActiveTab(id)} className="btn" style={{
 padding:'7px 14px',borderRadius:8,fontSize:13,
 background:activeTab===id?'var(--primary)':'transparent',
 color:activeTab===id?'#fff':'var(--text-2)',
@@ -242,7 +240,7 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600
 </button>
 ))}
 </div>
-<button className="btn btn-primary" onClick={()=>navigate('/create-invoice')}>
+<button type="button" className="btn btn-primary" onClick={()=>navigate(activeTab==='quotation'?'/create-quotation':'/create-invoice')}>
 <Plus size={15}/>New
 </button>
 </div>
@@ -289,15 +287,15 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600
 </>}
 <td style={{textAlign:'center'}}>
 <div style={{display:'flex',gap:4,justifyContent:'center',alignItems:'center'}}>
-<button onClick={()=>navigate(`/invoice/${item.id}`)} title="View/Print" style={{background:'none',border:'none',cursor:'pointer',color:'var(--primary)',padding:4,borderRadius:6}}><Printer size={14}/></button>
-<button onClick={()=>navigate(`/edit/${item.id}`)} title="Edit" style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Edit size={14}/></button>
+<button type="button" onClick={()=>navigate(`/invoice/${item.id}`)} title="View/Print" style={{background:'none',border:'none',cursor:'pointer',color:'var(--primary)',padding:4,borderRadius:6}}><Printer size={14}/></button>
+<button type="button" onClick={()=>navigate(`/edit/${item.id}`)} title="Edit" style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Edit size={14}/></button>
 {activeTab!=='customer'&&<>
-<button onClick={()=>handleDuplicate(item)} title="Duplicate" style={{background:'none',border:'none',cursor:'pointer',color:'#8b5cf6',padding:4,borderRadius:6}}><CopyPlus size={14}/></button>
-<button onClick={()=>handleShareLink(item)} title="Share link" style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Link size={14}/></button>
-<button onClick={()=>openPaymentModal(item)} title="Record payment" style={{background:'none',border:'none',cursor:'pointer',color:'#16a34a',padding:4,borderRadius:6}}><DollarSign size={14}/></button>
-<button onClick={()=>handleStatus(item.id,'refunded')} title="Refund" style={{background:'none',border:'none',cursor:'pointer',color:'#d97706',padding:4,borderRadius:6}}><RefreshCcw size={14}/></button>
+<button type="button" onClick={()=>handleDuplicate(item)} title="Duplicate" style={{background:'none',border:'none',cursor:'pointer',color:'#8b5cf6',padding:4,borderRadius:6}}><CopyPlus size={14}/></button>
+<button type="button" onClick={()=>handleShareLink(item)} title="Share link" style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Link size={14}/></button>
+{activeTab==='invoice'&&<button type="button" onClick={()=>openPaymentModal(item)} title="Record payment" style={{background:'none',border:'none',cursor:'pointer',color:'#16a34a',padding:4,borderRadius:6}}><DollarSign size={14}/></button>}
+<button type="button" onClick={()=>handleStatus(item.id,'refunded')} title="Refund" style={{background:'none',border:'none',cursor:'pointer',color:'#d97706',padding:4,borderRadius:6}}><RefreshCcw size={14}/></button>
 </>}
-<button onClick={()=>handleDelete(item.id)} title="Delete" style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)',padding:4,borderRadius:6}}><Trash2 size={14}/></button>
+<button type="button" onClick={()=>handleDelete(item.id)} title="Delete" style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)',padding:4,borderRadius:6}}><Trash2 size={14}/></button>
 </div>
 </td>
 </tr>
