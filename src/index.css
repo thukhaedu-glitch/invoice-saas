@@ -60,7 +60,9 @@ box-shadow:0 4px 24px rgba(79,110,247,0.08);
 .badge-danger{background:#fcebeb;color:#A32D2D}
 .badge-info{background:#e6f1fb;color:#185FA5}
 .badge-gray{background:#f1f5f9;color:#64748b}
-table{width:100%;border-collapse:collapse;font-size:13px;min-width:600px}
+
+/* Table */
+table{width:100%;border-collapse:collapse;font-size:13px}
 thead th{
 padding:10px 16px;text-align:left;
 font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;
@@ -70,6 +72,8 @@ border-bottom:0.5px solid var(--border);
 tbody td{padding:11px 16px;border-bottom:0.5px solid var(--border);color:var(--text-1);vertical-align:middle}
 tbody tr:last-child td{border-bottom:none}
 tbody tr:hover{background:rgba(79,110,247,0.03)}
+
+/* Form */
 .form-input{
 width:100%;padding:9px 12px;
 border:0.5px solid var(--border);border-radius:8px;
@@ -78,6 +82,8 @@ font-size:13px;font-family:inherit;color:var(--text-1);
 outline:none;transition:all 0.15s;
 }
 .form-input:focus{border-color:rgba(79,110,247,0.5);box-shadow:0 0 0 3px rgba(79,110,247,0.10);background:#fff}
+
+/* Sidebar */
 .sidebar{
 position:fixed;top:0;left:0;bottom:0;
 width:var(--sidebar-w);
@@ -87,6 +93,7 @@ backdrop-filter:blur(20px) saturate(1.5);
 border-right:0.5px solid var(--glass-border);
 display:flex;flex-direction:column;
 z-index:100;
+transition:transform 0.3s ease;
 }
 .nav-item{
 display:flex;align-items:center;gap:10px;
@@ -106,36 +113,84 @@ border-bottom:0.5px solid var(--glass-border);
 display:flex;align-items:center;padding:0 20px;gap:12px;
 }
 .page-content{padding:20px;flex:1;max-width:100%}
-@media(max-width:768px){
-.sidebar{transform:translateX(-100%);transition:transform 0.3s}
-.sidebar.open{transform:translateX(0)}
-.main-area{margin-left:0}
-}
 
+/* Desktop */
 @media(min-width:769px){
-.sidebar{
-display:flex!important;
-transform:none!important;
-position:fixed;
-}
-.main-area{
-margin-left:var(--sidebar-w)!important;
-}
+.sidebar{transform:none!important;display:flex!important}
+.main-area{margin-left:var(--sidebar-w)!important}
 #hamburger{display:none!important}
 }
+
+/* Mobile */
+@media(max-width:768px){
+.sidebar{transform:translateX(-100%)}
+.sidebar.open{transform:translateX(0)!important}
+.main-area{margin-left:0!important}
+#hamburger{display:flex!important}
+.page-content{padding:12px}
+.topbar{padding:0 12px}
+
+/* Stats grid — 2 col on mobile */
+.stats-grid{grid-template-columns:repeat(2,1fr)!important}
+
+/* Table scroll */
+.card table{min-width:500px}
+.card div[style*="overflowX"]{overflow-x:auto!important}
+
+/* Hide less important table columns on mobile */
+table thead th:nth-child(5),
+table tbody td:nth-child(5){display:none}
+
+/* Form grid — 1 col on mobile */
+div[style*="gridTemplateColumns: 1fr 1fr"]{
+grid-template-columns:1fr!important;
+}
+div[style*="gridTemplateColumns:'1fr 1fr'"]{
+grid-template-columns:1fr!important;
+}
+div[style*="repeat(4,1fr)"]{
+grid-template-columns:repeat(2,1fr)!important;
+}
+div[style*="repeat(3,1fr)"]{
+grid-template-columns:repeat(2,1fr)!important;
+}
+div[style*="repeat(5,1fr)"]{
+grid-template-columns:repeat(2,1fr)!important;
+}
+
+/* Card padding */
+.card{border-radius:12px}
+
+/* Buttons */
+.btn{padding:7px 12px;font-size:12px}
+.btn-primary{box-shadow:0 2px 6px rgba(79,110,247,0.25)}
+
+/* Modal full width */
+div[style*="maxWidth:440"],
+div[style*="maxWidth:560"],
+div[style*="maxWidth:600"]{
+max-width:100%!important;
+margin:0!important;
+border-radius:16px!important;
+}
+
+/* Invoice/Contract print area */
+div[style*="210mm"]{
+width:100%!important;
+padding:20px!important;
+}
+}
+
+/* Extra small */
+@media(max-width:480px){
+.page-content{padding:8px}
+.topbar{height:50px}
+div[style*="repeat(2,1fr)"]{
+grid-template-columns:1fr!important;
+}
+div[style*="fontSize:24"]{font-size:18px!important}
+div[style*="fontSize:20"]{font-size:16px!important}
+}
+
 html{scroll-behavior:auto!important}
 button{scroll-margin:0}
-
-@media(max-width:768px){
-.sidebar{
-transform:translateX(-100%);
-transition:transform 0.3s ease;
-}
-.sidebar.open{
-transform:translateX(0)!important;
-}
-.main-area{
-margin-left:0!important;
-}
-#hamburger{display:flex!important}
-}
