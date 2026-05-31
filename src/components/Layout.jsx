@@ -1,7 +1,7 @@
 import{useState}from'react'
 import{auth}from'../firebase'
 import{signOut}from'firebase/auth'
-import{useLocation,useNavigate}from'react-router-dom'
+import{useLocation,useNavigate,useSearchParams}from'react-router-dom'
 import{FileText,FileCheck,ScrollText,Users,Wallet,Briefcase,BarChart2,User,Settings,LogOut,Menu,X}from'lucide-react'
 
 const navItems=[
@@ -18,11 +18,11 @@ export default function Layout({children,title}){
 const[open,setOpen]=useState(false)
 const location=useLocation()
 const navigate=useNavigate()
+const[searchParams]=useSearchParams()
 
 const isActive=(item)=>{
 if(item.tab){
-const params=new URLSearchParams(location.search)
-const currentTab=params.get('tab')||'invoice'
+const currentTab=searchParams.get('tab')||'invoice'
 return location.pathname==='/'&&currentTab===item.tab
 }
 return location.pathname===item.path
@@ -55,7 +55,7 @@ return(
 <nav style={{flex:1,padding:'12px 10px',overflowY:'auto'}}>
 <div style={{fontSize:10,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.07em',padding:'8px 8px 4px'}}>Main</div>
 {navItems.map((item)=>(
-<div key={item.tab||item.path} className={`nav-item${isActive(item)?' active':''}`} onClick={()=>handleNav(item)}>
+<div key={item.tab||item.path+item.label} className={`nav-item${isActive(item)?' active':''}`} onClick={()=>handleNav(item)}>
 <item.icon size={17}/><span>{item.label}</span>
 </div>
 ))}
