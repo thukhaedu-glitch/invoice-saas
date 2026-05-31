@@ -31,7 +31,8 @@ const[activeTab,setActiveTab]=useState('pnl')
 const[filterYear,setFilterYear]=useState(new Date().getFullYear().toString())
 const[filterMonth,setFilterMonth]=useState('')
 const[expandedMonth,setExpandedMonth]=useState(null)
-
+const[expandedTaxMonth,setExpandedTaxMonth]=useState(null)
+  
 useEffect(()=>{
 const load=async()=>{
 const snap=await getDocs(query(collection(db,'companies'),where(`members.${auth.currentUser.uid}`,'!=',null)))
@@ -475,14 +476,78 @@ return(
 <th style={{...th,textAlign:'right'}}>Tax Collected (Ks)</th>
 </tr></thead>
 <tbody>
-{taxByMonth.map(t=>(
-<tr key={t.month}>
-<td style={{...td,fontWeight:500}}>{t.month}</td>
+{taxByMonth.map(t=>{
+const isExpanded=expandedTaxMonth===t.month
+const mNum=months[monthNamesFull.indexOf(t.month)]
+const mInvs=invoices.filter(i=>getInvDate(i)?.startsWith(`${filterYear}-${mNum}`)&&Number(i.taxRate||0)>0)
+return(
+<>
+<tr key={t.month} onClick={()=>setExpandedTaxMonth(isExpanded?null:t.month)} style={{cursor:'pointer',background:isExpanded?'rgba(139,92,246,0.04)':'white'}}>
+<td style={{...td,fontWeight:500}}>
+<span style={{display:'inline-flex',alignItems:'center',gap:6}}>
+<span style={{fontSize:10,color:'#8b5cf6'}}>{isExpanded?'▼':'▶'}</span>
+{t.month}
+</span>
+</td>
 <td style={{...td,textAlign:'center'}}>{t.taxableInvoices}</td>
 <td style={{...tdR,color:'#4F6EF7'}}>{t.totalAmount.toLocaleString()}</td>
 <td style={{...tdR,fontWeight:600,color:'#8b5cf6'}}>{Math.round(t.tax).toLocaleString()}</td>
 </tr>
+{isExpanded&&(
+<tr key={t.month+'_detail'}>
+<td colSpan={4} style={{padding:0,background:'#f8fafc'}}>
+<div style={{padding:16}}>
+<div style={{fontSize:11,fontWeight:600,color:'#8b5cf6',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:8}}>
+Taxable Invoices — {t.month}
+</div>
+<table style={{width:'100%',borderCollapse:'collapse',background:'white',borderRadius:8,overflow:'hidden'}}>
+<thead>
+<tr style={{background:'rgba(139,92,246,0.06)'}}>
+<th style={{...th,padding:'7px 12px'}}>Invoice</th>
+<th style={{...th,padding:'7px 12px'}}>Client</th>
+<th style={{...th,padding:'7px 12px'}}>Date</th>
+<th style={{...th,padding:'7px 12px',textAlign:'right'}}>Amount</th>
+<th style={{...th,padding:'7px 12px',textAlign:'center'}}>Tax Rate</th>
+<th style={{...th,padding:'7px 12px',textAlign:'right'}}>Tax Amount</th>
+<th style={{...th,padding:'7px 12px',textAlign:'center'}}>Status</th>
+</tr>
+</thead>
+<tbody>
+{mInvs.map(i=>(
+<tr key={i.id}>
+<td style={{...td,padding:'7px 12px',fontFamily:'monospace',fontSize:11,color:'var(--primary)'}}>{i.invoiceNumber}</td>
+<td style={{...td,padding:'7px 12px',fontWeight:500}}>{i.clientName}</td>
+<td style={{...td,padding:'7px 12px',color:'var(--text-3)',fontSize:12}}>{getInvDate(i)||'-'}</td>
+<td style={{...td,padding:'7px 12px',textAlign:'right'}}>{Number(i.totalAmount||0).toLocaleString()} Ks</td>
+<td style={{...td,padding:'7px 12px',textAlign:'center'}}>
+<span style={{background:'rgba(139,92,246,0.1)',color:'#8b5cf6',padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:600}}>{i.taxRate}%</span>
+</td>
+<td style={{...td,padding:'7px 12px',textAlign:'right',fontWeight:600,color:'#8b5cf6'}}>
+{Math.round(Number(i.totalAmount||0)*(Number(i.taxRate||0)/100)).toLocaleString()} Ks
+</td>
+<td style={{...td,padding:'7px 12px',textAlign:'center'}}>
+<span style={{background:i.status==='paid'?'#eaf3de':'#faeeda',color:i.status==='paid'?'#16a34a':'#d97706',padding:'2px 8px',borderRadius:20,fontSize:10,fontWeight:500,textTransform:'capitalize'}}>{i.status}</span>
+</td>
+</tr>
 ))}
+</tbody>
+<tfoot>
+<tr style={{background:'rgba(139,92,246,0.04)'}}>
+<td colSpan={3} style={{...td,padding:'7px 12px',fontWeight:700}}>Total</td>
+<td style={{...td,padding:'7px 12px',textAlign:'right',fontWeight:700,color:'#4F6EF7'}}>{mInvs.reduce((s,i)=>s+Number(i.totalAmount||0),0).toLocaleString()} Ks</td>
+<td/>
+<td style={{...td,padding:'7px 12px',textAlign:'right',fontWeight:700,color:'#8b5cf6'}}>{Math.round(mInvs.reduce((s,i)=>s+Number(i.totalAmount||0)*(Number(i.taxRate||0)/100),0)).toLocaleString()} Ks</td>
+<td/>
+</tr>
+</tfoot>
+</table>
+</div>
+</td>
+</tr>
+)}
+</>
+)
+})}
 </tbody>
 <tfoot><tr style={{background:'#f8fafc'}}>
 <td style={{...td,fontWeight:700}}>Total</td>
