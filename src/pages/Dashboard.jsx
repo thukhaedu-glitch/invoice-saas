@@ -2,7 +2,7 @@ import{useState,useEffect}from'react'
 import{db,auth}from'../firebase'
 import{collection,onSnapshot,getDocs,query,where,doc,deleteDoc,updateDoc,addDoc,serverTimestamp}from'firebase/firestore'
 import Layout from'../components/Layout'
-import{FileText,FileCheck,Users,Plus,TrendingUp,CheckCircle,Clock,AlertCircle,Copy,Edit,Trash2,RefreshCcw,Link,Printer,CheckSquare,CopyPlus}from'lucide-react'
+import{FileText,FileCheck,Users,Plus,TrendingUp,CheckCircle,Clock,AlertCircle,Edit,Trash2,RefreshCcw,Link,Printer,CheckSquare,CopyPlus}from'lucide-react'
 import{useNavigate}from'react-router-dom'
 
 export default function Dashboard(){
@@ -182,7 +182,7 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600
 <td style={{textAlign:'center'}}>
 <div style={{display:'flex',gap:4,justifyContent:'center',alignItems:'center'}}>
 <button onClick={()=>navigate(`/invoice/${item.id}`)} title="View/Print" style={{background:'none',border:'none',cursor:'pointer',color:'var(--primary)',padding:4,borderRadius:6}}><Printer size={14}/></button>
-<button onClick={()=>handleCopy(item)} title="Copy number" style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Copy size={14}/></button>
+
 <button onClick={()=>navigate(`/edit/${item.id}`)} title="Edit" style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Edit size={14}/></button>
 {activeTab!=='customer'&&<>
 <button onClick={()=>handleDuplicate(item)} title="Duplicate" style={{background:'none',border:'none',cursor:'pointer',color:'#8b5cf6',padding:4,borderRadius:6}}><CopyPlus size={14}/></button>
