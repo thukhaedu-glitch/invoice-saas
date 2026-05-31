@@ -1,9 +1,13 @@
-import{useState,useEffect}from'react'
+import{useState,useEffect,useMemo}from'react'
 import{db,auth}from'../firebase'
 import{collection,onSnapshot,getDocs,query,where,doc,deleteDoc,updateDoc,addDoc,serverTimestamp,getDoc}from'firebase/firestore'
 import Layout from'../components/Layout'
-import{FileText,FileCheck,Users,Plus,TrendingUp,CheckCircle,Clock,AlertCircle,Edit,Trash2,RefreshCcw,Link,Printer,CheckSquare,CopyPlus,DollarSign,X}from'lucide-react'
+import{FileText,FileCheck,Users,Plus,TrendingUp,CheckCircle,Clock,AlertCircle,Edit,Trash2,RefreshCcw,Link,Printer,CheckSquare,CopyPlus,DollarSign,X,Search,Filter}from'lucide-react'
 import{useNavigate,useSearchParams}from'react-router-dom'
+
+const BAR_H=100
+const months=['01','02','03','04','05','06','07','08','09','10','11','12']
+const monthNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
 export default function Dashboard(){
 const[searchParams]=useSearchParams()
@@ -17,6 +21,12 @@ const[paymentModal,setPaymentModal]=useState(null)
 const[paymentForm,setPaymentForm]=useState({amount:'',date:new Date().toISOString().split('T')[0],method:'',note:''})
 const[savingPayment,setSavingPayment]=useState(false)
 const[paymentMethodOptions,setPaymentMethodOptions]=useState(['Cash','KBZ Pay','AYA Pay','Wave Pay','CB Pay','Bank Transfer','Other'])
+const[filterMonth,setFilterMonth]=useState('')
+const[filterYear,setFilterYear]=useState('')
+const[filterCustomer,setFilterCustomer]=useState('')
+const[filterStatus,setFilterStatus]=useState('')
+const[search,setSearch]=useState('')
+const[showChart,setShowChart]=useState(true)
 const navigate=useNavigate()
 
 useEffect(()=>{
@@ -58,8 +68,34 @@ unsubs.push(u)
 return()=>unsubs.forEach(u=>u())
 },[companyId])
 
+const getInvDate=inv=>inv.date||(inv.createdAt?.seconds?new Date(inv.createdAt.seconds*1000).toISOString().split('T')[0]:null)
+
+// Filter invoices
+const filteredInvoices=useMemo(()=>invoices.filter(inv=>{
+const d=getInvDate(inv)||''
+if(filterYear&&!d.startsWith(filterYear))return false
+if(filterMonth&&filterYear&&!d.startsWith(`${filterYear}-${filterMonth}`))return false
+if(filterCustomer&&inv.clientName!==filterCustomer)return false
+if(filterStatus&&inv.status!==filterStatus)return false
+if(search&&!inv.clientName?.toLowerCase().includes(search.toLowerCase())&&!inv.invoiceNumber?.toLowerCase().includes(search.toLowerCase()))return false
+return true
+}),[invoices,filterYear,filterMonth,filterCustomer,filterStatus,search])
+
+const currentYear=new Date().getFullYear().toString()
+const chartYear=filterYear||currentYear
+const chartData=months.map((m,idx)=>{
+const mInvs=invoices.filter(i=>getInvDate(i)?.startsWith(`${chartYear}-${m}`))
+const revenue=mInvs.filter(i=>i.status==='paid'||i.status==='partial').reduce((s,i)=>s+Number(i.paidAmount||i.totalAmount||0),0)
+const pending=mInvs.filter(i=>i.status==='pending').reduce((s,i)=>s+Number(i.totalAmount||0),0)
+return{month:monthNames[idx],revenue,pending}
+})
+const chartMax=Math.max(...chartData.map(m=>Math.max(m.revenue,m.pending)),1)
+
+const uniqueYears=[...new Set(invoices.map(i=>getInvDate(i)?.slice(0,4)).filter(Boolean))].sort().reverse()
+const uniqueCustomers=[...new Set(invoices.map(i=>i.clientName).filter(Boolean))].sort()
+
 const tabs=[
-{id:'invoice',label:'Invoices',icon:FileText,data:invoices},
+{id:'invoice',label:'Invoices',icon:FileText,data:filteredInvoices},
 {id:'quotation',label:'Quotations',icon:FileCheck,data:quotations},
 {id:'customer',label:'Customers',icon:Users,data:customers},
 ]
@@ -158,11 +194,9 @@ const totalPaid=payments.reduce((s,p)=>s+p.amount,0)
 const remaining=Number(item.totalAmount||0)-totalPaid
 const newStatus=remaining<=0?'paid':totalPaid>0?'partial':'pending'
 await updateDoc(doc(db,'companies',companyId,'invoices',item.id),{
-payments,
-paidAmount:totalPaid,
+payments,paidAmount:totalPaid,
 remainingAmount:remaining<0?0:remaining,
-status:newStatus,
-lastPaymentDate:paymentForm.date,
+status:newStatus,lastPaymentDate:paymentForm.date,
 })
 setPaymentModal(null)
 }catch(e){alert(e.message)}
@@ -187,9 +221,7 @@ return(
 {paymentModal.remainingAmount>0&&<span style={{color:'#d97706'}}> | Due: {Number(paymentModal.remainingAmount).toLocaleString()} Ks</span>}
 </div>
 </div>
-<button type="button" onClick={()=>setPaymentModal(null)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-3)'}}>
-<X size={18}/>
-</button>
+<button type="button" onClick={()=>setPaymentModal(null)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-3)'}}><X size={18}/></button>
 </div>
 <div style={{padding:24}}>
 <div style={{marginBottom:12}}>
@@ -252,8 +284,49 @@ return(
 ))}
 </div>
 
-{/* Tabs + New */}
-<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+{/* Revenue Chart */}
+<div className="card" style={{padding:20,marginBottom:16}}>
+<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+<div style={{fontWeight:600,fontSize:14,color:'var(--text-1)'}}>Revenue Chart — {chartYear}</div>
+<div style={{display:'flex',gap:8,alignItems:'center'}}>
+<select className="form-input" style={{width:'auto',fontSize:12,padding:'5px 8px'}} value={filterYear} onChange={e=>setFilterYear(e.target.value)}>
+<option value="">All Years</option>
+{uniqueYears.map(y=><option key={y} value={y}>{y}</option>)}
+</select>
+<button type="button" onClick={()=>setShowChart(v=>!v)} className="btn btn-ghost" style={{fontSize:12,padding:'5px 10px'}}>
+{showChart?'Hide':'Show'}
+</button>
+</div>
+</div>
+{showChart&&(
+<>
+<div style={{display:'flex',alignItems:'flex-end',gap:6,height:BAR_H+24,overflowX:'auto',paddingBottom:4}}>
+{chartData.map((m,i)=>(
+<div key={i} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3,minWidth:40,flex:1}}>
+<div style={{display:'flex',alignItems:'flex-end',gap:2,height:BAR_H}}>
+<div title={`Revenue: ${m.revenue.toLocaleString()} Ks`} style={{width:14,borderRadius:'3px 3px 0 0',background:'#4F6EF7',height:`${Math.round(m.revenue/chartMax*BAR_H)}px`,minHeight:m.revenue>0?3:0,transition:'height 0.3s'}}/>
+<div title={`Pending: ${m.pending.toLocaleString()} Ks`} style={{width:14,borderRadius:'3px 3px 0 0',background:'rgba(217,119,6,0.6)',height:`${Math.round(m.pending/chartMax*BAR_H)}px`,minHeight:m.pending>0?3:0,transition:'height 0.3s'}}/>
+</div>
+<div style={{fontSize:9,color:'var(--text-3)',textAlign:'center'}}>{m.month}</div>
+</div>
+))}
+</div>
+<div style={{display:'flex',gap:16,marginTop:8,justifyContent:'center'}}>
+<div style={{display:'flex',alignItems:'center',gap:5,fontSize:11,color:'var(--text-2)'}}>
+<div style={{width:10,height:10,borderRadius:2,background:'#4F6EF7'}}/>Revenue (Paid)
+</div>
+<div style={{display:'flex',alignItems:'center',gap:5,fontSize:11,color:'var(--text-2)'}}>
+<div style={{width:10,height:10,borderRadius:2,background:'rgba(217,119,6,0.6)'}}/>Pending
+</div>
+</div>
+</>
+)}
+</div>
+
+{/* Filters + Tabs + New */}
+<div style={{marginBottom:12}}>
+{/* Tabs */}
+<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
 <div style={{display:'flex',gap:4,background:'rgba(255,255,255,0.7)',border:'0.5px solid var(--border)',borderRadius:12,padding:4}}>
 {tabs.map(({id,label,icon:Icon,data})=>(
 <button type="button" key={id} onClick={()=>{setActiveTab(id);navigate(`/?tab=${id}`)}} className="btn" style={{
@@ -274,6 +347,38 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600
 <button type="button" className="btn btn-primary" onClick={()=>navigate(activeTab==='quotation'?'/create-quotation':'/create-invoice')}>
 <Plus size={15}/>New
 </button>
+</div>
+
+{/* Invoice Filters */}
+{activeTab==='invoice'&&(
+<div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
+<div style={{position:'relative'}}>
+<Search size={12} style={{position:'absolute',left:8,top:'50%',transform:'translateY(-50%)',color:'var(--text-3)'}}/>
+<input className="form-input" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..." style={{paddingLeft:26,fontSize:12,padding:'6px 8px 6px 26px',width:140}}/>
+</div>
+<select className="form-input" style={{width:'auto',fontSize:12,padding:'6px 8px'}} value={filterYear} onChange={e=>{setFilterYear(e.target.value);setFilterMonth('')}}>
+<option value="">All Years</option>
+{uniqueYears.map(y=><option key={y} value={y}>{y}</option>)}
+</select>
+<select className="form-input" style={{width:'auto',fontSize:12,padding:'6px 8px'}} value={filterMonth} onChange={e=>setFilterMonth(e.target.value)}>
+<option value="">All Months</option>
+{months.map((m,i)=><option key={m} value={m}>{monthNames[i]}</option>)}
+</select>
+<select className="form-input" style={{width:'auto',fontSize:12,padding:'6px 8px'}} value={filterCustomer} onChange={e=>setFilterCustomer(e.target.value)}>
+<option value="">All Customers</option>
+{uniqueCustomers.map(c=><option key={c} value={c}>{c}</option>)}
+</select>
+<select className="form-input" style={{width:'auto',fontSize:12,padding:'6px 8px'}} value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}>
+<option value="">All Status</option>
+{['paid','pending','partial','overdue','refunded'].map(s=><option key={s} value={s} style={{textTransform:'capitalize'}}>{s}</option>)}
+</select>
+{(filterYear||filterMonth||filterCustomer||filterStatus||search)&&(
+<button type="button" onClick={()=>{setFilterYear('');setFilterMonth('');setFilterCustomer('');setFilterStatus('');setSearch('')}} className="btn btn-ghost" style={{fontSize:11,padding:'5px 10px',color:'#dc2626'}}>
+<X size={12}/>Clear
+</button>
+)}
+</div>
+)}
 </div>
 
 {/* Table */}
