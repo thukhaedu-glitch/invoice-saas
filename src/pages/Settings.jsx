@@ -4,6 +4,22 @@ import{doc,getDoc,setDoc,getDocs,collection,query,where}from'firebase/firestore'
 import Layout from'../components/Layout'
 import{Save,Upload,Building2,CreditCard,FileText,Plus,Trash2,Wallet}from'lucide-react'
 
+const Section=({title,icon:Icon,children})=>(
+<div className="card" style={{padding:24,marginBottom:16}}>
+<div style={{display:'flex',alignItems:'center',gap:8,fontWeight:600,fontSize:13,color:'var(--text-2)',marginBottom:16,textTransform:'uppercase',letterSpacing:'0.05em'}}>
+<Icon size={15}/>{title}
+</div>
+{children}
+</div>
+)
+
+const Field=({label,children})=>(
+<div style={{marginBottom:12}}>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>{label}</label>
+{children}
+</div>
+)
+
 export default function Settings(){
 const[companyId,setCompanyId]=useState(null)
 const[saving,setSaving]=useState(false)
@@ -73,27 +89,10 @@ const templates=['classic','modern','minimal','elegant']
 const colors=['#4F6EF7','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#1a1d2e']
 const positions=['left','center','right']
 
-const Section=({title,icon:Icon,children})=>(
-<div className="card" style={{padding:24,marginBottom:16}}>
-<div style={{display:'flex',alignItems:'center',gap:8,fontWeight:600,fontSize:13,color:'var(--text-2)',marginBottom:16,textTransform:'uppercase',letterSpacing:'0.05em'}}>
-<Icon size={15}/>{title}
-</div>
-{children}
-</div>
-)
-
-const Field=({label,children})=>(
-<div style={{marginBottom:12}}>
-<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>{label}</label>
-{children}
-</div>
-)
-
 return(
 <Layout title="Settings">
 <div style={{maxWidth:640,margin:'0 auto'}}>
 
-{/* Template */}
 <Section title="Invoice Template" icon={FileText}>
 <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10}}>
 {templates.map(t=>(
@@ -109,7 +108,6 @@ transition:'all 0.15s'
 </div>
 </Section>
 
-{/* Color */}
 <Section title="Primary Color" icon={FileText}>
 <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:12}}>
 {colors.map(c=>(
@@ -127,7 +125,6 @@ transition:'all 0.15s'
 </div>
 </Section>
 
-{/* Logo */}
 <Section title="Logo & Layout" icon={Building2}>
 <div style={{display:'flex',gap:16,alignItems:'flex-start',marginBottom:16}}>
 <div style={{width:80,height:80,border:'0.5px dashed var(--border)',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',background:'#f8fafc',overflow:'hidden',flexShrink:0}}>
@@ -161,7 +158,6 @@ transition:'all 0.15s'
 </div>
 </Section>
 
-{/* Company Info */}
 <Section title="Company Information" icon={Building2}>
 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
 <Field label="Phone">
@@ -182,7 +178,6 @@ transition:'all 0.15s'
 </Field>
 </Section>
 
-{/* Payment Methods */}
 <Section title="Payment Methods" icon={CreditCard}>
 <div style={{overflowX:'auto',marginBottom:12}}>
 {settings.paymentMethods.length>0&&(
@@ -217,7 +212,6 @@ transition:'all 0.15s'
 </div>
 </Section>
 
-{/* Expense Categories */}
 <Section title="Expense Categories" icon={Wallet}>
 <div style={{marginBottom:12}}>
 {settings.expenseCategories.map((cat,i)=>(
@@ -234,14 +228,12 @@ transition:'all 0.15s'
 </div>
 </Section>
 
-{/* Payment Terms */}
 <Section title="Payment Terms" icon={CreditCard}>
 <Field label="Terms">
 <input className="form-input" value={settings.paymentTerms} onChange={e=>setSettings(s=>({...s,paymentTerms:e.target.value}))} placeholder="e.g. Due on receipt, Net 30..."/>
 </Field>
 </Section>
 
-{/* Footer & QR */}
 <Section title="Footer & QR Code" icon={FileText}>
 <Field label="Footer Text">
 <input className="form-input" value={settings.footerText} onChange={e=>setSettings(s=>({...s,footerText:e.target.value}))} placeholder="Thank you for your business!"/>
