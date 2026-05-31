@@ -15,6 +15,8 @@ import Reports from'./pages/Reports'
 import Contracts from'./pages/Contracts'
 import CreateQuotation from'./pages/CreateQuotation'
 import Profile from'./pages/Profile'
+import Projects from'./pages/Projects'
+
 
 export default function App(){
 const[user,setUser]=useState(null)
@@ -38,6 +40,7 @@ return(
 <Route path="/profile" element={user?<Profile/>:<Navigate to="/login"/>}/>
 <Route path="/settings" element={user?<Settings/>:<Navigate to="/login"/>}/>
 <Route path="*" element={<Navigate to="/"/>}/>
+<Route path="/projects" element={user?<Projects/>:<Navigate to="/login"/>}/>
 </Routes>
 </BrowserRouter>
 )
