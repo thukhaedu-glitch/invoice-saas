@@ -1,11 +1,11 @@
 import{useEffect,useState}from'react'
 import{useParams}from'react-router-dom'
 import{db}from'../firebase'
-import{collectionGroup,getDocs,query,where}from'firebase/firestore'
+import{collection,getDocs,query,where}from'firebase/firestore'
 import{CheckCircle,XCircle,Clock,FileText}from'lucide-react'
 
 export default function Verify(){
-const{code}=useParams()
+const{companyId,code}=useParams()
 const[invoice,setInvoice]=useState(null)
 const[loading,setLoading]=useState(true)
 const[notFound,setNotFound]=useState(false)
@@ -13,18 +13,14 @@ const[notFound,setNotFound]=useState(false)
 useEffect(()=>{
 const load=async()=>{
 try{
-const snap=await getDocs(query(collectionGroup(db,'invoices'),where('securityCode','==',code)))
-if(!snap.empty){setInvoice({id:snap.docs[0].id,...snap.docs[0].data()})}
-else{
-const snap2=await getDocs(query(collectionGroup(db,'invoices'),where('__name__','==',code)))
-if(!snap2.empty)setInvoice({id:snap2.docs[0].id,...snap2.docs[0].data()})
+const snap=await getDocs(query(collection(db,'companies',companyId,'invoices'),where('securityCode','==',code)))
+if(!snap.empty)setInvoice({id:snap.docs[0].id,...snap.docs[0].data()})
 else setNotFound(true)
-}
-}catch(e){setNotFound(true)}
+}catch(e){console.error(e);setNotFound(true)}
 setLoading(false)
 }
 load()
-},[code])
+},[companyId,code])
 
 const statusColor={paid:'#16a34a',pending:'#d97706',overdue:'#dc2626',refunded:'#6366f1'}
 const statusBg={paid:'#eaf3de',pending:'#faeeda',overdue:'#fcebeb',refunded:'#ede9fe'}
@@ -46,7 +42,6 @@ if(notFound)return(
 )
 
 const s=invoice.status||'pending'
-
 return(
 <div style={{minHeight:'100vh',background:'linear-gradient(135deg,#e8f0fe,#f0f4ff,#e8f8f0)',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
 <div style={{width:'100%',maxWidth:560,background:'white',borderRadius:20,boxShadow:'0 8px 32px rgba(79,110,247,0.12)',overflow:'hidden'}}>
@@ -76,7 +71,7 @@ return(
 {label:'Client',value:invoice.clientName},
 {label:'Amount',value:`${Number(invoice.totalAmount||0).toLocaleString()} Ks`},
 {label:'Date',value:invoice.date||'-'},
-{label:'Security Code',value:invoice.securityCode||invoice.id},
+{label:'Security Code',value:invoice.securityCode||'-'},
 ].map(({label,value})=>(
 <div key={label} style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'0.5px solid #f1f5f9'}}>
 <span style={{fontSize:13,color:'#9aa0b4'}}>{label}</span>
