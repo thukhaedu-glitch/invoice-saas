@@ -1,8 +1,8 @@
 import{useState,useEffect}from'react'
 import{db,auth}from'../firebase'
-import{collection,onSnapshot,getDocs,query,where}from'firebase/firestore'
+import{collection,onSnapshot,getDocs,query,where,doc,deleteDoc,updateDoc}from'firebase/firestore'
 import Layout from'../components/Layout'
-import{FileText,FileCheck,Users,Plus,TrendingUp,CheckCircle,Clock,AlertCircle}from'lucide-react'
+import{FileText,FileCheck,Users,Plus,TrendingUp,CheckCircle,Clock,AlertCircle,Copy,Edit,Trash2,RefreshCcw,Link,Printer,CheckSquare}from'lucide-react'
 import{useNavigate}from'react-router-dom'
 
 export default function Dashboard(){
@@ -12,6 +12,7 @@ const[invoices,setInvoices]=useState([])
 const[quotations,setQuotations]=useState([])
 const[customers,setCustomers]=useState([])
 const[loading,setLoading]=useState(true)
+const[menuOpen,setMenuOpen]=useState(null)
 const navigate=useNavigate()
 
 useEffect(()=>{
@@ -63,12 +64,37 @@ const map={paid:'badge-success',partial:'badge-info',refunded:'badge-danger',pen
 return<span className={`badge ${map[s]||'badge-warning'}`}>{s||'pending'}</span>
 }
 
+const collName=activeTab==='invoice'?'invoices':activeTab==='quotation'?'quotations':'customers'
+
+const handleDelete=async(id)=>{
+if(!confirm('Delete this item?'))return
+await deleteDoc(doc(db,'companies',companyId,collName,id))
+}
+
+const handleStatus=async(id,status)=>{
+await updateDoc(doc(db,'companies',companyId,collName,id),{status})
+setMenuOpen(null)
+}
+
+const handleCopy=(item)=>{
+navigator.clipboard.writeText(item.invoiceNumber||item.quotationNumber||item.name||'')
+setMenuOpen(null)
+}
+
+const handleShareLink=(item)=>{
+const url=`${window.location.origin}/verify/${item.securityCode||item.id}`
+navigator.clipboard.writeText(url)
+alert('Link copied!')
+setMenuOpen(null)
+}
+
 if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh'}}>Loading...</div>
 
 return(
 <Layout title="Dashboard">
+{menuOpen&&<div onClick={()=>setMenuOpen(null)} style={{position:'fixed',inset:0,zIndex:49}}/>}
 
-{/* Stats Cards */}
+{/* Stats */}
 <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:20}}>
 {statsCards.map(({label,value,amount,icon:Icon,color,bg})=>(
 <div key={label} className="card" style={{padding:16}}>
@@ -84,7 +110,7 @@ return(
 ))}
 </div>
 
-{/* Tabs + New button */}
+{/* Tabs */}
 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
 <div style={{display:'flex',gap:4,background:'rgba(255,255,255,0.7)',border:'0.5px solid var(--border)',borderRadius:12,padding:4}}>
 {tabs.map(({id,label,icon:Icon,data})=>(
@@ -109,26 +135,27 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600
 </div>
 
 {/* Table */}
-<div className="card" style={{overflow:'hidden'}}>
+<div className="card" style={{overflow:'visible'}}>
 {activeData.length===0?(
 <div style={{padding:64,textAlign:'center',color:'var(--text-3)'}}>
 <FileText size={40} style={{margin:'0 auto 12px',opacity:0.3}}/>
 <div>No {activeTab}s found</div>
 </div>
 ):(
-<table>
+<div style={{overflowX:'auto'}}>
+<table style={{width:'100%'}}>
 <thead>
 <tr>
 {activeTab==='customer'?<>
-<th>ID</th><th>Name</th><th>Phone</th><th>Email</th>
+<th>ID</th><th>Name</th><th>Phone</th><th>Email</th><th style={{textAlign:'center'}}>Actions</th>
 </>:<>
-<th>Number</th><th>Client</th><th style={{textAlign:'right'}}>Amount</th><th style={{textAlign:'center'}}>Status</th><th>Date</th><th>Action</th>
+<th>Number</th><th>Client</th><th style={{textAlign:'right'}}>Amount</th><th style={{textAlign:'center'}}>Status</th><th>Date</th><th style={{textAlign:'center'}}>Actions</th>
 </>}
 </tr>
 </thead>
 <tbody>
 {activeData.map(item=>(
-<tr key={item.id} style={{cursor:'pointer'}} onClick={()=>activeTab!=='customer'&&navigate(`/invoice/${item.id}`)}>
+<tr key={item.id}>
 {activeTab==='customer'?<>
 <td style={{color:'var(--text-3)',fontFamily:'monospace',fontSize:11}}>{item.customerId||'-'}</td>
 <td style={{fontWeight:500}}>{item.name}</td>
@@ -140,12 +167,25 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600
 <td style={{textAlign:'right',fontWeight:500}}>{Number(item.totalAmount||0).toLocaleString()} Ks</td>
 <td style={{textAlign:'center'}}>{statusBadge(item.status)}</td>
 <td style={{color:'var(--text-3)',fontSize:12}}>{item.createdAt?.seconds?new Date(item.createdAt.seconds*1000).toLocaleDateString():'-'}</td>
-<td style={{color:'var(--text-3)',fontSize:12}}>View →</td>
 </>}
+<td style={{textAlign:'center',position:'relative'}}>
+<div style={{display:'flex',gap:4,justifyContent:'center',alignItems:'center'}}>
+<button onClick={()=>navigate(`/invoice/${item.id}`)} title="View" style={{background:'none',border:'none',cursor:'pointer',color:'var(--primary)',padding:4,borderRadius:6}}><Printer size={14}/></button>
+<button onClick={()=>handleCopy(item)} title="Copy number" style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Copy size={14}/></button>
+<button onClick={()=>navigate(`/edit/${item.id}`)} title="Edit" style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Edit size={14}/></button>
+{activeTab!=='customer'&&<>
+<button onClick={()=>handleShareLink(item)} title="Share link" style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Link size={14}/></button>
+<button onClick={()=>handleStatus(item.id,'paid')} title="Mark paid" style={{background:'none',border:'none',cursor:'pointer',color:'#16a34a',padding:4,borderRadius:6}}><CheckSquare size={14}/></button>
+<button onClick={()=>handleStatus(item.id,'refunded')} title="Refund" style={{background:'none',border:'none',cursor:'pointer',color:'#d97706',padding:4,borderRadius:6}}><RefreshCcw size={14}/></button>
+</>}
+<button onClick={()=>handleDelete(item.id)} title="Delete" style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)',padding:4,borderRadius:6}}><Trash2 size={14}/></button>
+</div>
+</td>
 </tr>
 ))}
 </tbody>
 </table>
+</div>
 )}
 </div>
 </Layout>
