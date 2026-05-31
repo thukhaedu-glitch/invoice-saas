@@ -18,7 +18,7 @@ template:'classic',primaryColor:'#4F6EF7',
 logoUrl:'',logoPosition:'left',titlePosition:'left',
 footerText:'Thank you for your business!',showQR:true,
 companyPhone:'',companyEmail:'',companyAddress:'',companyWebsite:'',
-trnNumber:'',paymentTerms:'Due on receipt',paymentMethods:'',
+trnNumber:'',paymentTerms:'',paymentMethods:[],
 })
 const[loading,setLoading]=useState(true)
 const[downloading,setDownloading]=useState(false)
@@ -69,7 +69,6 @@ const subtotal=items.reduce((s,i)=>s+(i.qty||1)*(i.price||0),0)
 const s=invoice.status||'pending'
 const pc=settings.primaryColor
 const verifyUrl=`${window.location.origin}/verify/${company?.id}/${invoice.securityCode}`
-
 const statusColor={paid:'#16a34a',pending:'#d97706',overdue:'#dc2626',refunded:'#6366f1'}
 const statusBg={paid:'#eaf3de',pending:'#faeeda',overdue:'#fcebeb',refunded:'#ede9fe'}
 
@@ -94,21 +93,13 @@ body{background:white!important;margin:0}
 }
 `}</style>
 
-{/* Topbar */}
 <div className="no-print" style={{position:'fixed',top:0,left:0,right:0,zIndex:100,background:'rgba(255,255,255,0.95)',backdropFilter:'blur(12px)',borderBottom:'0.5px solid #e2e8f0',padding:'12px 24px',display:'flex',alignItems:'center',gap:12}}>
-<button onClick={()=>navigate('/')} className="btn btn-ghost" style={{padding:'8px 12px'}}>
-<ArrowLeft size={16}/>
-</button>
+<button onClick={()=>navigate('/')} className="btn btn-ghost" style={{padding:'8px 12px'}}><ArrowLeft size={16}/></button>
 <span style={{flex:1,fontWeight:500,fontSize:15}}>Invoice #{invoice.invoiceNumber}</span>
-<button onClick={handlePrint} className="btn btn-ghost no-print">
-<Printer size={15}/>Print
-</button>
-<button onClick={handleDownloadPDF} disabled={downloading} className="btn btn-primary no-print">
-<Download size={15}/>{downloading?'Generating...':'Download PDF'}
-</button>
+<button onClick={handlePrint} className="btn btn-ghost no-print"><Printer size={15}/>Print</button>
+<button onClick={handleDownloadPDF} disabled={downloading} className="btn btn-primary no-print"><Download size={15}/>{downloading?'Generating...':'Download PDF'}</button>
 </div>
 
-{/* Invoice */}
 <div style={{minHeight:'100vh',background:'#f1f5f9',padding:'80px 24px 40px',display:'flex',justifyContent:'center'}}>
 <div ref={printRef} className="print-area" style={{width:'210mm',background:'white',boxShadow:'0 4px 32px rgba(0,0,0,0.08)',overflow:'hidden'}}>
 
@@ -138,8 +129,6 @@ body{background:white!important;margin:0}
 </div>
 </div>
 </div>
-
-{/* Bill To + Date */}
 <div style={{marginTop:24,paddingTop:20,borderTop:`0.5px solid ${settings.template==='minimal'?'#e2e8f0':'rgba(255,255,255,0.2)'}`,display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
 <div>
 <div style={{fontSize:10,opacity:0.7,marginBottom:4,textTransform:'uppercase',letterSpacing:'0.05em',color:headerTextColor}}>Bill To</div>
@@ -151,7 +140,6 @@ body{background:white!important;margin:0}
 <div style={{textAlign:'right'}}>
 <div style={{fontSize:10,opacity:0.7,marginBottom:4,textTransform:'uppercase',letterSpacing:'0.05em',color:headerTextColor}}>Date</div>
 <div style={{fontSize:13,color:headerTextColor}}>{invoice.date||(invoice.createdAt?.seconds?new Date(invoice.createdAt.seconds*1000).toLocaleDateString():'-')}</div>
-{settings.paymentTerms&&<div style={{fontSize:11,opacity:0.7,marginTop:4,color:headerTextColor}}>{settings.paymentTerms}</div>}
 </div>
 </div>
 </div>
@@ -180,15 +168,9 @@ body{background:white!important;margin:0}
 </table>
 </div>
 
-{/* Totals + QR */}
-<div style={{padding:'24px 40px',borderBottom:'0.5px solid #f1f5f9',display:'flex',justifyContent:'space-between',alignItems:'flex-end',gap:20}}>
-{settings.showQR&&(
-<div style={{textAlign:'center',flexShrink:0}}>
-<QRCodeSVG value={verifyUrl} size={80} fgColor={pc}/>
-<div style={{fontSize:10,color:'#9aa0b4',marginTop:4}}>Scan to verify</div>
-</div>
-)}
-<div style={{minWidth:220,flex:1,maxWidth:260,marginLeft:'auto'}}>
+{/* Totals */}
+<div style={{padding:'24px 40px',borderBottom:'0.5px solid #f1f5f9',display:'flex',justifyContent:'flex-end'}}>
+<div style={{minWidth:220,maxWidth:260}}>
 {[
 {label:'Subtotal',value:`${subtotal.toLocaleString()} Ks`},
 ...(Number(invoice.discount||0)>0?[{label:'Discount',value:`-${Number(invoice.discount).toLocaleString()} Ks`,color:'#dc2626'}]:[]),
@@ -207,10 +189,35 @@ body{background:white!important;margin:0}
 </div>
 
 {/* Payment Methods */}
-{settings.paymentMethods&&(
+{settings.paymentMethods?.length>0&&(
 <div style={{padding:'16px 40px',borderBottom:'0.5px solid #f1f5f9'}}>
-<div style={{fontSize:11,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',marginBottom:4}}>Payment Methods</div>
-<div style={{fontSize:13,color:'#64748b'}}>{settings.paymentMethods}</div>
+<div style={{fontSize:11,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',marginBottom:10,letterSpacing:'0.05em'}}>Payment Methods</div>
+<table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+<thead>
+<tr style={{borderBottom:`1px solid ${pc}30`}}>
+<th style={{textAlign:'left',padding:'6px 0',color:pc,fontWeight:600,fontSize:10,textTransform:'uppercase'}}>Bank Name</th>
+<th style={{textAlign:'left',padding:'6px 8px',color:pc,fontWeight:600,fontSize:10,textTransform:'uppercase'}}>Account No.</th>
+<th style={{textAlign:'left',padding:'6px 0',color:pc,fontWeight:600,fontSize:10,textTransform:'uppercase'}}>Account Name</th>
+</tr>
+</thead>
+<tbody>
+{settings.paymentMethods.map((m,i)=>(
+<tr key={i} style={{borderBottom:'0.5px solid #f8fafc'}}>
+<td style={{padding:'7px 0',color:'#1a1d2e',fontWeight:500}}>{m.bankName}</td>
+<td style={{padding:'7px 8px',color:'#64748b',fontFamily:'monospace'}}>{m.accountNo}</td>
+<td style={{padding:'7px 0',color:'#64748b'}}>{m.accountName}</td>
+</tr>
+))}
+</tbody>
+</table>
+</div>
+)}
+
+{/* Payment Terms */}
+{settings.paymentTerms&&(
+<div style={{padding:'12px 40px',borderBottom:'0.5px solid #f1f5f9',display:'flex',gap:8,alignItems:'center'}}>
+<span style={{fontSize:11,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.05em'}}>Payment Terms:</span>
+<span style={{fontSize:12,color:'#64748b'}}>{settings.paymentTerms}</span>
 </div>
 )}
 
@@ -222,12 +229,20 @@ body{background:white!important;margin:0}
 </div>
 )}
 
-{/* Footer */}
-<div style={{padding:'16px 40px',background:'#f8fafc',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-<div style={{fontSize:12,color:'#9aa0b4'}}>{settings.footerText}</div>
-<div style={{fontSize:11,color:'#9aa0b4',textAlign:'right'}}>
+{/* Footer + QR */}
+<div style={{padding:'16px 40px',background:'#f8fafc',display:'flex',justifyContent:'space-between',alignItems:'center',gap:20}}>
+<div>
+<div style={{fontSize:12,color:'#9aa0b4',marginBottom:4}}>{settings.footerText}</div>
+<div style={{fontSize:11,color:'#9aa0b4',opacity:0.7}}>System By: Ankora-X</div>
+</div>
+{settings.showQR&&(
+<div style={{textAlign:'center',flexShrink:0}}>
+<QRCodeSVG value={verifyUrl} size={70} fgColor={pc}/>
+<div style={{fontSize:10,color:'#9aa0b4',marginTop:4}}>Scan to verify</div>
+</div>
+)}
+<div style={{fontSize:11,color:'#9aa0b4',textAlign:'right',flexShrink:0}}>
 <div>SEC: {invoice.securityCode}</div>
-<div style={{marginTop:2,opacity:0.7}}>System By: Ankora-X</div>
 </div>
 </div>
 
