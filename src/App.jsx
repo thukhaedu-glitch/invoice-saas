@@ -12,6 +12,7 @@ import EditInvoice from'./pages/EditInvoice'
 import Customers from'./pages/Customers'
 import Expenses from'./pages/Expenses'
 import Profile from'./pages/Profile'
+import Reports from'./pages/Reports'
 
 
 
@@ -35,6 +36,7 @@ return(
 <Route path="/customers" element={user?<Customers/>:<Navigate to="/login"/>}/>
 <Route path="/expenses" element={user?<Expenses/>:<Navigate to="/login"/>}/>
 <Route path="/profile" element={user?<Profile/>:<Navigate to="/login"/>}/>
+<Route path="/reports" element={user?<Reports/>:<Navigate to="/login"/>}/>
 
 </Routes>
 </BrowserRouter>
