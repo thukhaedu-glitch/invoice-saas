@@ -9,6 +9,7 @@ import InvoiceDetail from'./pages/InvoiceDetail'
 import Settings from'./pages/Settings'
 import CreateInvoice from'./pages/CreateInvoice'
 import EditInvoice from'./pages/EditInvoice'
+import Customers from'./pages/Customers'
 
 export default function App(){
 const[user,setUser]=useState(null)
@@ -26,6 +27,7 @@ return(
 <Route path="/create-invoice" element={user?<CreateInvoice/>:<Navigate to="/login"/>}/>
 <Route path="*" element={<Navigate to="/"/>}/>
 <Route path="/edit/:id" element={user?<EditInvoice/>:<Navigate to="/login"/>}/>
+<Route path="/customers" element={user?<Customers/>:<Navigate to="/login"/>}/>
 </Routes>
 </BrowserRouter>
 )
