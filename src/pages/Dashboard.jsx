@@ -189,7 +189,11 @@ await deleteDoc(doc(db,'companies',companyId,collName,id))
 }
 
 const handleDeleteWithAuth=(id)=>{
-if(!canDelete){alert('You do not have permission to delete');return}
+if(loading){return} // loading ဆဲဆဲ မလုပ်ရ
+if(!canDelete){
+alert('You do not have permission to delete this item.')
+return
+}
 setConfirmAction({action:()=>handleDelete(id),label:'delete this item'})
 }
 
