@@ -37,7 +37,12 @@ const[sendingReminder,setSendingReminder]=useState(null)
 const[confirmAction,setConfirmAction]=useState(null)
 const navigate=useNavigate()
 const{role,canEdit,canDelete}=useRole()
+const{role,canEdit,canDelete,loading}=useRole()
 
+// Debug — ဒါ ယာယီထည့်ပါ
+console.log('Role:', role, 'canDelete:', canDelete, 'loading:', loading)
+
+  
 useEffect(()=>{
 const load=async()=>{
 try{
