@@ -9,6 +9,8 @@ const TABS=[
 {id:'chart',label:'Chart'},
 {id:'project',label:'Projects'},
 {id:'tax',label:'Tax'},
+{id:'balance',label:'Balance Sheet'},
+{id:'ap',label:'AP/AR'},
 {id:'journal',label:'Journal'},
 {id:'ledger',label:'Ledger'},
 ]
@@ -577,7 +579,172 @@ return(
 </table>
 </div>
 )}
+{/* Balance Sheet Tab */}
+{activeTab==='balance'&&(()=>{
+const totalReceivable=invoices.filter(i=>i.status==='pending'||i.status==='partial').reduce((s,i)=>s+Number(i.remainingAmount||i.totalAmount||0),0)
+const totalCashReceived=invoices.filter(i=>i.status==='paid'||i.status==='partial').reduce((s,i)=>s+Number(i.paidAmount||i.totalAmount||0),0)
+const totalPayable=expenses.reduce((s,e)=>s+Number(e.amount||0),0)
+const equity=totalCashReceived-totalPayable
+const totalAssets=totalReceivable+totalCashReceived
+const totalLiabilities=totalPayable
+return(
+<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
+{/* Assets */}
+<div className="card" style={{overflow:'hidden'}}>
+<div style={{padding:'16px 20px',borderBottom:'0.5px solid var(--border)',background:'rgba(79,110,247,0.04)'}}>
+<div style={{fontWeight:700,fontSize:14,color:'#4F6EF7'}}>Assets</div>
+</div>
+<div style={{padding:20}}>
+{[
+{label:'Cash & Revenue Received',value:totalCashReceived,color:'#16a34a'},
+{label:'Accounts Receivable (Pending)',value:totalReceivable,color:'#d97706'},
+].map(({label,value,color})=>(
+<div key={label} style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'0.5px solid #f1f5f9'}}>
+<span style={{fontSize:13,color:'var(--text-2)'}}>{label}</span>
+<span style={{fontSize:13,fontWeight:600,color}}>{value.toLocaleString()} Ks</span>
+</div>
+))}
+<div style={{display:'flex',justifyContent:'space-between',padding:'12px 0',marginTop:4}}>
+<span style={{fontSize:14,fontWeight:700}}>Total Assets</span>
+<span style={{fontSize:14,fontWeight:700,color:'#4F6EF7'}}>{totalAssets.toLocaleString()} Ks</span>
+</div>
+</div>
+</div>
 
+{/* Liabilities + Equity */}
+<div style={{display:'flex',flexDirection:'column',gap:16}}>
+<div className="card" style={{overflow:'hidden'}}>
+<div style={{padding:'16px 20px',borderBottom:'0.5px solid var(--border)',background:'rgba(220,38,38,0.04)'}}>
+<div style={{fontWeight:700,fontSize:14,color:'#dc2626'}}>Liabilities</div>
+</div>
+<div style={{padding:20}}>
+<div style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'0.5px solid #f1f5f9'}}>
+<span style={{fontSize:13,color:'var(--text-2)'}}>Accounts Payable (Expenses)</span>
+<span style={{fontSize:13,fontWeight:600,color:'#dc2626'}}>{totalPayable.toLocaleString()} Ks</span>
+</div>
+<div style={{display:'flex',justifyContent:'space-between',padding:'12px 0',marginTop:4}}>
+<span style={{fontSize:14,fontWeight:700}}>Total Liabilities</span>
+<span style={{fontSize:14,fontWeight:700,color:'#dc2626'}}>{totalLiabilities.toLocaleString()} Ks</span>
+</div>
+</div>
+</div>
+
+<div className="card" style={{overflow:'hidden'}}>
+<div style={{padding:'16px 20px',borderBottom:'0.5px solid var(--border)',background:'rgba(22,163,74,0.04)'}}>
+<div style={{fontWeight:700,fontSize:14,color:'#16a34a'}}>Equity</div>
+</div>
+<div style={{padding:20}}>
+<div style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'0.5px solid #f1f5f9'}}>
+<span style={{fontSize:13,color:'var(--text-2)'}}>Net Profit (Revenue - Expenses)</span>
+<span style={{fontSize:13,fontWeight:600,color:equity>=0?'#16a34a':'#dc2626'}}>{equity.toLocaleString()} Ks</span>
+</div>
+<div style={{display:'flex',justifyContent:'space-between',padding:'12px 0',marginTop:4}}>
+<span style={{fontSize:14,fontWeight:700}}>Total Equity</span>
+<span style={{fontSize:14,fontWeight:700,color:equity>=0?'#16a34a':'#dc2626'}}>{equity.toLocaleString()} Ks</span>
+</div>
+</div>
+</div>
+</div>
+
+{/* Accounting Equation */}
+<div className="card" style={{gridColumn:'1/-1',padding:20,background:'rgba(79,110,247,0.04)',border:'0.5px solid rgba(79,110,247,0.2)'}}>
+<div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:16,flexWrap:'wrap'}}>
+<div style={{textAlign:'center'}}>
+<div style={{fontSize:11,color:'var(--text-3)',marginBottom:4}}>Total Assets</div>
+<div style={{fontSize:20,fontWeight:700,color:'#4F6EF7'}}>{totalAssets.toLocaleString()} Ks</div>
+</div>
+<div style={{fontSize:20,color:'var(--text-3)'}}>=</div>
+<div style={{textAlign:'center'}}>
+<div style={{fontSize:11,color:'var(--text-3)',marginBottom:4}}>Total Liabilities</div>
+<div style={{fontSize:20,fontWeight:700,color:'#dc2626'}}>{totalLiabilities.toLocaleString()} Ks</div>
+</div>
+<div style={{fontSize:20,color:'var(--text-3)'}}>+</div>
+<div style={{textAlign:'center'}}>
+<div style={{fontSize:11,color:'var(--text-3)',marginBottom:4}}>Equity</div>
+<div style={{fontSize:20,fontWeight:700,color:equity>=0?'#16a34a':'#dc2626'}}>{equity.toLocaleString()} Ks</div>
+</div>
+</div>
+</div>
+</div>
+)
+})()}
+
+{/* AP/AR Tab */}
+{activeTab==='ap'&&(()=>{
+const receivables=invoices.filter(i=>i.status==='pending'||i.status==='partial'||i.status==='overdue').map(i=>({
+client:i.clientName,
+invoiceNumber:i.invoiceNumber,
+date:getInvDate(i)||'-',
+total:Number(i.totalAmount||0),
+paid:Number(i.paidAmount||0),
+balance:Number(i.remainingAmount||i.totalAmount||0),
+status:i.status,
+daysOld:i.createdAt?.seconds?Math.floor((Date.now()-i.createdAt.seconds*1000)/(1000*60*60*24)):0,
+})).sort((a,b)=>b.balance-a.balance)
+
+const totalAR=receivables.reduce((s,r)=>s+r.balance,0)
+const overdueAR=receivables.filter(r=>r.daysOld>30).reduce((s,r)=>s+r.balance,0)
+
+return(
+<div>
+<div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginBottom:16}}>
+{[
+{label:'Total Receivable',value:totalAR,color:'#4F6EF7'},
+{label:'Overdue (>30 days)',value:overdueAR,color:'#dc2626'},
+{label:'Current',value:totalAR-overdueAR,color:'#16a34a'},
+].map(({label,value,color})=>(
+<div key={label} className="card" style={{padding:16}}>
+<div style={{fontSize:12,color:'var(--text-2)',marginBottom:6}}>{label}</div>
+<div style={{fontSize:20,fontWeight:700,color}}>{value.toLocaleString()} Ks</div>
+</div>
+))}
+</div>
+
+<div className="card" style={{overflow:'hidden',marginBottom:16}}>
+<div style={{padding:'16px 20px',borderBottom:'0.5px solid var(--border)',background:'rgba(79,110,247,0.04)'}}>
+<div style={{fontWeight:700,fontSize:14,color:'#4F6EF7'}}>Accounts Receivable — Outstanding Invoices</div>
+</div>
+{receivables.length===0?(
+<div style={{padding:40,textAlign:'center',color:'var(--text-3)'}}>All invoices paid 🎉</div>
+):(
+<table style={{width:'100%',borderCollapse:'collapse'}}>
+<thead><tr>
+<th style={th}>Invoice</th><th style={th}>Client</th><th style={th}>Date</th>
+<th style={{...th,textAlign:'right'}}>Total</th>
+<th style={{...th,textAlign:'right'}}>Paid</th>
+<th style={{...th,textAlign:'right'}}>Balance</th>
+<th style={{...th,textAlign:'center'}}>Days</th>
+<th style={{...th,textAlign:'center'}}>Status</th>
+</tr></thead>
+<tbody>
+{receivables.map((r,i)=>(
+<tr key={i} style={{background:r.daysOld>30?'rgba(220,38,38,0.02)':'white'}}>
+<td style={{...td,fontFamily:'monospace',fontSize:11,color:'var(--primary)'}}>{r.invoiceNumber}</td>
+<td style={{...td,fontWeight:500}}>{r.client}</td>
+<td style={{...td,color:'var(--text-3)',fontSize:12}}>{r.date}</td>
+<td style={{...tdR}}>{r.total.toLocaleString()} Ks</td>
+<td style={{...tdR,color:'#16a34a'}}>{r.paid.toLocaleString()} Ks</td>
+<td style={{...tdR,fontWeight:700,color:r.daysOld>30?'#dc2626':'#d97706'}}>{r.balance.toLocaleString()} Ks</td>
+<td style={{...td,textAlign:'center'}}>
+<span style={{background:r.daysOld>30?'rgba(220,38,38,0.1)':'rgba(217,119,6,0.1)',color:r.daysOld>30?'#dc2626':'#d97706',padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:500}}>{r.daysOld}d</span>
+</td>
+<td style={{...td,textAlign:'center'}}>
+<span style={{background:r.status==='overdue'?'#fcebeb':r.status==='partial'?'#e6f1fb':'#faeeda',color:r.status==='overdue'?'#dc2626':r.status==='partial'?'#2563eb':'#d97706',padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:500,textTransform:'capitalize'}}>{r.status}</span>
+</td>
+</tr>
+))}
+</tbody>
+<tfoot><tr style={{background:'#f8fafc'}}>
+<td colSpan={5} style={{...td,fontWeight:700}}>Total Outstanding</td>
+<td style={{...tdR,fontWeight:700,color:'#dc2626'}}>{totalAR.toLocaleString()} Ks</td>
+<td colSpan={2}/>
+</tr></tfoot>
+</table>
+)}
+</div>
+</div>
+)
+})()}
 </Layout>
 )
 }
