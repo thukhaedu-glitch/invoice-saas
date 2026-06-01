@@ -20,6 +20,9 @@ footerText:'Thank you for your business!',showQR:true,
 companyPhone:'',companyEmail:'',companyAddress:'',companyWebsite:'',
 trnNumber:'',paymentTerms:'',paymentMethods:[],
 })
+const[staffName,setStaffName]=useState('')
+const[adminName,setAdminName]=useState('')
+const[ownerName,setOwnerName]=useState('')
 const[loading,setLoading]=useState(true)
 const[downloading,setDownloading]=useState(false)
 
@@ -35,7 +38,27 @@ const[invSnap,sSnap]=await Promise.all([
 getDoc(doc(db,'companies',cid,'invoices',id)),
 getDoc(doc(db,'companies',cid,'_config','invoiceSettings'))
 ])
-if(invSnap.exists())setInvoice({id:invSnap.id,...invSnap.data()})
+if(invSnap.exists()){
+const invData={id:invSnap.id,...invSnap.data()}
+setInvoice(invData)
+// Load staff/admin/owner names
+const members=compData.members||{}
+// Staff (creator)
+if(invData.createdBy){
+const staffSnap=await getDoc(doc(db,'users',invData.createdBy))
+if(staffSnap.exists())setStaffName(staffSnap.data().displayName||staffSnap.data().email||'Staff')
+}
+// Admin (approver)
+if(invData.approvedBy){
+const adminSnap=await getDoc(doc(db,'users',invData.approvedBy))
+if(adminSnap.exists())setAdminName(adminSnap.data().displayName||adminSnap.data().email||'Admin')
+}
+// Owner (final approver)
+if(invData.ownerApprovedBy){
+const ownerSnap=await getDoc(doc(db,'users',invData.ownerApprovedBy))
+if(ownerSnap.exists())setOwnerName(ownerSnap.data().displayName||ownerSnap.data().email||'Owner')
+}
+}
 if(sSnap.exists())setSettings(s=>({...s,...sSnap.data()}))
 }
 }catch(e){console.error(e)}
@@ -69,8 +92,12 @@ const subtotal=items.reduce((s,i)=>s+(i.qty||1)*(i.price||0),0)
 const s=invoice.status||'pending'
 const pc=settings.primaryColor
 const verifyUrl=`${window.location.origin}/verify/${company?.id}/${invoice.securityCode}`
-const statusColor={paid:'#16a34a',pending:'#d97706',overdue:'#dc2626',refunded:'#6366f1'}
-const statusBg={paid:'#eaf3de',pending:'#faeeda',overdue:'#fcebeb',refunded:'#ede9fe'}
+const statusColor={paid:'#16a34a',pending:'#d97706',overdue:'#dc2626',refunded:'#6366f1',pending_approval:'#4F6EF7',rejected:'#dc2626'}
+const statusBg={paid:'#eaf3de',pending:'#faeeda',overdue:'#fcebeb',refunded:'#ede9fe',pending_approval:'rgba(79,110,247,0.1)',rejected:'#fcebeb'}
+
+// Signature levels
+const hasAdminApproval=!!invoice.approvedBy||!!invoice.adminApprovedBy
+const hasOwnerApproval=!!invoice.ownerApprovedBy
 
 const getHeaderStyle=()=>{
 if(settings.template==='modern')return{background:'#1a1d2e',color:'white'}
@@ -125,7 +152,9 @@ body{background:white!important;margin:0}
 <div style={{fontSize:24,fontWeight:800,letterSpacing:1,color:headerTextColor}}>INVOICE</div>
 <div style={{fontSize:13,opacity:0.9,color:headerTextColor}}>#{invoice.invoiceNumber}</div>
 <div style={{marginTop:8}}>
-<span style={{background:statusBg[s],color:statusColor[s],padding:'3px 12px',borderRadius:20,fontSize:12,fontWeight:600}}>{s}</span>
+<span style={{background:statusBg[s]||'#faeeda',color:statusColor[s]||'#d97706',padding:'3px 12px',borderRadius:20,fontSize:12,fontWeight:600}}>
+{s==='pending_approval'?'Needs Approval':s}
+</span>
 </div>
 </div>
 </div>
@@ -231,6 +260,7 @@ body{background:white!important;margin:0}
 <div style={{fontSize:13,color:'#64748b'}}>{invoice.note}</div>
 </div>
 )}
+
 {/* Payment History */}
 {invoice.payments?.length>0&&(
 <div style={{padding:'16px 40px',borderBottom:'0.5px solid #f1f5f9'}}>
@@ -267,11 +297,55 @@ body{background:white!important;margin:0}
 )}
 </div>
 )}
+
+{/* Signatures */}
+<div style={{padding:'24px 40px',borderBottom:'0.5px solid #f1f5f9'}}>
+<div style={{fontSize:11,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',marginBottom:16,letterSpacing:'0.05em'}}>Authorized Signatures</div>
+<div style={{display:'grid',gridTemplateColumns:`repeat(${hasOwnerApproval?3:hasAdminApproval?2:1},1fr)`,gap:24}}>
+
+{/* Staff Signature */}
+<div style={{textAlign:'center'}}>
+<div style={{height:48,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:4}}>
+<span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{staffName||'—'}</span>
+</div>
+<div style={{fontSize:10,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.05em'}}>Prepared by</div>
+<div style={{fontSize:12,fontWeight:500,color:'#1a1d2e',marginTop:2}}>{staffName||'Staff'}</div>
+{invoice.createdAt?.seconds&&<div style={{fontSize:10,color:'#9aa0b4',marginTop:2}}>{new Date(invoice.createdAt.seconds*1000).toLocaleDateString()}</div>}
+</div>
+
+{/* Admin Signature */}
+{hasAdminApproval&&(
+<div style={{textAlign:'center'}}>
+<div style={{height:48,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:4}}>
+<span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{adminName||'—'}</span>
+</div>
+<div style={{fontSize:10,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.05em'}}>Approved by</div>
+<div style={{fontSize:12,fontWeight:500,color:'#1a1d2e',marginTop:2}}>{adminName||'Admin'}</div>
+{invoice.approvedAt&&<div style={{fontSize:10,color:'#9aa0b4',marginTop:2}}>{new Date(invoice.approvedAt).toLocaleDateString()}</div>}
+</div>
+)}
+
+{/* Owner Signature */}
+{hasOwnerApproval&&(
+<div style={{textAlign:'center'}}>
+<div style={{height:48,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:4}}>
+<span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{ownerName||'—'}</span>
+</div>
+<div style={{fontSize:10,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.05em'}}>Director Approved</div>
+<div style={{fontSize:12,fontWeight:500,color:'#1a1d2e',marginTop:2}}>{ownerName||'Director'}</div>
+{invoice.ownerApprovedAt&&<div style={{fontSize:10,color:'#9aa0b4',marginTop:2}}>{new Date(invoice.ownerApprovedAt).toLocaleDateString()}</div>}
+</div>
+)}
+</div>
+</div>
+
 {/* Footer + QR */}
 <div style={{padding:'16px 40px',background:'#f8fafc',display:'flex',justifyContent:'space-between',alignItems:'center',gap:20}}>
 <div>
 <div style={{fontSize:12,color:'#9aa0b4',marginBottom:4}}>{settings.footerText}</div>
-<div style={{fontSize:11,color:'#9aa0b4',opacity:0.7}}>System By: Ankora-X</div>
+<div style={{fontSize:10,color:'#9aa0b4',marginBottom:2}}>This invoice is system-generated and does not require a physical seal.</div>
+<div style={{fontSize:10,color:'#9aa0b4',marginBottom:2}}>Verify authenticity by scanning the QR code.</div>
+<div style={{fontSize:10,color:'#9aa0b4'}}>System developed by Ankora-X</div>
 </div>
 {settings.showQR&&(
 <div style={{textAlign:'center',flexShrink:0}}>
