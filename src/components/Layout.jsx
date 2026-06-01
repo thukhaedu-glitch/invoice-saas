@@ -9,15 +9,13 @@ import{useNotifications}from'../hooks/useNotifications'
 import{useRecurring}from'../hooks/useRecurring'
 import{useRole}from'../hooks/useRole'
 
-
-const navItems=[
+const NAV_MAIN=[
 {path:'/',tab:'invoice',label:'Invoices',icon:FileText},
 {path:'/',tab:'quotation',label:'Quotations',icon:FileCheck},
 {path:'/contracts',label:'Contracts',icon:ScrollText},
 {path:'/customers',label:'Customers',icon:Users},
 {path:'/expenses',label:'Expenses',icon:Wallet},
 {path:'/projects',label:'Projects',icon:Briefcase},
-{path:'/reports',label:'Reports',icon:BarChart2},
 ]
 
 export default function Layout({children,title}){
@@ -26,8 +24,8 @@ const[companyId,setCompanyId]=useState(null)
 const location=useLocation()
 const navigate=useNavigate()
 const[searchParams]=useSearchParams()
+const{canSettings,canReports}=useRole()
 
-  
 useEffect(()=>{
 const load=async()=>{
 try{
@@ -40,6 +38,7 @@ load()
 
 useNotifications(companyId)
 useRecurring(companyId)
+
 const isActive=(item)=>{
 if(item.tab){
 const currentTab=searchParams.get('tab')||'invoice'
@@ -53,13 +52,6 @@ if(item.tab)navigate(`/?tab=${item.tab}`)
 else navigate(item.path)
 setOpen(false)
 }
-const{canSettings}=useRole()
-{canSettings&&(
-<div className="nav-item" onClick={()=>{navigate('/settings');setOpen(false)}}>
-<Settings size={17}/><span>Settings</span>
-</div>
-)}
-
 
 return(
 <div style={{display:'flex',minHeight:'100vh'}}>
@@ -78,18 +70,25 @@ return(
 </div>
 <nav style={{flex:1,padding:'12px 10px',overflowY:'auto'}}>
 <div style={{fontSize:10,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.07em',padding:'8px 8px 4px'}}>Main</div>
-{navItems.map((item)=>(
+{NAV_MAIN.map((item)=>(
 <div key={item.tab||item.path+item.label} className={`nav-item${isActive(item)?' active':''}`} onClick={()=>handleNav(item)}>
 <item.icon size={17}/><span>{item.label}</span>
 </div>
 ))}
+{canReports&&(
+<div className={`nav-item${location.pathname==='/reports'?' active':''}`} onClick={()=>{navigate('/reports');setOpen(false)}}>
+<BarChart2 size={17}/><span>Reports</span>
+</div>
+)}
 <div style={{fontSize:10,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.07em',padding:'12px 8px 4px',marginTop:8}}>Account</div>
 <div className="nav-item" onClick={()=>{navigate('/profile');setOpen(false)}}>
 <User size={17}/><span>Profile</span>
 </div>
-<div className="nav-item" onClick={()=>{navigate('/settings');setOpen(false)}}>
+{canSettings&&(
+<div className={`nav-item${location.pathname==='/settings'?' active':''}`} onClick={()=>{navigate('/settings');setOpen(false)}}>
 <Settings size={17}/><span>Settings</span>
 </div>
+)}
 </nav>
 <div style={{padding:10,borderTop:'0.5px solid var(--border)'}}>
 <div className="nav-item" style={{color:'#ef4444'}} onClick={()=>signOut(auth)}>
