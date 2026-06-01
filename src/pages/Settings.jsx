@@ -2,7 +2,7 @@ import{useState,useEffect}from'react'
 import{db,auth}from'../firebase'
 import{doc,getDoc,setDoc,getDocs,collection,query,where}from'firebase/firestore'
 import Layout from'../components/Layout'
-import{Save,Upload,Building2,CreditCard,FileText,Plus,Trash2,Wallet}from'lucide-react'
+import{Save,Upload,Building2,CreditCard,FileText,Plus,Trash2,Wallet,ShieldCheck}from'lucide-react'
 
 const Section=({title,icon:Icon,children})=>(
 <div className="card" style={{padding:24,marginBottom:16}}>
@@ -39,6 +39,7 @@ trnNumber:'',
 paymentTerms:'',
 paymentMethods:[],
 expenseCategories:['Office','Transport','Food','Utilities','Marketing','Salary','Equipment','Software','Other'],
+approvalThreshold:0,
 })
 
 useEffect(()=>{
@@ -244,18 +245,17 @@ transition:'all 0.15s'
 </div>
 </Section>
 
- <Section title="Approval Settings" icon={FileText}>
+<Section title="Approval Settings" icon={ShieldCheck}>
 <Field label="Approval Threshold Amount (Ks)">
 <input className="form-input" type="number" value={settings.approvalThreshold||0} onChange={e=>setSettings(s=>({...s,approvalThreshold:Number(e.target.value)}))} placeholder="e.g. 500000" style={{textAlign:'right'}}/>
 </Field>
-<div style={{fontSize:12,color:'var(--text-3)',marginTop:4,padding:'10px 12px',background:'rgba(79,110,247,0.06)',borderRadius:8}}>
+<div style={{fontSize:12,color:'var(--text-2)',marginTop:4,padding:'12px',background:'rgba(79,110,247,0.06)',borderRadius:8,lineHeight:1.6}}>
 <strong style={{color:'var(--primary)'}}>ℹ️ How it works:</strong><br/>
-Invoice amount ဒီ threshold ထက် များရင် Owner approval လိုမည်။<br/>
-0 ထည့်ရင် approval မလိုဘူး။
+Invoice amount ဒီ threshold ထက် များရင် <strong>Owner approval</strong> လိုမည်။<br/>
+<span style={{color:'var(--text-3)'}}>0 ထည့်ရင် approval မလိုဘူး — အကုန် auto approve ဖြစ်မည်။</span>
 </div>
 </Section>
 
-  
 <div style={{display:'flex',justifyContent:'flex-end'}}>
 <button type="button" onClick={save} disabled={saving} className="btn btn-primary">
 <Save size={15}/>{saving?'Saving...':'Save Settings'}
