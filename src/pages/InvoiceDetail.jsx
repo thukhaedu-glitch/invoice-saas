@@ -303,9 +303,8 @@ body{background:white!important;margin:0}
 <div style={{fontSize:11,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',marginBottom:16,letterSpacing:'0.05em'}}>Authorized Signatures</div>
 <div style={{display:'grid',gridTemplateColumns:`repeat(${hasOwnerApproval?3:hasAdminApproval?2:1},1fr)`,gap:24}}>
 
-{/* Staff Signature */}
-<div style={{textAlign:'center'}}>
-<div style={{height:48,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:4}}>
+<div>
+<div style={{height:48,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',paddingBottom:4}}>
 <span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{staffName||'—'}</span>
 </div>
 <div style={{fontSize:10,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.05em'}}>Prepared by</div>
@@ -313,10 +312,9 @@ body{background:white!important;margin:0}
 {invoice.createdAt?.seconds&&<div style={{fontSize:10,color:'#9aa0b4',marginTop:2}}>{new Date(invoice.createdAt.seconds*1000).toLocaleDateString()}</div>}
 </div>
 
-{/* Admin Signature */}
 {hasAdminApproval&&(
-<div style={{textAlign:'center'}}>
-<div style={{height:48,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:4}}>
+<div>
+<div style={{height:48,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',paddingBottom:4}}>
 <span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{adminName||'—'}</span>
 </div>
 <div style={{fontSize:10,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.05em'}}>Approved by</div>
@@ -325,10 +323,9 @@ body{background:white!important;margin:0}
 </div>
 )}
 
-{/* Owner Signature */}
 {hasOwnerApproval&&(
-<div style={{textAlign:'center'}}>
-<div style={{height:48,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:4}}>
+<div>
+<div style={{height:48,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',paddingBottom:4}}>
 <span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{ownerName||'—'}</span>
 </div>
 <div style={{fontSize:10,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.05em'}}>Director Approved</div>
@@ -354,7 +351,7 @@ body{background:white!important;margin:0}
 </div>
 )}
 <div style={{fontSize:11,color:'#9aa0b4',textAlign:'right',flexShrink:0}}>
-<div>SEC: {invoice.securityCode}</div>
+
 </div>
 </div>
 
