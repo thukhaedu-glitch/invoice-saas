@@ -5,6 +5,7 @@ import{ref,uploadBytes,getDownloadURL}from'firebase/storage'
 import{useNavigate}from'react-router-dom'
 import Layout from'../components/Layout'
 import{Plus,Trash2,Save,ArrowLeft,Image,X,RefreshCcw}from'lucide-react'
+import{collection,addDoc,getDocs,query,where,serverTimestamp,getDoc,doc}from'firebase/firestore'
 
 export default function CreateInvoice(){
 const navigate=useNavigate()
@@ -78,12 +79,20 @@ const save=async()=>{
 if(!form.clientName||items.some(i=>!i.desc)){alert('Please fill required fields');return}
 setSaving(true)
 try{
+// Load approval threshold from settings
+const sSnap=await getDoc(doc(db,'companies',companyId,'_config','invoiceSettings'))
+const threshold=sSnap.exists()?Number(sSnap.data().approvalThreshold||0):0
+
+// Check if approval needed
+const needsApproval=threshold>0&&total>threshold
+const status=needsApproval?'pending_approval':'pending'
+
 await addDoc(collection(db,'companies',companyId,'invoices'),{
 ...form,items,
 discount:Number(form.discount),
 taxRate:Number(form.taxRate),
 totalAmount:total,
-status:'pending',
+status,
 payments:[],
 securityCode:'SEC-'+Math.random().toString(36).substring(2,8).toUpperCase(),
 createdBy:auth.currentUser.uid,
@@ -91,6 +100,10 @@ createdAt:serverTimestamp(),
 source:'manual',
 ...(form.recurring?{lastRecurringDate:form.date}:{}),
 })
+
+if(needsApproval){
+alert(`Invoice created! Amount ${total.toLocaleString()} Ks exceeds threshold — Owner approval required.`)
+}
 navigate('/')
 }catch(e){alert(e.message)}
 setSaving(false)
