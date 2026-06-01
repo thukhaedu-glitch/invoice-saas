@@ -17,6 +17,9 @@ const[settings,setSettings]=useState({})
 const[loading,setLoading]=useState(true)
 const[downloading,setDownloading]=useState(false)
 const[converting,setConverting]=useState(false)
+const[staffName,setStaffName]=useState('')
+const[adminName,setAdminName]=useState('')
+const[ownerName,setOwnerName]=useState('')
 const printRef=useRef()
 
 useEffect(()=>{
@@ -31,7 +34,22 @@ const[qSnap,sSnap]=await Promise.all([
 getDoc(doc(db,'companies',cid,'quotations',id)),
 getDoc(doc(db,'companies',cid,'_config','invoiceSettings'))
 ])
-if(qSnap.exists())setQuotation({id:qSnap.id,...qSnap.data()})
+if(qSnap.exists()){
+const qData={id:qSnap.id,...qSnap.data()}
+setQuotation(qData)
+if(qData.createdBy){
+const staffSnap=await getDoc(doc(db,'users',qData.createdBy))
+if(staffSnap.exists())setStaffName(staffSnap.data().displayName||staffSnap.data().email||'Staff')
+}
+if(qData.approvedBy){
+const adminSnap=await getDoc(doc(db,'users',qData.approvedBy))
+if(adminSnap.exists())setAdminName(adminSnap.data().displayName||adminSnap.data().email||'Admin')
+}
+if(qData.ownerApprovedBy){
+const ownerSnap=await getDoc(doc(db,'users',qData.ownerApprovedBy))
+if(ownerSnap.exists())setOwnerName(ownerSnap.data().displayName||ownerSnap.data().email||'Owner')
+}
+}
 if(sSnap.exists())setSettings(sSnap.data())
 }
 setLoading(false)
@@ -82,6 +100,8 @@ const subtotal=quotation.items?.reduce((s,i)=>s+Number(i.qty||1)*Number(i.price|
 const tax=subtotal*(Number(quotation.taxRate||0)/100)
 const total=quotation.totalAmount||subtotal-Number(quotation.discount||0)+tax
 const primaryColor=settings.primaryColor||'#4F6EF7'
+const hasAdminApproval=!!quotation.approvedBy||!!quotation.adminApprovedBy
+const hasOwnerApproval=!!quotation.ownerApprovedBy
 
 return(
 <>
@@ -235,19 +255,64 @@ body{background:white!important;margin:0}
 </div>
 )}
 
+{/* Signatures */}
+<div style={{padding:'24px 40px',borderTop:'0.5px solid #f1f5f9'}}>
+<div style={{fontSize:11,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',marginBottom:16,letterSpacing:'0.05em'}}>Authorized Signatures</div>
+<div style={{display:'grid',gridTemplateColumns:`repeat(${hasOwnerApproval?3:hasAdminApproval?2:1},1fr)`,gap:24}}>
+
+{/* Staff Signature */}
+<div style={{textAlign:'center'}}>
+<div style={{height:48,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:4}}>
+<span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{staffName||'—'}</span>
+</div>
+<div style={{fontSize:10,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.05em'}}>Prepared by</div>
+<div style={{fontSize:12,fontWeight:500,color:'#1a1d2e',marginTop:2}}>{staffName||'Staff'}</div>
+{quotation.createdAt?.seconds&&<div style={{fontSize:10,color:'#9aa0b4',marginTop:2}}>{new Date(quotation.createdAt.seconds*1000).toLocaleDateString()}</div>}
+</div>
+
+{/* Admin Signature */}
+{hasAdminApproval&&(
+<div style={{textAlign:'center'}}>
+<div style={{height:48,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:4}}>
+<span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{adminName||'—'}</span>
+</div>
+<div style={{fontSize:10,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.05em'}}>Approved by</div>
+<div style={{fontSize:12,fontWeight:500,color:'#1a1d2e',marginTop:2}}>{adminName||'Admin'}</div>
+{quotation.approvedAt&&<div style={{fontSize:10,color:'#9aa0b4',marginTop:2}}>{new Date(quotation.approvedAt).toLocaleDateString()}</div>}
+</div>
+)}
+
+{/* Owner Signature */}
+{hasOwnerApproval&&(
+<div style={{textAlign:'center'}}>
+<div style={{height:48,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:4}}>
+<span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{ownerName||'—'}</span>
+</div>
+<div style={{fontSize:10,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.05em'}}>Director Approved</div>
+<div style={{fontSize:12,fontWeight:500,color:'#1a1d2e',marginTop:2}}>{ownerName||'Director'}</div>
+{quotation.ownerApprovedAt&&<div style={{fontSize:10,color:'#9aa0b4',marginTop:2}}>{new Date(quotation.ownerApprovedAt).toLocaleDateString()}</div>}
+</div>
+)}
+</div>
+</div>
+
 {/* Footer + QR */}
-<div style={{padding:'16px 40px',borderTop:'0.5px solid #e2e8f0',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+<div style={{padding:'16px 40px',background:'#f8fafc',display:'flex',justifyContent:'space-between',alignItems:'center',gap:20}}>
 <div>
-{settings.footerText&&<div style={{fontSize:11,color:'#9aa0b4'}}>{settings.footerText}</div>}
-<div style={{fontSize:11,color:'#9aa0b4',marginTop:2}}>System By: Ankora-X</div>
-<div style={{fontSize:11,color:'#9aa0b4',marginTop:2}}>SEC: {quotation.securityCode}</div>
+{settings.footerText&&<div style={{fontSize:11,color:'#9aa0b4',marginBottom:4}}>{settings.footerText}</div>}
+<div style={{fontSize:10,color:'#9aa0b4',marginBottom:2}}>This quotation is system-generated and does not require a physical seal.</div>
+<div style={{fontSize:10,color:'#9aa0b4',marginBottom:2}}>Verify authenticity by scanning the QR code.</div>
+<div style={{fontSize:10,color:'#9aa0b4'}}>System developed by Ankora-X</div>
 </div>
 {settings.showQr!==false&&quotation.securityCode&&(
 <div style={{textAlign:'center'}}>
-<QRCodeSVG value={`${window.location.origin}/verify/${companyId}/${quotation.securityCode}`} size={64} fgColor="#1a1d2e"/>
+<QRCodeSVG value={`${window.location.origin}/verify/${companyId}/${quotation.securityCode}`} size={64} fgColor={primaryColor}/>
 <div style={{fontSize:9,color:'#9aa0b4',marginTop:4}}>Scan to verify</div>
 </div>
 )}
+<div style={{fontSize:11,color:'#9aa0b4',textAlign:'right',flexShrink:0}}>
+<div>SEC: {quotation.securityCode}</div>
+</div>
 </div>
 
 </div>
