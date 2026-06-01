@@ -11,7 +11,6 @@ import ReactQuill from'react-quill'
 import'react-quill/dist/quill.snow.css'
 
 const STATUS=['draft','active','expired','cancelled']
-
 const statusColor={draft:'#64748b',active:'#16a34a',expired:'#d97706',cancelled:'#dc2626'}
 const statusBg={draft:'#f1f5f9',active:'#eaf3de',expired:'#faeeda',cancelled:'#fcebeb'}
 
@@ -33,10 +32,13 @@ const[contracts,setContracts]=useState([])
 const[customers,setCustomers]=useState([])
 const[loading,setLoading]=useState(true)
 const[search,setSearch]=useState('')
-const[view,setView]=useState('list') // list | editor | detail
+const[view,setView]=useState('list')
 const[selected,setSelected]=useState(null)
 const[saving,setSaving]=useState(false)
 const[downloading,setDownloading]=useState(false)
+const[staffName,setStaffName]=useState('')
+const[adminName,setAdminName]=useState('')
+const[ownerName,setOwnerName]=useState('')
 const[form,setForm]=useState({
 title:'Service Agreement',
 clientName:'',clientEmail:'',clientPhone:'',
@@ -70,6 +72,23 @@ setLoading(false)
 load()
 },[])
 
+const loadSignatureNames=async(cid,contract)=>{
+try{
+if(contract.createdBy){
+const s=await getDoc(doc(db,'users',contract.createdBy))
+if(s.exists())setStaffName(s.data().displayName||s.data().email||'Staff')
+}
+if(contract.approvedBy){
+const s=await getDoc(doc(db,'users',contract.approvedBy))
+if(s.exists())setAdminName(s.data().displayName||s.data().email||'Admin')
+}
+if(contract.ownerApprovedBy){
+const s=await getDoc(doc(db,'users',contract.ownerApprovedBy))
+if(s.exists())setOwnerName(s.data().displayName||s.data().email||'Owner')
+}
+}catch(e){console.error(e)}
+}
+
 const openNew=()=>{
 setForm({
 title:'Service Agreement',
@@ -101,8 +120,12 @@ setSelected(c)
 setView('editor')
 }
 
-const openDetail=(c)=>{
+const openDetail=async(c)=>{
 setSelected(c)
+setStaffName('')
+setAdminName('')
+setOwnerName('')
+await loadSignatureNames(companyId,c)
 setView('detail')
 }
 
@@ -167,6 +190,9 @@ toolbar:[
 ]
 }
 
+const hasAdminApproval=!!selected?.approvedBy||!!selected?.adminApprovedBy
+const hasOwnerApproval=!!selected?.ownerApprovedBy
+
 if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh'}}>Loading...</div>
 
 // Editor View
@@ -181,7 +207,6 @@ if(view==='editor')return(
 </button>
 </div>
 
-{/* Meta */}
 <div className="card" style={{padding:20,marginBottom:16}}>
 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
 <div style={{gridColumn:'1/-1'}}>
@@ -218,19 +243,11 @@ if(view==='editor')return(
 </div>
 </div>
 
-{/* Editor */}
 <div className="card" style={{padding:20,marginBottom:16}}>
 <div style={{fontSize:12,fontWeight:600,color:'var(--text-2)',marginBottom:12,textTransform:'uppercase',letterSpacing:'0.05em'}}>Contract Content</div>
-<ReactQuill
-theme="snow"
-value={form.content}
-onChange={v=>setForm(f=>({...f,content:v}))}
-modules={modules}
-style={{minHeight:400,fontSize:14}}
-/>
+<ReactQuill theme="snow" value={form.content} onChange={v=>setForm(f=>({...f,content:v}))} modules={modules} style={{minHeight:400,fontSize:14}}/>
 </div>
 
-{/* Signatures */}
 <div className="card" style={{padding:20,marginBottom:16}}>
 <div style={{fontSize:12,fontWeight:600,color:'var(--text-2)',marginBottom:12,textTransform:'uppercase',letterSpacing:'0.05em'}}>Signatures</div>
 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
@@ -308,8 +325,48 @@ body{background:white!important;margin:0}
 {/* Content */}
 <div style={{marginBottom:40,lineHeight:1.8,fontSize:13}} dangerouslySetInnerHTML={{__html:selected.content}}/>
 
-{/* Signatures */}
-<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:40,marginTop:40,paddingTop:24,borderTop:'0.5px solid #e2e8f0'}}>
+{/* Approval-based Signatures */}
+<div style={{marginTop:40,paddingTop:24,borderTop:'0.5px solid #e2e8f0'}}>
+<div style={{fontSize:11,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',marginBottom:16,letterSpacing:'0.05em'}}>Authorized Signatures</div>
+<div style={{display:'grid',gridTemplateColumns:`repeat(${hasOwnerApproval?3:hasAdminApproval?2:1},1fr)`,gap:24,marginBottom:24}}>
+
+{/* Staff/Creator */}
+<div style={{textAlign:'center'}}>
+<div style={{height:48,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:4}}>
+<span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{staffName||'—'}</span>
+</div>
+<div style={{fontSize:10,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.05em'}}>Prepared by</div>
+<div style={{fontSize:12,fontWeight:500,color:'#1a1d2e',marginTop:2}}>{staffName||'Staff'}</div>
+{selected.createdAt?.seconds&&<div style={{fontSize:10,color:'#9aa0b4',marginTop:2}}>{new Date(selected.createdAt.seconds*1000).toLocaleDateString()}</div>}
+</div>
+
+{/* Admin */}
+{hasAdminApproval&&(
+<div style={{textAlign:'center'}}>
+<div style={{height:48,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:4}}>
+<span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{adminName||'—'}</span>
+</div>
+<div style={{fontSize:10,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.05em'}}>Approved by</div>
+<div style={{fontSize:12,fontWeight:500,color:'#1a1d2e',marginTop:2}}>{adminName||'Admin'}</div>
+{selected.approvedAt&&<div style={{fontSize:10,color:'#9aa0b4',marginTop:2}}>{new Date(selected.approvedAt).toLocaleDateString()}</div>}
+</div>
+)}
+
+{/* Owner/Director */}
+{hasOwnerApproval&&(
+<div style={{textAlign:'center'}}>
+<div style={{height:48,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:4}}>
+<span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{ownerName||'—'}</span>
+</div>
+<div style={{fontSize:10,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.05em'}}>Director Approved</div>
+<div style={{fontSize:12,fontWeight:500,color:'#1a1d2e',marginTop:2}}>{ownerName||'Director'}</div>
+{selected.ownerApprovedAt&&<div style={{fontSize:10,color:'#9aa0b4',marginTop:2}}>{new Date(selected.ownerApprovedAt).toLocaleDateString()}</div>}
+</div>
+)}
+</div>
+
+{/* Party Signatures */}
+<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:40,paddingTop:24,borderTop:'0.5px solid #f1f5f9'}}>
 <div>
 <div style={{borderBottom:'1.5px solid #1a1d2e',paddingBottom:4,marginBottom:8,minHeight:48,display:'flex',alignItems:'flex-end'}}>
 <span style={{fontSize:13,color:'#64748b',fontStyle:'italic'}}>{selected.partyASign||''}</span>
@@ -325,13 +382,15 @@ body{background:white!important;margin:0}
 <div style={{fontSize:12,fontWeight:500,marginTop:2}}>{selected.clientName}</div>
 </div>
 </div>
+</div>
 
 {/* Footer + QR */}
 <div style={{marginTop:32,paddingTop:16,borderTop:'0.5px solid #e2e8f0',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
 <div>
-<div style={{fontSize:11,color:'#9aa0b4'}}>Generated by Invoice SaaS</div>
-<div style={{fontSize:11,color:'#9aa0b4',marginTop:2}}>System By: Ankora-X</div>
-<div style={{fontSize:11,color:'#9aa0b4',marginTop:2}}>SEC: {selected.securityCode}</div>
+<div style={{fontSize:10,color:'#9aa0b4',marginBottom:2}}>This contract is system-generated and does not require a physical seal.</div>
+<div style={{fontSize:10,color:'#9aa0b4',marginBottom:2}}>Verify authenticity by scanning the QR code.</div>
+<div style={{fontSize:10,color:'#9aa0b4'}}>System developed by Ankora-X</div>
+<div style={{fontSize:11,color:'#9aa0b4',marginTop:4}}>SEC: {selected.securityCode}</div>
 </div>
 {selected.securityCode&&(
 <div style={{textAlign:'center'}}>
@@ -359,7 +418,6 @@ return(
 </button>
 </div>
 
-{/* Stats */}
 <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:16}}>
 {STATUS.map(s=>(
 <div key={s} className="card" style={{padding:16}}>
@@ -370,7 +428,6 @@ return(
 ))}
 </div>
 
-{/* Table */}
 <div className="card" style={{overflow:'hidden'}}>
 {filtered.length===0?(
 <div style={{padding:64,textAlign:'center',color:'var(--text-3)'}}>
