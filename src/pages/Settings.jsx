@@ -244,6 +244,18 @@ transition:'all 0.15s'
 </div>
 </Section>
 
+ <Section title="Approval Settings" icon={FileText}>
+<Field label="Approval Threshold Amount (Ks)">
+<input className="form-input" type="number" value={settings.approvalThreshold||0} onChange={e=>setSettings(s=>({...s,approvalThreshold:Number(e.target.value)}))} placeholder="e.g. 500000" style={{textAlign:'right'}}/>
+</Field>
+<div style={{fontSize:12,color:'var(--text-3)',marginTop:4,padding:'10px 12px',background:'rgba(79,110,247,0.06)',borderRadius:8}}>
+<strong style={{color:'var(--primary)'}}>ℹ️ How it works:</strong><br/>
+Invoice amount ဒီ threshold ထက် များရင် Owner approval လိုမည်။<br/>
+0 ထည့်ရင် approval မလိုဘူး။
+</div>
+</Section>
+
+  
 <div style={{display:'flex',justifyContent:'flex-end'}}>
 <button type="button" onClick={save} disabled={saving} className="btn btn-primary">
 <Save size={15}/>{saving?'Saving...':'Save Settings'}
