@@ -4,7 +4,7 @@ import{doc,getDoc,setDoc,getDocs,collection,query,where,updateDoc}from'firebase/
 import{updatePassword,reauthenticateWithCredential,EmailAuthProvider}from'firebase/auth'
 import{ref,uploadBytes,getDownloadURL}from'firebase/storage'
 import Layout from'../components/Layout'
-import{Save,Upload,User,Lock,Building2,X,Shield,Users,Copy,Check}from'lucide-react'
+import{Save,Upload,User,Lock,Building2,X,Shield,Users,Copy,Check,PenLine,Trash2}from'lucide-react'
 
 const Section=({title,icon:Icon,children})=>(
 <div className="card" style={{padding:24,marginBottom:16}}>
@@ -19,8 +19,9 @@ export default function Profile(){
 const[companyId,setCompanyId]=useState(null)
 const[saving,setSaving]=useState(false)
 const[uploadingAvatar,setUploadingAvatar]=useState(false)
+const[uploadingSignature,setUploadingSignature]=useState(false)
 const[pwModal,setPwModal]=useState(false)
-const[profile,setProfile]=useState({displayName:'',avatarUrl:'',phone:'',role:'staff'})
+const[profile,setProfile]=useState({displayName:'',avatarUrl:'',signatureUrl:'',phone:'',role:'staff'})
 const[company,setCompany]=useState({name:'',plan:'free',inviteCode:''})
 const[members,setMembers]=useState([])
 const[pwForm,setPwForm]=useState({current:'',newPw:'',confirm:''})
@@ -66,6 +67,27 @@ const url=await getDownloadURL(storageRef)
 setProfile(p=>({...p,avatarUrl:url}))
 }catch(err){console.error(err)}
 setUploadingAvatar(false)
+}
+
+const handleSignatureUpload=async(e)=>{
+const file=e.target.files[0]
+if(!file)return
+setUploadingSignature(true)
+try{
+const storageRef=ref(storage,`signatures/${auth.currentUser.uid}`)
+await uploadBytes(storageRef,file)
+const url=await getDownloadURL(storageRef)
+setProfile(p=>({...p,signatureUrl:url}))
+await setDoc(doc(db,'users',auth.currentUser.uid),{signatureUrl:url},{merge:true})
+alert('Signature saved!')
+}catch(err){console.error(err)}
+setUploadingSignature(false)
+}
+
+const handleRemoveSignature=async()=>{
+if(!confirm('Remove signature?'))return
+setProfile(p=>({...p,signatureUrl:''}))
+await setDoc(doc(db,'users',auth.currentUser.uid),{signatureUrl:''},{merge:true})
 }
 
 const save=async()=>{
@@ -176,6 +198,45 @@ return(
 </div>
 </Section>
 
+{/* Signature */}
+<Section title="My Signature" icon={PenLine}>
+<div style={{fontSize:12,color:'var(--text-3)',marginBottom:12}}>
+လက်မှတ် ပုံ upload လုပ်ပါ — Invoice, Quotation, Contract မှာ auto-show ဖြစ်မည်။
+</div>
+{profile.signatureUrl?(
+<div>
+<div style={{border:'0.5px solid var(--border)',borderRadius:10,padding:16,background:'#f8fafc',marginBottom:12,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+<img src={profile.signatureUrl} style={{height:60,objectFit:'contain',maxWidth:200}} alt="Signature"/>
+<button type="button" onClick={handleRemoveSignature} style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)',padding:4}}>
+<Trash2 size={16}/>
+</button>
+</div>
+<label style={{cursor:'pointer'}}>
+<input type="file" accept="image/*" onChange={handleSignatureUpload} style={{display:'none'}}/>
+<span className="btn btn-ghost" style={{fontSize:13}}>
+<Upload size={14}/>{uploadingSignature?'Uploading...':'Change Signature'}
+</span>
+</label>
+</div>
+):(
+<div>
+<div style={{border:'1.5px dashed var(--border)',borderRadius:10,padding:32,textAlign:'center',marginBottom:12,background:'#fafbff'}}>
+<PenLine size={32} color="var(--text-3)" style={{margin:'0 auto 8px'}}/>
+<div style={{fontSize:13,color:'var(--text-3)',marginBottom:12}}>No signature uploaded yet</div>
+<label style={{cursor:'pointer'}}>
+<input type="file" accept="image/*" onChange={handleSignatureUpload} style={{display:'none'}}/>
+<span className="btn btn-primary" style={{fontSize:13}}>
+<Upload size={14}/>{uploadingSignature?'Uploading...':'Upload Signature'}
+</span>
+</label>
+</div>
+<div style={{fontSize:11,color:'var(--text-3)',padding:'8px 12px',background:'rgba(79,110,247,0.05)',borderRadius:8}}>
+💡 လက်မှတ် ဓာတ်ပုံ ရိုက်ပြီး ဖြူဆက်မရှိတဲ့ background နဲ့ upload လုပ်ပါ (PNG recommended)
+</div>
+</div>
+)}
+</Section>
+
 {/* Company */}
 <Section title="Company" icon={Building2}>
 {[
@@ -189,7 +250,6 @@ return(
 <span style={{fontSize:13,fontWeight:500}}>{value}</span>
 </div>
 ))}
-{/* Invite Code */}
 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderBottom:'0.5px solid #f1f5f9'}}>
 <span style={{fontSize:13,color:'var(--text-2)'}}>Invite Code</span>
 <div style={{display:'flex',alignItems:'center',gap:8}}>
