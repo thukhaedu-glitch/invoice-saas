@@ -4,7 +4,6 @@ import{collection,onSnapshot,getDocs,query,where,doc,deleteDoc,updateDoc,addDoc,
 import Layout from'../components/Layout'
 import{FileText,FileCheck,Users,Plus,TrendingUp,CheckCircle,Clock,AlertCircle,Edit,Trash2,RefreshCcw,Link,Printer,CheckSquare,CopyPlus,DollarSign,X,Search,Briefcase,Wallet,Mail}from'lucide-react'
 import{useNavigate,useSearchParams}from'react-router-dom'
-
 import{sendInvoiceReminder}from'../utils/emailService'
 import{useRole}from'../hooks/useRole'
 import ConfirmPassword from'../components/ConfirmPassword'
@@ -37,14 +36,8 @@ const[companyInfo,setCompanyInfo]=useState({})
 const[sendingReminder,setSendingReminder]=useState(null)
 const[confirmAction,setConfirmAction]=useState(null)
 const navigate=useNavigate()
-const{role,canEdit,canDelete}=useRole()
+const{role,canEdit,canDelete,loading:roleLoading}=useRole()
 
-  const{role,canEdit,canDelete,loading}=useRole()
-
-// Debug — ဒါ ယာယီထည့်ပါ
-console.log('Role:', role, 'canDelete:', canDelete, 'loading:', loading)
-
-  
 useEffect(()=>{
 const load=async()=>{
 try{
@@ -196,7 +189,7 @@ await deleteDoc(doc(db,'companies',companyId,collName,id))
 }
 
 const handleDeleteWithAuth=(id)=>{
-if(loading){return} // loading ဆဲဆဲ မလုပ်ရ
+if(roleLoading)return
 if(!canDelete){
 alert('You do not have permission to delete this item.')
 return
@@ -205,6 +198,7 @@ setConfirmAction({action:()=>handleDelete(id),label:'delete this item'})
 }
 
 const handleEditNav=(item)=>{
+if(roleLoading)return
 if(!canEdit){alert('You do not have permission to edit');return}
 setConfirmAction({
 action:()=>navigate(activeTab==='quotation'?`/edit-quotation/${item.id}`:`/edit/${item.id}`),
@@ -315,7 +309,6 @@ if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:
 return(
 <Layout title="Dashboard">
 
-{/* Confirm Password Modal */}
 {confirmAction&&(
 <ConfirmPassword
 action={confirmAction.label}
@@ -324,7 +317,6 @@ onCancel={()=>setConfirmAction(null)}
 />
 )}
 
-{/* Payment Modal */}
 {paymentModal&&(
 <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
 <div style={{background:'white',borderRadius:16,width:'100%',maxWidth:440,boxShadow:'0 20px 60px rgba(0,0,0,0.2)'}}>
