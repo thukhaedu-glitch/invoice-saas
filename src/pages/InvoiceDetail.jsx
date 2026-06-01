@@ -25,6 +25,9 @@ const[adminName,setAdminName]=useState('')
 const[ownerName,setOwnerName]=useState('')
 const[loading,setLoading]=useState(true)
 const[downloading,setDownloading]=useState(false)
+const[staffSig,setStaffSig]=useState('')
+const[adminSig,setAdminSig]=useState('')
+const[ownerSig,setOwnerSig]=useState('')
 
 useEffect(()=>{
 const load=async()=>{
