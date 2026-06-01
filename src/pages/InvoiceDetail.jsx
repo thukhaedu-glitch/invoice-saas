@@ -23,11 +23,11 @@ trnNumber:'',paymentTerms:'',paymentMethods:[],
 const[staffName,setStaffName]=useState('')
 const[adminName,setAdminName]=useState('')
 const[ownerName,setOwnerName]=useState('')
-const[loading,setLoading]=useState(true)
-const[downloading,setDownloading]=useState(false)
 const[staffSig,setStaffSig]=useState('')
 const[adminSig,setAdminSig]=useState('')
 const[ownerSig,setOwnerSig]=useState('')
+const[loading,setLoading]=useState(true)
+const[downloading,setDownloading]=useState(false)
 
 useEffect(()=>{
 const load=async()=>{
@@ -44,22 +44,26 @@ getDoc(doc(db,'companies',cid,'_config','invoiceSettings'))
 if(invSnap.exists()){
 const invData={id:invSnap.id,...invSnap.data()}
 setInvoice(invData)
-// Load staff/admin/owner names
-const members=compData.members||{}
-// Staff (creator)
 if(invData.createdBy){
-const staffSnap=await getDoc(doc(db,'users',invData.createdBy))
-if(staffSnap.exists())setStaffName(staffSnap.data().displayName||staffSnap.data().email||'Staff')
+const s=await getDoc(doc(db,'users',invData.createdBy))
+if(s.exists()){
+setStaffName(s.data().displayName||s.data().email||'Staff')
+setStaffSig(s.data().signatureUrl||'')
 }
-// Admin (approver)
+}
 if(invData.approvedBy){
-const adminSnap=await getDoc(doc(db,'users',invData.approvedBy))
-if(adminSnap.exists())setAdminName(adminSnap.data().displayName||adminSnap.data().email||'Admin')
+const s=await getDoc(doc(db,'users',invData.approvedBy))
+if(s.exists()){
+setAdminName(s.data().displayName||s.data().email||'Admin')
+setAdminSig(s.data().signatureUrl||'')
 }
-// Owner (final approver)
+}
 if(invData.ownerApprovedBy){
-const ownerSnap=await getDoc(doc(db,'users',invData.ownerApprovedBy))
-if(ownerSnap.exists())setOwnerName(ownerSnap.data().displayName||ownerSnap.data().email||'Owner')
+const s=await getDoc(doc(db,'users',invData.ownerApprovedBy))
+if(s.exists()){
+setOwnerName(s.data().displayName||s.data().email||'Owner')
+setOwnerSig(s.data().signatureUrl||'')
+}
 }
 }
 if(sSnap.exists())setSettings(s=>({...s,...sSnap.data()}))
@@ -97,8 +101,6 @@ const pc=settings.primaryColor
 const verifyUrl=`${window.location.origin}/verify/${company?.id}/${invoice.securityCode}`
 const statusColor={paid:'#16a34a',pending:'#d97706',overdue:'#dc2626',refunded:'#6366f1',pending_approval:'#4F6EF7',rejected:'#dc2626'}
 const statusBg={paid:'#eaf3de',pending:'#faeeda',overdue:'#fcebeb',refunded:'#ede9fe',pending_approval:'rgba(79,110,247,0.1)',rejected:'#fcebeb'}
-
-// Signature levels
 const hasAdminApproval=!!invoice.approvedBy||!!invoice.adminApprovedBy
 const hasOwnerApproval=!!invoice.ownerApprovedBy
 
@@ -306,19 +308,29 @@ body{background:white!important;margin:0}
 <div style={{fontSize:11,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',marginBottom:16,letterSpacing:'0.05em'}}>Authorized Signatures</div>
 <div style={{display:'grid',gridTemplateColumns:`repeat(${hasOwnerApproval?3:hasAdminApproval?2:1},1fr)`,gap:24}}>
 
+{/* Staff */}
 <div>
-<div style={{height:48,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',paddingBottom:4}}>
+<div style={{height:64,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',paddingBottom:4}}>
+{staffSig?(
+<img src={staffSig} style={{height:56,objectFit:'contain',maxWidth:'100%'}} alt="signature"/>
+):(
 <span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{staffName||'—'}</span>
+)}
 </div>
 <div style={{fontSize:10,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.05em'}}>Prepared by</div>
 <div style={{fontSize:12,fontWeight:500,color:'#1a1d2e',marginTop:2}}>{staffName||'Staff'}</div>
 {invoice.createdAt?.seconds&&<div style={{fontSize:10,color:'#9aa0b4',marginTop:2}}>{new Date(invoice.createdAt.seconds*1000).toLocaleDateString()}</div>}
 </div>
 
+{/* Admin */}
 {hasAdminApproval&&(
 <div>
-<div style={{height:48,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',paddingBottom:4}}>
+<div style={{height:64,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',paddingBottom:4}}>
+{adminSig?(
+<img src={adminSig} style={{height:56,objectFit:'contain',maxWidth:'100%'}} alt="signature"/>
+):(
 <span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{adminName||'—'}</span>
+)}
 </div>
 <div style={{fontSize:10,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.05em'}}>Approved by</div>
 <div style={{fontSize:12,fontWeight:500,color:'#1a1d2e',marginTop:2}}>{adminName||'Admin'}</div>
@@ -326,10 +338,15 @@ body{background:white!important;margin:0}
 </div>
 )}
 
+{/* Owner */}
 {hasOwnerApproval&&(
 <div>
-<div style={{height:48,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',paddingBottom:4}}>
+<div style={{height:64,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',paddingBottom:4}}>
+{ownerSig?(
+<img src={ownerSig} style={{height:56,objectFit:'contain',maxWidth:'100%'}} alt="signature"/>
+):(
 <span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{ownerName||'—'}</span>
+)}
 </div>
 <div style={{fontSize:10,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.05em'}}>Director Approved</div>
 <div style={{fontSize:12,fontWeight:500,color:'#1a1d2e',marginTop:2}}>{ownerName||'Director'}</div>
@@ -353,9 +370,6 @@ body{background:white!important;margin:0}
 <div style={{fontSize:10,color:'#9aa0b4',marginTop:4}}>Scan to verify</div>
 </div>
 )}
-<div style={{fontSize:11,color:'#9aa0b4',textAlign:'right',flexShrink:0}}>
-
-</div>
 </div>
 
 </div>
