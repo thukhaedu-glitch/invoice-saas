@@ -138,9 +138,9 @@ if(!confirm(`Remove ${memberEmail||uid} from company?`))return
 try{
 const cSnap=await getDoc(doc(db,'companies',companyId))
 if(cSnap.exists()){
-const members=cSnap.data().members||{}
-delete members[uid]
-await updateDoc(doc(db,'companies',companyId),{members})
+const mems=cSnap.data().members||{}
+delete mems[uid]
+await updateDoc(doc(db,'companies',companyId),{members:mems})
 setMembers(m=>m.filter(mem=>mem.uid!==uid))
 alert('Member removed!')
 }
@@ -170,7 +170,7 @@ const roleBg={owner:'rgba(79,110,247,0.1)',admin:'rgba(22,163,74,0.1)',staff:'rg
 
 return(
 <Layout title="Profile">
-<div style={{maxWidth:600,margin:'0 auto'}}>
+<div style={{maxWidth:720,margin:'0 auto'}}>
 
 {/* Password Modal */}
 {pwModal&&(
@@ -304,49 +304,49 @@ return(
 <div style={{marginBottom:12,fontSize:12,color:'var(--text-3)'}}>
 {members.length} member{members.length!==1?'s':''} in {company.name}
 </div>
-
 {members.map(m=>(
-<div key={m.uid} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 0',borderBottom:'0.5px solid #f1f5f9',flexWrap:'wrap'}}>
+<div key={m.uid} style={{padding:'12px 0',borderBottom:'0.5px solid #f1f5f9'}}>
+<div style={{display:'flex',alignItems:'center',gap:12,marginBottom:(myRole==='owner'&&m.uid!==auth.currentUser?.uid)||(myRole==='admin'&&m.uid!==auth.currentUser?.uid&&m.role==='staff')?8:0}}>
 <div style={{width:38,height:38,borderRadius:'50%',background:'var(--primary-light)',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',flexShrink:0}}>
 {m.avatarUrl?<img src={m.avatarUrl} style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<User size={18} color="var(--primary)"/>}
 </div>
-<div style={{flex:1,minWidth:120}}>
+<div style={{flex:1}}>
 <div style={{fontSize:13,fontWeight:500,color:'var(--text-1)',display:'flex',alignItems:'center',gap:6}}>
 {m.displayName||m.email||m.uid.slice(0,8)}
 {m.uid===auth.currentUser?.uid&&<span style={{fontSize:10,color:'var(--text-3)'}}>(You)</span>}
 </div>
 <div style={{fontSize:11,color:'var(--text-3)',marginTop:1}}>{m.email||'-'}</div>
 </div>
-<div style={{display:'flex',alignItems:'center',gap:6}}>
-{myRole==='owner'&&m.uid!==auth.currentUser?.uid?(
-<>
+<span style={{background:roleBg[m.role]||'#f1f5f9',color:roleColor[m.role]||'#64748b',padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:600,textTransform:'capitalize',flexShrink:0}}>{m.role}</span>
+</div>
+
+{/* Owner actions */}
+{myRole==='owner'&&m.uid!==auth.currentUser?.uid&&(
+<div style={{display:'flex',gap:8,paddingLeft:50,flexWrap:'wrap'}}>
 <select value={m.role} onChange={e=>handleRoleChange(m.uid,e.target.value)} className="form-input" style={{width:'auto',fontSize:12,padding:'4px 8px'}}>
 <option value="owner">Owner</option>
 <option value="admin">Admin</option>
 <option value="staff">Staff</option>
 </select>
-<button type="button" onClick={()=>handleResetPassword(m.email)} disabled={resettingPw===m.email} title="Reset password" style={{background:'rgba(217,119,6,0.1)',border:'none',cursor:'pointer',color:'#d97706',padding:'4px 8px',borderRadius:6,fontSize:11,display:'flex',alignItems:'center',gap:4}}>
-<KeyRound size={13}/>Reset PW
+<button type="button" onClick={()=>handleResetPassword(m.email)} disabled={resettingPw===m.email} style={{background:'rgba(217,119,6,0.1)',border:'none',cursor:'pointer',color:'#d97706',padding:'4px 10px',borderRadius:6,fontSize:12,display:'flex',alignItems:'center',gap:4}}>
+<KeyRound size={13}/>{resettingPw===m.email?'Sending...':'Reset PW'}
 </button>
-<button type="button" onClick={()=>handleRemoveMember(m.uid,m.email)} title="Remove from company" style={{background:'rgba(220,38,38,0.1)',border:'none',cursor:'pointer',color:'#dc2626',padding:'4px 8px',borderRadius:6,fontSize:11,display:'flex',alignItems:'center',gap:4}}>
+<button type="button" onClick={()=>handleRemoveMember(m.uid,m.email)} style={{background:'rgba(220,38,38,0.1)',border:'none',cursor:'pointer',color:'#dc2626',padding:'4px 10px',borderRadius:6,fontSize:12,display:'flex',alignItems:'center',gap:4}}>
 <UserMinus size={13}/>Remove
 </button>
-</>
-):(myRole==='admin'&&m.uid!==auth.currentUser?.uid&&m.role==='staff')?(
-<>
-<span style={{background:roleBg[m.role]||'#f1f5f9',color:roleColor[m.role]||'#64748b',padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:600,textTransform:'capitalize'}}>{m.role}</span>
-<button type="button" onClick={()=>handleResetPassword(m.email)} disabled={resettingPw===m.email} title="Reset password" style={{background:'rgba(217,119,6,0.1)',border:'none',cursor:'pointer',color:'#d97706',padding:'4px 8px',borderRadius:6,fontSize:11,display:'flex',alignItems:'center',gap:4}}>
-<KeyRound size={13}/>Reset PW
+</div>
+)}
+
+{/* Admin actions — staff only */}
+{myRole==='admin'&&m.uid!==auth.currentUser?.uid&&m.role==='staff'&&(
+<div style={{display:'flex',gap:8,paddingLeft:50}}>
+<button type="button" onClick={()=>handleResetPassword(m.email)} disabled={resettingPw===m.email} style={{background:'rgba(217,119,6,0.1)',border:'none',cursor:'pointer',color:'#d97706',padding:'4px 10px',borderRadius:6,fontSize:12,display:'flex',alignItems:'center',gap:4}}>
+<KeyRound size={13}/>{resettingPw===m.email?'Sending...':'Reset PW'}
 </button>
-</>
-):(
-<span style={{background:roleBg[m.role]||'#f1f5f9',color:roleColor[m.role]||'#64748b',padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:600,textTransform:'capitalize'}}>{m.role}</span>
+</div>
 )}
 </div>
-</div>
 ))}
-
-  
 </Section>
 
 {/* Security */}
