@@ -24,6 +24,7 @@ const[pwModal,setPwModal]=useState(false)
 const[profile,setProfile]=useState({displayName:'',avatarUrl:'',signatureUrl:'',phone:'',role:'staff'})
 const[company,setCompany]=useState({name:'',plan:'free',inviteCode:''})
 const[members,setMembers]=useState([])
+const[managedBy,setManagedBy]=useState({})
 const[pwForm,setPwForm]=useState({current:'',newPw:'',confirm:''})
 const[pwError,setPwError]=useState('')
 const[savingPw,setSavingPw]=useState(false)
@@ -41,6 +42,7 @@ setCompanyId(cid)
 setCompany({name:cData.name||'',plan:cData.plan||'free',inviteCode:cData.inviteCode||''})
 const role=cData.members?.[user.uid]||'staff'
 setMyRole(role)
+setManagedBy(cData.managedBy||{})
 const memberIds=Object.keys(cData.members||{})
 const memberRoles=cData.members||{}
 const memberProfiles=await Promise.all(memberIds.map(async uid=>{
@@ -131,6 +133,20 @@ setMembers(m=>m.map(mem=>mem.uid===uid?{...mem,role:newRole}:mem))
 }catch(e){alert(e.message)}
 }
 
+const handleManagedByChange=async(staffUid,adminUid)=>{
+if(myRole!=='owner'){alert('Only owner can assign managers');return}
+try{
+const newManagedBy={...managedBy}
+if(adminUid===''){
+delete newManagedBy[staffUid]
+}else{
+newManagedBy[staffUid]=adminUid
+}
+await updateDoc(doc(db,'companies',companyId),{managedBy:newManagedBy})
+setManagedBy(newManagedBy)
+}catch(e){alert(e.message)}
+}
+
 const handleRemoveMember=async(uid,memberEmail)=>{
 if(myRole!=='owner'){alert('Only owner can remove members');return}
 if(!confirm(`Remove ${memberEmail||uid} from company?`))return
@@ -138,9 +154,16 @@ try{
 const cSnap=await getDoc(doc(db,'companies',companyId))
 if(cSnap.exists()){
 const mems=cSnap.data().members||{}
+const mgBy=cSnap.data().managedBy||{}
 delete mems[uid]
-await updateDoc(doc(db,'companies',companyId),{members:mems})
+delete mgBy[uid]
+// Remove this uid from managedBy values too
+Object.keys(mgBy).forEach(k=>{if(mgBy[k]===uid)delete mgBy[k]})
+await updateDoc(doc(db,'companies',companyId),{members:mems,managedBy:mgBy})
 setMembers(m=>m.filter(mem=>mem.uid!==uid))
+const newMgBy={...managedBy}
+delete newMgBy[uid]
+setManagedBy(newMgBy)
 alert('Member removed!')
 }
 }catch(e){alert(e.message)}
@@ -154,6 +177,7 @@ setTimeout(()=>setCopied(false),2000)
 
 const roleColor={owner:'#4F6EF7',admin:'#16a34a',staff:'#d97706'}
 const roleBg={owner:'rgba(79,110,247,0.1)',admin:'rgba(22,163,74,0.1)',staff:'rgba(217,119,6,0.1)'}
+const adminMembers=members.filter(m=>m.role==='admin')
 
 return(
 <Layout title="Profile">
@@ -303,17 +327,32 @@ return(
 {m.uid===auth.currentUser?.uid&&<span style={{fontSize:10,color:'var(--text-3)'}}>(You)</span>}
 </div>
 <div style={{fontSize:11,color:'var(--text-3)',marginTop:1}}>{m.email||'-'}</div>
+{/* Show assigned admin for staff */}
+{m.role==='staff'&&managedBy[m.uid]&&(
+<div style={{fontSize:11,color:'#16a34a',marginTop:2}}>
+👤 {members.find(x=>x.uid===managedBy[m.uid])?.displayName||members.find(x=>x.uid===managedBy[m.uid])?.email||'Admin'}
+</div>
+)}
 </div>
 <span style={{background:roleBg[m.role]||'#f1f5f9',color:roleColor[m.role]||'#64748b',padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:600,textTransform:'capitalize',flexShrink:0}}>{m.role}</span>
 </div>
 
 {myRole==='owner'&&m.uid!==auth.currentUser?.uid&&(
-<div style={{display:'flex',gap:8,paddingLeft:50,flexWrap:'wrap'}}>
+<div style={{display:'flex',gap:8,paddingLeft:50,flexWrap:'wrap',alignItems:'center'}}>
 <select value={m.role} onChange={e=>handleRoleChange(m.uid,e.target.value)} className="form-input" style={{width:'auto',fontSize:12,padding:'4px 8px'}}>
 <option value="owner">Owner</option>
 <option value="admin">Admin</option>
 <option value="staff">Staff</option>
 </select>
+{/* Managed by — staff only */}
+{m.role==='staff'&&(
+<select value={managedBy[m.uid]||''} onChange={e=>handleManagedByChange(m.uid,e.target.value)} className="form-input" style={{width:'auto',fontSize:12,padding:'4px 8px'}}>
+<option value="">No Admin Assigned</option>
+{adminMembers.map(a=>(
+<option key={a.uid} value={a.uid}>{a.displayName||a.email}</option>
+))}
+</select>
+)}
 <button type="button" onClick={()=>handleRemoveMember(m.uid,m.email)} style={{background:'rgba(220,38,38,0.1)',border:'none',cursor:'pointer',color:'#dc2626',padding:'4px 10px',borderRadius:6,fontSize:12,display:'flex',alignItems:'center',gap:4}}>
 <UserMinus size={13}/>Remove
 </button>
