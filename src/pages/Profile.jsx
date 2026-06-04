@@ -304,19 +304,20 @@ return(
 <div style={{marginBottom:12,fontSize:12,color:'var(--text-3)'}}>
 {members.length} member{members.length!==1?'s':''} in {company.name}
 </div>
+
 {members.map(m=>(
-<div key={m.uid} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 0',borderBottom:'0.5px solid #f1f5f9'}}>
+<div key={m.uid} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 0',borderBottom:'0.5px solid #f1f5f9',flexWrap:'wrap'}}>
 <div style={{width:38,height:38,borderRadius:'50%',background:'var(--primary-light)',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',flexShrink:0}}>
 {m.avatarUrl?<img src={m.avatarUrl} style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<User size={18} color="var(--primary)"/>}
 </div>
-<div style={{flex:1,minWidth:0}}>
+<div style={{flex:1,minWidth:120}}>
 <div style={{fontSize:13,fontWeight:500,color:'var(--text-1)',display:'flex',alignItems:'center',gap:6}}>
 {m.displayName||m.email||m.uid.slice(0,8)}
 {m.uid===auth.currentUser?.uid&&<span style={{fontSize:10,color:'var(--text-3)'}}>(You)</span>}
 </div>
-<div style={{fontSize:11,color:'var(--text-3)',marginTop:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.email||'-'}</div>
+<div style={{fontSize:11,color:'var(--text-3)',marginTop:1}}>{m.email||'-'}</div>
 </div>
-<div style={{display:'flex',alignItems:'center',gap:6,flexShrink:0,minWidth:'fit-content'}}>
+<div style={{display:'flex',alignItems:'center',gap:6}}>
 {myRole==='owner'&&m.uid!==auth.currentUser?.uid?(
 <>
 <select value={m.role} onChange={e=>handleRoleChange(m.uid,e.target.value)} className="form-input" style={{width:'auto',fontSize:12,padding:'4px 8px'}}>
@@ -324,18 +325,18 @@ return(
 <option value="admin">Admin</option>
 <option value="staff">Staff</option>
 </select>
-<button type="button" onClick={()=>handleResetPassword(m.email)} disabled={resettingPw===m.email} title="Send password reset email" style={{background:'none',border:'none',cursor:'pointer',color:'#d97706',padding:4,borderRadius:6}}>
-<KeyRound size={14}/>
+<button type="button" onClick={()=>handleResetPassword(m.email)} disabled={resettingPw===m.email} title="Reset password" style={{background:'rgba(217,119,6,0.1)',border:'none',cursor:'pointer',color:'#d97706',padding:'4px 8px',borderRadius:6,fontSize:11,display:'flex',alignItems:'center',gap:4}}>
+<KeyRound size={13}/>Reset PW
 </button>
-<button type="button" onClick={()=>handleRemoveMember(m.uid,m.email)} title="Remove from company" style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)',padding:4,borderRadius:6}}>
-<UserMinus size={14}/>
+<button type="button" onClick={()=>handleRemoveMember(m.uid,m.email)} title="Remove from company" style={{background:'rgba(220,38,38,0.1)',border:'none',cursor:'pointer',color:'#dc2626',padding:'4px 8px',borderRadius:6,fontSize:11,display:'flex',alignItems:'center',gap:4}}>
+<UserMinus size={13}/>Remove
 </button>
 </>
 ):(myRole==='admin'&&m.uid!==auth.currentUser?.uid&&m.role==='staff')?(
 <>
 <span style={{background:roleBg[m.role]||'#f1f5f9',color:roleColor[m.role]||'#64748b',padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:600,textTransform:'capitalize'}}>{m.role}</span>
-<button type="button" onClick={()=>handleResetPassword(m.email)} disabled={resettingPw===m.email} title="Send password reset email" style={{background:'none',border:'none',cursor:'pointer',color:'#d97706',padding:4,borderRadius:6}}>
-<KeyRound size={14}/>
+<button type="button" onClick={()=>handleResetPassword(m.email)} disabled={resettingPw===m.email} title="Reset password" style={{background:'rgba(217,119,6,0.1)',border:'none',cursor:'pointer',color:'#d97706',padding:'4px 8px',borderRadius:6,fontSize:11,display:'flex',alignItems:'center',gap:4}}>
+<KeyRound size={13}/>Reset PW
 </button>
 </>
 ):(
@@ -344,6 +345,8 @@ return(
 </div>
 </div>
 ))}
+
+  
 </Section>
 
 {/* Security */}
