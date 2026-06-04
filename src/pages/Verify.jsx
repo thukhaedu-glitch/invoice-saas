@@ -7,28 +7,61 @@ import{CheckCircle,XCircle,Clock,FileText,Building2}from'lucide-react'
 export default function Verify(){
 const{companyId,code}=useParams()
 const[invoice,setInvoice]=useState(null)
+const[docType,setDocType]=useState('invoice')
 const[company,setCompany]=useState(null)
+const[settings,setSettings]=useState({})
 const[loading,setLoading]=useState(true)
 const[notFound,setNotFound]=useState(false)
 
 useEffect(()=>{
 const load=async()=>{
 try{
-const[invSnap,compSnap]=await Promise.all([
-getDocs(query(collection(db,'companies',companyId,'invoices'),where('securityCode','==',code))),
-getDoc(doc(db,'companies',companyId))
+const[compSnap,sSnap]=await Promise.all([
+getDoc(doc(db,'companies',companyId)),
+getDoc(doc(db,'companies',companyId,'_config','invoiceSettings'))
 ])
-if(!invSnap.empty)setInvoice({id:invSnap.docs[0].id,...invSnap.docs[0].data()})
-else setNotFound(true)
 if(compSnap.exists())setCompany(compSnap.data())
+if(sSnap.exists())setSettings(sSnap.data())
+
+// Check invoices first
+const invSnap=await getDocs(query(collection(db,'companies',companyId,'invoices'),where('securityCode','==',code)))
+if(!invSnap.empty){
+setInvoice({id:invSnap.docs[0].id,...invSnap.docs[0].data()})
+setDocType('invoice')
+setLoading(false)
+return
+}
+
+// Check quotations
+const quoSnap=await getDocs(query(collection(db,'companies',companyId,'quotations'),where('securityCode','==',code)))
+if(!quoSnap.empty){
+setInvoice({id:quoSnap.docs[0].id,...quoSnap.docs[0].data()})
+setDocType('quotation')
+setLoading(false)
+return
+}
+
+// Check contracts
+const conSnap=await getDocs(query(collection(db,'companies',companyId,'contracts'),where('securityCode','==',code)))
+if(!conSnap.empty){
+setInvoice({id:conSnap.docs[0].id,...conSnap.docs[0].data()})
+setDocType('contract')
+setLoading(false)
+return
+}
+
+setNotFound(true)
 }catch(e){console.error(e);setNotFound(true)}
 setLoading(false)
 }
 load()
 },[companyId,code])
 
-const statusColor={paid:'#16a34a',pending:'#d97706',overdue:'#dc2626',refunded:'#6366f1'}
-const statusBg={paid:'#eaf3de',pending:'#faeeda',overdue:'#fcebeb',refunded:'#ede9fe'}
+const statusColor={paid:'#16a34a',pending:'#d97706',overdue:'#dc2626',refunded:'#6366f1',draft:'#64748b',active:'#16a34a',expired:'#d97706',cancelled:'#dc2626'}
+const statusBg={paid:'#eaf3de',pending:'#faeeda',overdue:'#fcebeb',refunded:'#ede9fe',draft:'#f1f5f9',active:'#eaf3de',expired:'#faeeda',cancelled:'#fcebeb'}
+
+const docTypeLabel={invoice:'Invoice',quotation:'Quotation',contract:'Contract'}
+const docNumber=invoice?.invoiceNumber||invoice?.quotationNumber||invoice?.contractNumber||'-'
 
 if(loading)return(
 <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'linear-gradient(135deg,#e8f0fe,#f0f4ff,#e8f8f0)'}}>
@@ -40,7 +73,7 @@ if(notFound)return(
 <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'linear-gradient(135deg,#e8f0fe,#f0f4ff,#e8f8f0)'}}>
 <div style={{textAlign:'center',padding:40,background:'white',borderRadius:20,boxShadow:'0 8px 32px rgba(0,0,0,0.08)'}}>
 <XCircle size={48} color="#dc2626" style={{marginBottom:16}}/>
-<div style={{fontSize:20,fontWeight:700,color:'#1a1d2e',marginBottom:8}}>Invoice Not Found</div>
+<div style={{fontSize:20,fontWeight:700,color:'#1a1d2e',marginBottom:8}}>Document Not Found</div>
 <div style={{color:'#9aa0b4',fontSize:14}}>This link is invalid or has been removed.</div>
 </div>
 </div>
@@ -57,25 +90,25 @@ return(
 {/* Header */}
 <div style={{background:'#4F6EF7',padding:'28px 32px',color:'white'}}>
 <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
-<div style={{width:40,height:40,background:'rgba(255,255,255,0.2)',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center'}}>
-<FileText size={20} color="white"/>
+<div style={{width:48,height:48,background:'rgba(255,255,255,0.2)',borderRadius:12,display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',flexShrink:0}}>
+{settings.logoUrl?<img src={settings.logoUrl} style={{width:40,height:40,objectFit:'contain'}}/>:<FileText size={20} color="white"/>}
 </div>
 <div>
-<div style={{fontWeight:700,fontSize:18}}>Invoice Verification</div>
+<div style={{fontWeight:700,fontSize:18}}>{docTypeLabel[docType]} Verification</div>
 <div style={{fontSize:12,opacity:0.8,display:'flex',alignItems:'center',gap:4}}>
-<Building2 size={11}/>{company?.name||'Invoice SaaS'}
+<Building2 size={11}/>{company?.name||''}
 </div>
 </div>
 </div>
-<div style={{fontSize:13,opacity:0.9}}>Invoice #{invoice.invoiceNumber}</div>
+<div style={{fontSize:13,opacity:0.9}}>{docTypeLabel[docType]} #{docNumber}</div>
 </div>
 
 {/* Status */}
 <div style={{padding:'20px 32px',borderBottom:'1px solid #f1f5f9'}}>
 <div style={{display:'flex',alignItems:'center',gap:12}}>
-{s==='paid'?<CheckCircle size={32} color="#16a34a"/>:s==='pending'?<Clock size={32} color="#d97706"/>:<XCircle size={32} color="#dc2626"/>}
+{s==='paid'||s==='active'?<CheckCircle size={32} color="#16a34a"/>:s==='pending'||s==='draft'?<Clock size={32} color="#d97706"/>:<XCircle size={32} color="#dc2626"/>}
 <div>
-<div style={{fontSize:13,color:'#9aa0b4',marginBottom:4}}>Payment Status</div>
+<div style={{fontSize:13,color:'#9aa0b4',marginBottom:4}}>Status</div>
 <span style={{background:statusBg[s]||'#f1f5f9',color:statusColor[s]||'#64748b',padding:'4px 14px',borderRadius:20,fontSize:14,fontWeight:600,textTransform:'capitalize'}}>{s}</span>
 </div>
 </div>
@@ -86,7 +119,7 @@ return(
 {[
 {label:'Company',value:company?.name||'-'},
 {label:'Client',value:invoice.clientName||'-'},
-{label:'Date',value:invoice.date||(invoice.createdAt?.seconds?new Date(invoice.createdAt.seconds*1000).toLocaleDateString():'-')},
+{label:'Date',value:invoice.date||invoice.startDate||(invoice.createdAt?.seconds?new Date(invoice.createdAt.seconds*1000).toLocaleDateString():'-')},
 {label:'Security Code',value:invoice.securityCode||'-'},
 ].map(({label,value})=>(
 <div key={label} style={{display:'flex',justifyContent:'space-between',padding:'8px 0',borderBottom:'0.5px solid #f8fafc'}}>
@@ -96,8 +129,8 @@ return(
 ))}
 </div>
 
-{/* Items */}
-{items.length>0&&(
+{/* Items — invoice/quotation only */}
+{items.length>0&&docType!=='contract'&&(
 <div style={{padding:'20px 32px',borderBottom:'1px solid #f1f5f9'}}>
 <div style={{fontSize:12,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:12}}>Items</div>
 <div style={{overflowX:'auto'}}>
@@ -125,7 +158,8 @@ return(
 </div>
 )}
 
-{/* Totals */}
+{/* Totals — invoice/quotation only */}
+{docType!=='contract'&&(
 <div style={{padding:'16px 32px',borderBottom:'1px solid #f1f5f9'}}>
 <div style={{display:'flex',justifyContent:'space-between',padding:'6px 0',fontSize:13}}>
 <span style={{color:'#9aa0b4'}}>Subtotal</span>
@@ -148,9 +182,20 @@ return(
 <span style={{color:'#4F6EF7',whiteSpace:'nowrap'}}>{Number(invoice.totalAmount||0).toLocaleString()} Ks</span>
 </div>
 </div>
+)}
+
+{/* Contract value */}
+{docType==='contract'&&invoice.value>0&&(
+<div style={{padding:'16px 32px',borderBottom:'1px solid #f1f5f9'}}>
+<div style={{display:'flex',justifyContent:'space-between',padding:'10px 0',fontSize:15,fontWeight:700}}>
+<span style={{color:'#1a1d2e'}}>Contract Value</span>
+<span style={{color:'#4F6EF7',whiteSpace:'nowrap'}}>{Number(invoice.value).toLocaleString()} Ks</span>
+</div>
+</div>
+)}
 
 <div style={{padding:'16px 32px',background:'#f8fafc',textAlign:'center',fontSize:12,color:'#9aa0b4'}}>
-This invoice was verified by Invoice SaaS
+This document was verified by Ankora-X
 </div>
 </div>
 </div>
