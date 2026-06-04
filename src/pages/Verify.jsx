@@ -88,7 +88,7 @@ return(
 <div style={{width:'100%',maxWidth:600,background:'white',borderRadius:20,boxShadow:'0 8px 32px rgba(79,110,247,0.12)',overflow:'hidden'}}>
 
 {/* Header */}
-<div style={{background:'#4F6EF7',padding:'28px 32px',color:'white'}}>
+<div style={{background:'#ffffff',padding:'28px 32px',color:'white'}}>
 <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
 <div style={{width:48,height:48,background:'rgba(255,255,255,0.2)',borderRadius:12,display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',flexShrink:0}}>
 {settings.logoUrl?<img src={settings.logoUrl} style={{width:40,height:40,objectFit:'contain'}}/>:<FileText size={20} color="white"/>}
