@@ -26,20 +26,11 @@ name:companyName||'',
 }
 })
 })
-if(response.ok)return{success:true}
-return{success:false,error:'Failed to send'}
-}
-const response=await fetch('https://api.emailjs.com/api/v1.0/email/send',{
-method:'POST',
-headers:{'Content-Type':'application/json'},
-body:JSON.stringify({...})
-})
 const responseText=await response.text()
 console.log('EmailJS response:',responseText)
 if(response.ok)return{success:true}
 return{success:false,error:responseText}
-
-catch(e){
+}catch(e){
 console.error(e)
 return{success:false,error:e.message}
 }
