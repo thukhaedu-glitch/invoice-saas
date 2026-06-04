@@ -1,10 +1,10 @@
 import{useState,useEffect}from'react'
 import{db,auth,storage}from'../firebase'
 import{doc,getDoc,setDoc,getDocs,collection,query,where,updateDoc}from'firebase/firestore'
-import{updatePassword,reauthenticateWithCredential,EmailAuthProvider}from'firebase/auth'
+import{updatePassword,reauthenticateWithCredential,EmailAuthProvider,sendPasswordResetEmail}from'firebase/auth'
 import{ref,uploadBytes,getDownloadURL}from'firebase/storage'
 import Layout from'../components/Layout'
-import{Save,Upload,User,Lock,Building2,X,Shield,Users,Copy,Check,PenLine,Trash2}from'lucide-react'
+import{Save,Upload,User,Lock,Building2,X,Shield,Users,Copy,Check,PenLine,Trash2,UserMinus,KeyRound}from'lucide-react'
 
 const Section=({title,icon:Icon,children})=>(
 <div className="card" style={{padding:24,marginBottom:16}}>
@@ -29,6 +29,7 @@ const[pwError,setPwError]=useState('')
 const[savingPw,setSavingPw]=useState(false)
 const[myRole,setMyRole]=useState('staff')
 const[copied,setCopied]=useState(false)
+const[resettingPw,setResettingPw]=useState(null)
 
 useEffect(()=>{
 const load=async()=>{
@@ -45,7 +46,15 @@ const memberIds=Object.keys(cData.members||{})
 const memberRoles=cData.members||{}
 const memberProfiles=await Promise.all(memberIds.map(async uid=>{
 const pSnap=await getDoc(doc(db,'users',uid))
-return{uid,role:memberRoles[uid],...(pSnap.exists()?pSnap.data():{displayName:'Unknown',email:'-'})}
+const userData=pSnap.exists()?pSnap.data():{}
+return{
+uid,
+role:memberRoles[uid],
+displayName:userData.displayName||'',
+email:userData.email||'',
+avatarUrl:userData.avatarUrl||'',
+phone:userData.phone||'',
+}
 }))
 setMembers(memberProfiles)
 const pSnap=await getDoc(doc(db,'users',user.uid))
@@ -121,6 +130,33 @@ try{
 await updateDoc(doc(db,'companies',companyId),{[`members.${uid}`]:newRole})
 setMembers(m=>m.map(mem=>mem.uid===uid?{...mem,role:newRole}:mem))
 }catch(e){alert(e.message)}
+}
+
+const handleRemoveMember=async(uid,memberEmail)=>{
+if(myRole!=='owner'){alert('Only owner can remove members');return}
+if(!confirm(`Remove ${memberEmail||uid} from company?`))return
+try{
+const cSnap=await getDoc(doc(db,'companies',companyId))
+if(cSnap.exists()){
+const members=cSnap.data().members||{}
+delete members[uid]
+await updateDoc(doc(db,'companies',companyId),{members})
+setMembers(m=>m.filter(mem=>mem.uid!==uid))
+alert('Member removed!')
+}
+}catch(e){alert(e.message)}
+}
+
+const handleResetPassword=async(memberEmail)=>{
+if(myRole!=='owner'&&myRole!=='admin'){alert('Only owner or admin can reset passwords');return}
+if(!memberEmail){alert('This member has no email address');return}
+if(!confirm(`Send password reset email to ${memberEmail}?`))return
+setResettingPw(memberEmail)
+try{
+await sendPasswordResetEmail(auth,memberEmail)
+alert(`Password reset email sent to ${memberEmail} ✓`)
+}catch(e){alert(e.message)}
+setResettingPw(null)
 }
 
 const handleCopyInvite=()=>{
@@ -269,23 +305,43 @@ return(
 {members.length} member{members.length!==1?'s':''} in {company.name}
 </div>
 {members.map(m=>(
-<div key={m.uid} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 0',borderBottom:'0.5px solid #f1f5f9'}}>
-<div style={{width:36,height:36,borderRadius:'50%',background:'var(--primary-light)',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',flexShrink:0}}>
+<div key={m.uid} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 0',borderBottom:'0.5px solid #f1f5f9'}}>
+<div style={{width:38,height:38,borderRadius:'50%',background:'var(--primary-light)',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',flexShrink:0}}>
 {m.avatarUrl?<img src={m.avatarUrl} style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<User size={18} color="var(--primary)"/>}
 </div>
-<div style={{flex:1}}>
-<div style={{fontSize:13,fontWeight:500,color:'var(--text-1)'}}>{m.displayName||m.email||m.uid.slice(0,8)}</div>
-<div style={{fontSize:11,color:'var(--text-3)'}}>{m.uid===auth.currentUser?.uid?'(You)':''}</div>
+<div style={{flex:1,minWidth:0}}>
+<div style={{fontSize:13,fontWeight:500,color:'var(--text-1)',display:'flex',alignItems:'center',gap:6}}>
+{m.displayName||m.email||m.uid.slice(0,8)}
+{m.uid===auth.currentUser?.uid&&<span style={{fontSize:10,color:'var(--text-3)'}}>(You)</span>}
 </div>
+<div style={{fontSize:11,color:'var(--text-3)',marginTop:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.email||'-'}</div>
+</div>
+<div style={{display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
 {myRole==='owner'&&m.uid!==auth.currentUser?.uid?(
+<>
 <select value={m.role} onChange={e=>handleRoleChange(m.uid,e.target.value)} className="form-input" style={{width:'auto',fontSize:12,padding:'4px 8px'}}>
 <option value="owner">Owner</option>
 <option value="admin">Admin</option>
 <option value="staff">Staff</option>
 </select>
+<button type="button" onClick={()=>handleResetPassword(m.email)} disabled={resettingPw===m.email} title="Send password reset email" style={{background:'none',border:'none',cursor:'pointer',color:'#d97706',padding:4,borderRadius:6}}>
+<KeyRound size={14}/>
+</button>
+<button type="button" onClick={()=>handleRemoveMember(m.uid,m.email)} title="Remove from company" style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)',padding:4,borderRadius:6}}>
+<UserMinus size={14}/>
+</button>
+</>
+):(myRole==='admin'&&m.uid!==auth.currentUser?.uid&&m.role==='staff')?(
+<>
+<span style={{background:roleBg[m.role]||'#f1f5f9',color:roleColor[m.role]||'#64748b',padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:600,textTransform:'capitalize'}}>{m.role}</span>
+<button type="button" onClick={()=>handleResetPassword(m.email)} disabled={resettingPw===m.email} title="Send password reset email" style={{background:'none',border:'none',cursor:'pointer',color:'#d97706',padding:4,borderRadius:6}}>
+<KeyRound size={14}/>
+</button>
+</>
 ):(
 <span style={{background:roleBg[m.role]||'#f1f5f9',color:roleColor[m.role]||'#64748b',padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:600,textTransform:'capitalize'}}>{m.role}</span>
 )}
+</div>
 </div>
 ))}
 </Section>
