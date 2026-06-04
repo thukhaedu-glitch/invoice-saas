@@ -39,6 +39,9 @@ const[downloading,setDownloading]=useState(false)
 const[staffName,setStaffName]=useState('')
 const[adminName,setAdminName]=useState('')
 const[ownerName,setOwnerName]=useState('')
+const[staffSig,setStaffSig]=useState('')
+const[adminSig,setAdminSig]=useState('')
+const[ownerSig,setOwnerSig]=useState('')
 const[form,setForm]=useState({
 title:'Service Agreement',
 clientName:'',clientEmail:'',clientPhone:'',
@@ -74,17 +77,29 @@ load()
 
 const loadSignatureNames=async(cid,contract)=>{
 try{
+setStaffSig('')
+setAdminSig('')
+setOwnerSig('')
 if(contract.createdBy){
 const s=await getDoc(doc(db,'users',contract.createdBy))
-if(s.exists())setStaffName(s.data().displayName||s.data().email||'Staff')
+if(s.exists()){
+setStaffName(s.data().displayName||s.data().email||'Staff')
+setStaffSig(s.data().signatureUrl||'')
+}
 }
 if(contract.approvedBy){
 const s=await getDoc(doc(db,'users',contract.approvedBy))
-if(s.exists())setAdminName(s.data().displayName||s.data().email||'Admin')
+if(s.exists()){
+setAdminName(s.data().displayName||s.data().email||'Admin')
+setAdminSig(s.data().signatureUrl||'')
+}
 }
 if(contract.ownerApprovedBy){
 const s=await getDoc(doc(db,'users',contract.ownerApprovedBy))
-if(s.exists())setOwnerName(s.data().displayName||s.data().email||'Owner')
+if(s.exists()){
+setOwnerName(s.data().displayName||s.data().email||'Owner')
+setOwnerSig(s.data().signatureUrl||'')
+}
 }
 }catch(e){console.error(e)}
 }
@@ -125,6 +140,9 @@ setSelected(c)
 setStaffName('')
 setAdminName('')
 setOwnerName('')
+setStaffSig('')
+setAdminSig('')
+setOwnerSig('')
 await loadSignatureNames(companyId,c)
 setView('detail')
 }
@@ -195,7 +213,6 @@ const hasOwnerApproval=!!selected?.ownerApprovedBy
 
 if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh'}}>Loading...</div>
 
-// Editor View
 if(view==='editor')return(
 <Layout title={selected?'Edit Contract':'New Contract'}>
 <div style={{maxWidth:860,margin:'0 auto'}}>
@@ -206,7 +223,6 @@ if(view==='editor')return(
 {saving?'Saving...':'Save Contract'}
 </button>
 </div>
-
 <div className="card" style={{padding:20,marginBottom:16}}>
 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
 <div style={{gridColumn:'1/-1'}}>
@@ -242,12 +258,10 @@ if(view==='editor')return(
 </div>
 </div>
 </div>
-
 <div className="card" style={{padding:20,marginBottom:16}}>
 <div style={{fontSize:12,fontWeight:600,color:'var(--text-2)',marginBottom:12,textTransform:'uppercase',letterSpacing:'0.05em'}}>Contract Content</div>
 <ReactQuill theme="snow" value={form.content} onChange={v=>setForm(f=>({...f,content:v}))} modules={modules} style={{minHeight:400,fontSize:14}}/>
 </div>
-
 <div className="card" style={{padding:20,marginBottom:16}}>
 <div style={{fontSize:12,fontWeight:600,color:'var(--text-2)',marginBottom:12,textTransform:'uppercase',letterSpacing:'0.05em'}}>Signatures</div>
 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
@@ -265,7 +279,6 @@ if(view==='editor')return(
 </Layout>
 )
 
-// Detail/Print View
 if(view==='detail'&&selected)return(
 <>
 <style>{`
@@ -290,14 +303,12 @@ body{background:white!important;margin:0}
 <div style={{minHeight:'100vh',background:'#f1f5f9',padding:'80px 24px 40px',display:'flex',justifyContent:'center'}}>
 <div ref={printRef} className="print-area" style={{width:'210mm',background:'white',boxShadow:'0 4px 32px rgba(0,0,0,0.08)',padding:'40px 50px',fontFamily:'Georgia,serif'}}>
 
-{/* Header */}
 <div style={{textAlign:'center',marginBottom:32,borderBottom:'2px solid #1a1d2e',paddingBottom:24}}>
 {settings.logoUrl&&<img src={settings.logoUrl} style={{height:60,objectFit:'contain',marginBottom:12}}/>}
 <div style={{fontSize:22,fontWeight:700,color:'#1a1d2e',letterSpacing:1}}>{selected.title}</div>
 <div style={{fontSize:13,color:'#64748b',marginTop:6}}>{selected.contractNumber}</div>
 </div>
 
-{/* Parties */}
 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:32,marginBottom:28,padding:'16px 0',borderBottom:'0.5px solid #e2e8f0'}}>
 <div>
 <div style={{fontSize:10,fontWeight:700,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:6}}>Party A (Service Provider)</div>
@@ -314,7 +325,6 @@ body{background:white!important;margin:0}
 </div>
 </div>
 
-{/* Details */}
 <div style={{display:'flex',gap:24,marginBottom:28,fontSize:13}}>
 {selected.startDate&&<div><span style={{color:'#9aa0b4'}}>Start Date: </span><strong>{selected.startDate}</strong></div>}
 {selected.endDate&&<div><span style={{color:'#9aa0b4'}}>End Date: </span><strong>{selected.endDate}</strong></div>}
@@ -322,29 +332,26 @@ body{background:white!important;margin:0}
 <div><span style={{color:'#9aa0b4'}}>Status: </span><strong style={{color:statusColor[selected.status],textTransform:'capitalize'}}>{selected.status}</strong></div>
 </div>
 
-{/* Content */}
 <div style={{marginBottom:40,lineHeight:1.8,fontSize:13}} dangerouslySetInnerHTML={{__html:selected.content}}/>
 
-{/* Approval-based Signatures */}
+{/* Approval Signatures */}
 <div style={{marginTop:40,paddingTop:24,borderTop:'0.5px solid #e2e8f0'}}>
 <div style={{fontSize:11,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',marginBottom:16,letterSpacing:'0.05em'}}>Authorized Signatures</div>
 <div style={{display:'grid',gridTemplateColumns:`repeat(${hasOwnerApproval?3:hasAdminApproval?2:1},1fr)`,gap:24,marginBottom:24}}>
 
-{/* Staff/Creator */}
 <div style={{textAlign:'center'}}>
-<div style={{height:48,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:4}}>
-<span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{staffName||'—'}</span>
+<div style={{height:64,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:4}}>
+{staffSig?<img src={staffSig} style={{height:56,maxWidth:120,objectFit:'contain'}}/>:<span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{staffName||'—'}</span>}
 </div>
 <div style={{fontSize:10,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.05em'}}>Prepared by</div>
 <div style={{fontSize:12,fontWeight:500,color:'#1a1d2e',marginTop:2}}>{staffName||'Staff'}</div>
 {selected.createdAt?.seconds&&<div style={{fontSize:10,color:'#9aa0b4',marginTop:2}}>{new Date(selected.createdAt.seconds*1000).toLocaleDateString()}</div>}
 </div>
 
-{/* Admin */}
 {hasAdminApproval&&(
 <div style={{textAlign:'center'}}>
-<div style={{height:48,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:4}}>
-<span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{adminName||'—'}</span>
+<div style={{height:64,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:4}}>
+{adminSig?<img src={adminSig} style={{height:56,maxWidth:120,objectFit:'contain'}}/>:<span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{adminName||'—'}</span>}
 </div>
 <div style={{fontSize:10,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.05em'}}>Approved by</div>
 <div style={{fontSize:12,fontWeight:500,color:'#1a1d2e',marginTop:2}}>{adminName||'Admin'}</div>
@@ -352,11 +359,10 @@ body{background:white!important;margin:0}
 </div>
 )}
 
-{/* Owner/Director */}
 {hasOwnerApproval&&(
 <div style={{textAlign:'center'}}>
-<div style={{height:48,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:4}}>
-<span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{ownerName||'—'}</span>
+<div style={{height:64,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:4}}>
+{ownerSig?<img src={ownerSig} style={{height:56,maxWidth:120,objectFit:'contain'}}/>:<span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{ownerName||'—'}</span>}
 </div>
 <div style={{fontSize:10,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.05em'}}>Director Approved</div>
 <div style={{fontSize:12,fontWeight:500,color:'#1a1d2e',marginTop:2}}>{ownerName||'Director'}</div>
@@ -390,7 +396,6 @@ body{background:white!important;margin:0}
 <div style={{fontSize:10,color:'#9aa0b4',marginBottom:2}}>This contract is system-generated and does not require a physical seal.</div>
 <div style={{fontSize:10,color:'#9aa0b4',marginBottom:2}}>Verify authenticity by scanning the QR code.</div>
 <div style={{fontSize:10,color:'#9aa0b4'}}>System developed by Ankora-X</div>
-<div style={{fontSize:11,color:'#9aa0b4',marginTop:4}}>SEC: {selected.securityCode}</div>
 </div>
 {selected.securityCode&&(
 <div style={{textAlign:'center'}}>
@@ -405,7 +410,6 @@ body{background:white!important;margin:0}
 </>
 )
 
-// List View
 return(
 <Layout title="Contracts">
 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16,gap:12}}>
