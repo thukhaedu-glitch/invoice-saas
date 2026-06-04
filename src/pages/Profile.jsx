@@ -316,7 +316,7 @@ return(
 </div>
 <div style={{fontSize:11,color:'var(--text-3)',marginTop:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.email||'-'}</div>
 </div>
-<div style={{display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
+<div style={{display:'flex',alignItems:'center',gap:6,flexShrink:0,minWidth:'fit-content'}}>
 {myRole==='owner'&&m.uid!==auth.currentUser?.uid?(
 <>
 <select value={m.role} onChange={e=>handleRoleChange(m.uid,e.target.value)} className="form-input" style={{width:'auto',fontSize:12,padding:'4px 8px'}}>
