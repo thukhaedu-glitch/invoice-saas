@@ -39,37 +39,14 @@ const[managedBy,setManagedBy]=useState({})
 const navigate=useNavigate()
 const{role,canEdit,canDelete,loading:roleLoading}=useRole()
 
-// Check if current admin can approve this invoice
 const canAdminApprove=(item)=>{
 if(role==='owner')return true
 if(role!=='admin')return false
-// Admin can only approve if they manage the creator
 const creatorUid=item.createdBy
-if(!creatorUid)return true // no creator info — allow
+if(!creatorUid)return true
 return managedBy[creatorUid]===auth.currentUser.uid
 }
-const handleSendReminder=async(item)=>{
-if(!item.clientEmail){alert('This client has no email address.');return}
-if(!confirm(`Send reminder to ${item.clientName} (${item.clientEmail})?`))return
-setSendingReminder(item.id)
-try{
-const result=await sendInvoiceReminder({
-clientName:item.clientName,
-clientEmail:item.clientEmail,
-invoiceNumber:item.invoiceNumber,
-amount:item.remainingAmount||item.totalAmount||0,
-status:item.status,
-companyName:companyInfo.name,
-companyEmail:companyInfo.email,
-companyPhone:companyInfo.phone,
-paymentMethods:companyInfo.paymentMethods,
-invoiceLink:`${window.location.origin}/verify/${companyId}/${item.securityCode||item.id}`,
-})
-if(result.success)alert(`Reminder sent to ${item.clientEmail} ✓`)
-else alert('Failed: '+result.error)
-}catch(e){alert(e.message)}
-setSendingReminder(null)
-}
+
 useEffect(()=>{
 const load=async()=>{
 try{
@@ -260,10 +237,7 @@ await updateDoc(doc(db,'companies',companyId,'invoices',id),{status})
 
 const handleApprove=async(id,item)=>{
 if(role==='admin'&&item.status==='pending_approval'){
-if(!canAdminApprove(item)){
-alert('You can only approve invoices from staff you manage.')
-return
-}
+if(!canAdminApprove(item)){alert('You can only approve invoices from staff you manage.');return}
 await updateDoc(doc(db,'companies',companyId,'invoices',id),{
 status:'admin_approved',
 approvedBy:auth.currentUser.uid,
@@ -290,10 +264,7 @@ alert('Invoice approved ✓')
 }
 
 const handleReject=async(id,item)=>{
-if(role==='admin'&&!canAdminApprove(item)){
-alert('You can only reject invoices from staff you manage.')
-return
-}
+if(role==='admin'&&!canAdminApprove(item)){alert('You can only reject invoices from staff you manage.');return}
 if(role!=='owner'&&role!=='admin'){alert('Only admin or owner can reject');return}
 if(!confirm('Reject this invoice?'))return
 await updateDoc(doc(db,'companies',companyId,'invoices',id),{
@@ -391,6 +362,7 @@ companyName:companyInfo.name,
 companyEmail:companyInfo.email,
 companyPhone:companyInfo.phone,
 paymentMethods:companyInfo.paymentMethods,
+invoiceLink:`${window.location.origin}/verify/${companyId}/${item.securityCode||item.id}`,
 })
 if(result.success)alert(`Reminder sent to ${item.clientEmail} ✓`)
 else alert('Failed: '+result.error)
@@ -470,46 +442,36 @@ onCancel={()=>setConfirmAction(null)}
 </div>
 )}
 
-{/* Admin Banner — pending_approval (only managed staff) */}
 {role==='admin'&&pendingApproval.length>0&&(
 <div style={{background:'rgba(22,163,74,0.08)',border:'0.5px solid rgba(22,163,74,0.2)',borderRadius:12,padding:'12px 16px',marginBottom:16,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
 <div style={{display:'flex',alignItems:'center',gap:8}}>
 <AlertCircle size={16} color="#16a34a"/>
 <span style={{fontSize:13,fontWeight:500,color:'#16a34a'}}>{pendingApproval.length} invoice{pendingApproval.length>1?'s':''} waiting for your approval</span>
 </div>
-<button type="button" onClick={()=>setFilterStatus('pending_approval')} className="btn btn-primary" style={{fontSize:12,padding:'5px 12px',background:'#16a34a',boxShadow:'none'}}>
-Review Now
-</button>
+<button type="button" onClick={()=>setFilterStatus('pending_approval')} className="btn btn-primary" style={{fontSize:12,padding:'5px 12px',background:'#16a34a',boxShadow:'none'}}>Review Now</button>
 </div>
 )}
 
-{/* Owner Banner — admin_approved */}
 {role==='owner'&&adminApproved.length>0&&(
 <div style={{background:'rgba(79,110,247,0.08)',border:'0.5px solid rgba(79,110,247,0.2)',borderRadius:12,padding:'12px 16px',marginBottom:16,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
 <div style={{display:'flex',alignItems:'center',gap:8}}>
 <AlertCircle size={16} color="var(--primary)"/>
 <span style={{fontSize:13,fontWeight:500,color:'var(--primary)'}}>{adminApproved.length} invoice{adminApproved.length>1?'s':''} waiting for your final approval</span>
 </div>
-<button type="button" onClick={()=>setFilterStatus('admin_approved')} className="btn btn-primary" style={{fontSize:12,padding:'5px 12px'}}>
-Review Now
-</button>
+<button type="button" onClick={()=>setFilterStatus('admin_approved')} className="btn btn-primary" style={{fontSize:12,padding:'5px 12px'}}>Review Now</button>
 </div>
 )}
 
-{/* Owner Banner — pending_approval */}
 {role==='owner'&&invoices.filter(i=>i.status==='pending_approval').length>0&&(
 <div style={{background:'rgba(217,119,6,0.08)',border:'0.5px solid rgba(217,119,6,0.2)',borderRadius:12,padding:'12px 16px',marginBottom:16,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
 <div style={{display:'flex',alignItems:'center',gap:8}}>
 <AlertCircle size={16} color="#d97706"/>
 <span style={{fontSize:13,fontWeight:500,color:'#d97706'}}>{invoices.filter(i=>i.status==='pending_approval').length} invoice{invoices.filter(i=>i.status==='pending_approval').length>1?'s':''} pending admin approval</span>
 </div>
-<button type="button" onClick={()=>setFilterStatus('pending_approval')} className="btn btn-ghost" style={{fontSize:12,padding:'5px 12px'}}>
-View
-</button>
+<button type="button" onClick={()=>setFilterStatus('pending_approval')} className="btn btn-ghost" style={{fontSize:12,padding:'5px 12px'}}>View</button>
 </div>
 )}
 
-{/* Stats */}
 <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:20}}>
 {statsCards.map(({label,value,amount,icon:Icon,color,bg})=>(
 <div key={label} className="card" style={{padding:16}}>
@@ -525,7 +487,6 @@ View
 ))}
 </div>
 
-{/* Revenue Chart */}
 <div className="card" style={{padding:20,marginBottom:16}}>
 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
 <div style={{fontWeight:600,fontSize:14,color:'var(--text-1)'}}>Revenue Chart — {chartYear}</div>
@@ -534,9 +495,7 @@ View
 <option value="">All Years</option>
 {uniqueYears.map(y=><option key={y} value={y}>{y}</option>)}
 </select>
-<button type="button" onClick={()=>setShowChart(v=>!v)} className="btn btn-ghost" style={{fontSize:12,padding:'5px 10px'}}>
-{showChart?'Hide':'Show'}
-</button>
+<button type="button" onClick={()=>setShowChart(v=>!v)} className="btn btn-ghost" style={{fontSize:12,padding:'5px 10px'}}>{showChart?'Hide':'Show'}</button>
 </div>
 </div>
 {showChart&&(
@@ -564,15 +523,13 @@ View
 )}
 </div>
 
-{/* Widgets Row 1 */}
 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}>
 <div className="card" style={{padding:20}}>
 <div style={{display:'flex',alignItems:'center',gap:8,fontWeight:600,fontSize:13,marginBottom:16,color:'var(--text-1)'}}>
 <Users size={15} color="var(--primary)"/>Top 5 Clients
 </div>
-{top5Clients.length===0?(
-<div style={{textAlign:'center',color:'var(--text-3)',fontSize:12,padding:20}}>No data yet</div>
-):top5Clients.map((c,i)=>{
+{top5Clients.length===0?<div style={{textAlign:'center',color:'var(--text-3)',fontSize:12,padding:20}}>No data yet</div>
+:top5Clients.map((c,i)=>{
 const maxAmt=top5Clients[0]?.amount||1
 return(
 <div key={c.name} style={{marginBottom:12}}>
@@ -594,9 +551,8 @@ return(
 <div style={{display:'flex',alignItems:'center',gap:8,fontWeight:600,fontSize:13,marginBottom:16,color:'var(--text-1)'}}>
 <CheckCircle size={15} color="#16a34a"/>Recent Payments
 </div>
-{recentPayments.length===0?(
-<div style={{textAlign:'center',color:'var(--text-3)',fontSize:12,padding:20}}>No payments yet</div>
-):recentPayments.map((p,i)=>(
+{recentPayments.length===0?<div style={{textAlign:'center',color:'var(--text-3)',fontSize:12,padding:20}}>No payments yet</div>
+:recentPayments.map((p,i)=>(
 <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom:'0.5px solid #f1f5f9'}}>
 <div>
 <div style={{fontSize:13,fontWeight:500,color:'var(--text-1)'}}>{p.clientName}</div>
@@ -608,15 +564,13 @@ return(
 </div>
 </div>
 
-{/* Widgets Row 2 */}
 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}>
 <div className="card" style={{padding:20}}>
 <div style={{display:'flex',alignItems:'center',gap:8,fontWeight:600,fontSize:13,marginBottom:16,color:'var(--text-1)'}}>
 <AlertCircle size={15} color="#dc2626"/>Outstanding Invoices
 </div>
-{upcomingDue.length===0?(
-<div style={{textAlign:'center',color:'var(--text-3)',fontSize:12,padding:20}}>All invoices paid 🎉</div>
-):upcomingDue.map(inv=>(
+{upcomingDue.length===0?<div style={{textAlign:'center',color:'var(--text-3)',fontSize:12,padding:20}}>All invoices paid 🎉</div>
+:upcomingDue.map(inv=>(
 <div key={inv.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom:'0.5px solid #f1f5f9',cursor:'pointer'}} onClick={()=>navigate(`/invoice/${inv.id}`)}>
 <div>
 <div style={{fontSize:13,fontWeight:500,color:'var(--text-1)'}}>{inv.clientName}</div>
@@ -633,9 +587,8 @@ return(
 <div style={{display:'flex',alignItems:'center',gap:8,fontWeight:600,fontSize:13,marginBottom:16,color:'var(--text-1)'}}>
 <Wallet size={15} color="#dc2626"/>Expense Breakdown
 </div>
-{expenseByCategory.length===0?(
-<div style={{textAlign:'center',color:'var(--text-3)',fontSize:12,padding:20}}>No expenses yet</div>
-):expenseByCategory.map(({cat,amount,pct})=>(
+{expenseByCategory.length===0?<div style={{textAlign:'center',color:'var(--text-3)',fontSize:12,padding:20}}>No expenses yet</div>
+:expenseByCategory.map(({cat,amount,pct})=>(
 <div key={cat} style={{marginBottom:10}}>
 <div style={{display:'flex',justifyContent:'space-between',fontSize:12,marginBottom:3}}>
 <span style={{color:'var(--text-2)',fontWeight:500}}>{cat}</span>
@@ -652,7 +605,6 @@ return(
 </div>
 </div>
 
-{/* Project Status */}
 {projects.length>0&&(
 <div className="card" style={{padding:20,marginBottom:16}}>
 <div style={{display:'flex',alignItems:'center',gap:8,fontWeight:600,fontSize:13,marginBottom:16,color:'var(--text-1)'}}>
@@ -675,7 +627,6 @@ return(
 </div>
 )}
 
-{/* Role Badge */}
 {role&&(
 <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
 <span style={{fontSize:11,color:'var(--text-3)'}}>Your role:</span>
@@ -688,7 +639,6 @@ padding:'2px 10px',borderRadius:20,fontSize:11,fontWeight:600,textTransform:'cap
 </div>
 )}
 
-{/* Tabs + Filters */}
 <div style={{marginBottom:12}}>
 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
 <div style={{display:'flex',gap:4,background:'rgba(255,255,255,0.7)',border:'0.5px solid var(--border)',borderRadius:12,padding:4}}>
@@ -748,7 +698,6 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600
 )}
 </div>
 
-{/* Table */}
 <div className="card" style={{overflow:'visible'}}>
 {activeData.length===0?(
 <div style={{padding:64,textAlign:'center',color:'var(--text-3)'}}>
@@ -797,20 +746,12 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600
 <button type="button" onClick={()=>handleShareLink(item)} title="Share link" style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Link size={14}/></button>
 {activeTab==='invoice'&&<>
 {item.status==='pending_approval'&&canAdminApprove(item)&&(role==='admin'||role==='owner')&&<>
-<button type="button" onClick={()=>handleApprove(item.id,item)} title="Approve" style={{background:'none',border:'none',cursor:'pointer',color:'#16a34a',padding:4,borderRadius:6}}>
-<ThumbsUp size={14}/>
-</button>
-<button type="button" onClick={()=>handleReject(item.id,item)} title="Reject" style={{background:'none',border:'none',cursor:'pointer',color:'#dc2626',padding:4,borderRadius:6}}>
-<ThumbsDown size={14}/>
-</button>
+<button type="button" onClick={()=>handleApprove(item.id,item)} title="Approve" style={{background:'none',border:'none',cursor:'pointer',color:'#16a34a',padding:4,borderRadius:6}}><ThumbsUp size={14}/></button>
+<button type="button" onClick={()=>handleReject(item.id,item)} title="Reject" style={{background:'none',border:'none',cursor:'pointer',color:'#dc2626',padding:4,borderRadius:6}}><ThumbsDown size={14}/></button>
 </>}
 {item.status==='admin_approved'&&role==='owner'&&<>
-<button type="button" onClick={()=>handleApprove(item.id,item)} title="Final Approve" style={{background:'none',border:'none',cursor:'pointer',color:'#4F6EF7',padding:4,borderRadius:6}}>
-<ThumbsUp size={14}/>
-</button>
-<button type="button" onClick={()=>handleReject(item.id,item)} title="Reject" style={{background:'none',border:'none',cursor:'pointer',color:'#dc2626',padding:4,borderRadius:6}}>
-<ThumbsDown size={14}/>
-</button>
+<button type="button" onClick={()=>handleApprove(item.id,item)} title="Final Approve" style={{background:'none',border:'none',cursor:'pointer',color:'#4F6EF7',padding:4,borderRadius:6}}><ThumbsUp size={14}/></button>
+<button type="button" onClick={()=>handleReject(item.id,item)} title="Reject" style={{background:'none',border:'none',cursor:'pointer',color:'#dc2626',padding:4,borderRadius:6}}><ThumbsDown size={14}/></button>
 </>}
 {item.status!=='pending_approval'&&item.status!=='admin_approved'&&<>
 <button type="button" onClick={()=>openPaymentModal(item)} title="Record payment" style={{background:'none',border:'none',cursor:'pointer',color:'#16a34a',padding:4,borderRadius:6}}><DollarSign size={14}/></button>
