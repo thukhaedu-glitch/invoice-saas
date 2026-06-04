@@ -48,7 +48,28 @@ const creatorUid=item.createdBy
 if(!creatorUid)return true // no creator info — allow
 return managedBy[creatorUid]===auth.currentUser.uid
 }
-
+const handleSendReminder=async(item)=>{
+if(!item.clientEmail){alert('This client has no email address.');return}
+if(!confirm(`Send reminder to ${item.clientName} (${item.clientEmail})?`))return
+setSendingReminder(item.id)
+try{
+const result=await sendInvoiceReminder({
+clientName:item.clientName,
+clientEmail:item.clientEmail,
+invoiceNumber:item.invoiceNumber,
+amount:item.remainingAmount||item.totalAmount||0,
+status:item.status,
+companyName:companyInfo.name,
+companyEmail:companyInfo.email,
+companyPhone:companyInfo.phone,
+paymentMethods:companyInfo.paymentMethods,
+invoiceLink:`${window.location.origin}/verify/${companyId}/${item.securityCode||item.id}`,
+})
+if(result.success)alert(`Reminder sent to ${item.clientEmail} ✓`)
+else alert('Failed: '+result.error)
+}catch(e){alert(e.message)}
+setSendingReminder(null)
+}
 useEffect(()=>{
 const load=async()=>{
 try{
