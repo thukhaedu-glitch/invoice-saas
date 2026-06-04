@@ -8,7 +8,7 @@ method:'POST',
 headers:{'Content-Type':'application/json'},
 body:JSON.stringify({
 service_id:'service_5hait3m',
-template_id:'template_2p8srej',
+template_id:'2p8srej',
 user_id:'_x4olwB-Hfyx9iXkl',
 template_params:{
 client_name:clientName,
