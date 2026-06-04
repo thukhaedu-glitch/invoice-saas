@@ -4,7 +4,7 @@ import{doc,getDoc,setDoc,getDocs,collection,query,where,updateDoc}from'firebase/
 import{updatePassword,reauthenticateWithCredential,EmailAuthProvider}from'firebase/auth'
 import{ref,uploadBytes,getDownloadURL}from'firebase/storage'
 import Layout from'../components/Layout'
-import{Save,Upload,User,Lock,Building2,X,Shield,Users,Copy,Check,PenLine,Trash2,UserMinus,KeyRound}from'lucide-react'
+import{Save,Upload,User,Lock,Building2,X,Shield,Users,Copy,Check,PenLine,Trash2,UserMinus}from'lucide-react'
 
 const Section=({title,icon:Icon,children})=>(
 <div className="card" style={{padding:24,marginBottom:16}}>
@@ -21,7 +21,6 @@ const[saving,setSaving]=useState(false)
 const[uploadingAvatar,setUploadingAvatar]=useState(false)
 const[uploadingSignature,setUploadingSignature]=useState(false)
 const[pwModal,setPwModal]=useState(false)
-const[tempPwModal,setTempPwModal]=useState(null)
 const[profile,setProfile]=useState({displayName:'',avatarUrl:'',signatureUrl:'',phone:'',role:'staff'})
 const[company,setCompany]=useState({name:'',plan:'free',inviteCode:''})
 const[members,setMembers]=useState([])
@@ -30,7 +29,6 @@ const[pwError,setPwError]=useState('')
 const[savingPw,setSavingPw]=useState(false)
 const[myRole,setMyRole]=useState('staff')
 const[copied,setCopied]=useState(false)
-const[copiedPw,setCopiedPw]=useState(false)
 
 useEffect(()=>{
 const load=async()=>{
@@ -148,31 +146,10 @@ alert('Member removed!')
 }catch(e){alert(e.message)}
 }
 
-const handleResetPassword=async(uid,memberEmail)=>{
-if(myRole!=='owner'&&myRole!=='admin'){alert('Only owner or admin can reset passwords');return}
-if(!uid){alert('User not found');return}
-const chars='ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789@#'
-const tempPw=Array.from({length:10},()=>chars[Math.floor(Math.random()*chars.length)]).join('')
-try{
-await setDoc(doc(db,'users',uid),{
-tempPassword:tempPw,
-tempPasswordCreatedAt:new Date().toISOString(),
-mustChangePassword:true,
-},{merge:true})
-setTempPwModal({email:memberEmail,password:tempPw})
-}catch(e){alert(e.message)}
-}
-
 const handleCopyInvite=()=>{
 navigator.clipboard.writeText(company.inviteCode)
 setCopied(true)
 setTimeout(()=>setCopied(false),2000)
-}
-
-const handleCopyTempPw=()=>{
-navigator.clipboard.writeText(tempPwModal.password)
-setCopiedPw(true)
-setTimeout(()=>setCopiedPw(false),2000)
 }
 
 const roleColor={owner:'#4F6EF7',admin:'#16a34a',staff:'#d97706'}
@@ -203,40 +180,6 @@ return(
 <button type="button" onClick={handleChangePassword} disabled={savingPw} className="btn btn-primary">
 <Lock size={14}/>{savingPw?'Saving...':'Change Password'}
 </button>
-</div>
-</div>
-</div>
-</div>
-)}
-
-{/* Temp Password Modal */}
-{tempPwModal&&(
-<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
-<div style={{background:'white',borderRadius:16,width:'100%',maxWidth:420,boxShadow:'0 20px 60px rgba(0,0,0,0.2)'}}>
-<div style={{padding:'20px 24px',borderBottom:'0.5px solid #f1f5f9',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-<div style={{display:'flex',alignItems:'center',gap:10}}>
-<div style={{width:32,height:32,borderRadius:8,background:'rgba(79,110,247,0.1)',display:'flex',alignItems:'center',justifyContent:'center'}}>
-<KeyRound size={15} color="var(--primary)"/>
-</div>
-<div style={{fontWeight:600,fontSize:15}}>Temporary Password</div>
-</div>
-<button type="button" onClick={()=>setTempPwModal(null)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-3)'}}><X size={18}/></button>
-</div>
-<div style={{padding:24}}>
-<div style={{fontSize:13,color:'var(--text-2)',marginBottom:16}}>
-Share this temporary password with <strong>{tempPwModal.email}</strong>. They must change it after login.
-</div>
-<div style={{background:'#f8fafc',border:'1.5px dashed var(--primary)',borderRadius:12,padding:16,display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
-<span style={{fontFamily:'monospace',fontSize:20,fontWeight:700,letterSpacing:3,color:'var(--primary)'}}>{tempPwModal.password}</span>
-<button type="button" onClick={handleCopyTempPw} style={{background:copiedPw?'#16a34a':'var(--primary)',border:'none',cursor:'pointer',color:'white',padding:'6px 12px',borderRadius:8,fontSize:12,display:'flex',alignItems:'center',gap:4,transition:'background 0.2s'}}>
-{copiedPw?<><Check size={13}/>Copied!</>:<><Copy size={13}/>Copy</>}
-</button>
-</div>
-<div style={{fontSize:11,color:'#d97706',background:'rgba(217,119,6,0.08)',padding:'10px 12px',borderRadius:8,marginBottom:16,lineHeight:1.6}}>
-⚠️ Share this password directly to the staff member. They will be prompted to change it upon their next login.
-</div>
-<div style={{display:'flex',justifyContent:'flex-end'}}>
-<button type="button" onClick={()=>setTempPwModal(null)} className="btn btn-primary">Done</button>
 </div>
 </div>
 </div>
@@ -350,7 +293,7 @@ Share this temporary password with <strong>{tempPwModal.email}</strong>. They mu
 </div>
 {members.map(m=>(
 <div key={m.uid} style={{padding:'12px 0',borderBottom:'0.5px solid #f1f5f9'}}>
-<div style={{display:'flex',alignItems:'center',gap:12,marginBottom:(myRole==='owner'&&m.uid!==auth.currentUser?.uid)||(myRole==='admin'&&m.uid!==auth.currentUser?.uid&&m.role==='staff')?8:0}}>
+<div style={{display:'flex',alignItems:'center',gap:12,marginBottom:myRole==='owner'&&m.uid!==auth.currentUser?.uid?8:0}}>
 <div style={{width:38,height:38,borderRadius:'50%',background:'var(--primary-light)',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',flexShrink:0}}>
 {m.avatarUrl?<img src={m.avatarUrl} style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<User size={18} color="var(--primary)"/>}
 </div>
@@ -364,7 +307,6 @@ Share this temporary password with <strong>{tempPwModal.email}</strong>. They mu
 <span style={{background:roleBg[m.role]||'#f1f5f9',color:roleColor[m.role]||'#64748b',padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:600,textTransform:'capitalize',flexShrink:0}}>{m.role}</span>
 </div>
 
-{/* Owner actions */}
 {myRole==='owner'&&m.uid!==auth.currentUser?.uid&&(
 <div style={{display:'flex',gap:8,paddingLeft:50,flexWrap:'wrap'}}>
 <select value={m.role} onChange={e=>handleRoleChange(m.uid,e.target.value)} className="form-input" style={{width:'auto',fontSize:12,padding:'4px 8px'}}>
@@ -372,20 +314,8 @@ Share this temporary password with <strong>{tempPwModal.email}</strong>. They mu
 <option value="admin">Admin</option>
 <option value="staff">Staff</option>
 </select>
-<button type="button" onClick={()=>handleResetPassword(m.uid,m.email)} style={{background:'rgba(217,119,6,0.1)',border:'none',cursor:'pointer',color:'#d97706',padding:'4px 10px',borderRadius:6,fontSize:12,display:'flex',alignItems:'center',gap:4}}>
-<KeyRound size={13}/>Reset PW
-</button>
 <button type="button" onClick={()=>handleRemoveMember(m.uid,m.email)} style={{background:'rgba(220,38,38,0.1)',border:'none',cursor:'pointer',color:'#dc2626',padding:'4px 10px',borderRadius:6,fontSize:12,display:'flex',alignItems:'center',gap:4}}>
 <UserMinus size={13}/>Remove
-</button>
-</div>
-)}
-
-{/* Admin actions */}
-{myRole==='admin'&&m.uid!==auth.currentUser?.uid&&m.role==='staff'&&(
-<div style={{display:'flex',gap:8,paddingLeft:50}}>
-<button type="button" onClick={()=>handleResetPassword(m.uid,m.email)} style={{background:'rgba(217,119,6,0.1)',border:'none',cursor:'pointer',color:'#d97706',padding:'4px 10px',borderRadius:6,fontSize:12,display:'flex',alignItems:'center',gap:4}}>
-<KeyRound size={13}/>Reset PW
 </button>
 </div>
 )}
