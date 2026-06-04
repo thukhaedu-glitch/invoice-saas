@@ -728,9 +728,11 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600
 <td style={{color:'var(--primary)',fontFamily:'monospace',fontWeight:500,fontSize:12}}>{item.invoiceNumber||item.quotationNumber}</td>
 <td style={{fontWeight:500}}>{item.clientName}</td>
 <td style={{textAlign:'right',fontWeight:500}}>{Number(item.totalAmount||0).toLocaleString()} Ks</td>
-<td style={{textAlign:'right',fontSize:12}}>
+{activeTab==='invoice'&&<td style={{textAlign:'right',fontSize:12}}>
 {item.paidAmount>0?<span style={{color:'#16a34a',fontWeight:500}}>{Number(item.paidAmount).toLocaleString()} Ks</span>:<span style={{color:'var(--text-3)'}}>-</span>}
-</td>
+</td>}
+
+  
 <td style={{textAlign:'center'}}>{statusBadge(item.status)}</td>
 <td style={{color:'var(--text-3)',fontSize:12}}>
 <div>{item.createdAt?.seconds?new Date(item.createdAt.seconds*1000).toLocaleDateString():'-'}</div>
