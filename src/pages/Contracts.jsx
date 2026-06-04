@@ -1,14 +1,15 @@
 import{useState,useEffect,useRef}from'react'
-import{db,auth,storage}from'../firebase'
+import{db,auth}from'../firebase'
 import{collection,onSnapshot,getDocs,query,where,doc,deleteDoc,addDoc,updateDoc,serverTimestamp,getDoc}from'firebase/firestore'
-import{ref,uploadBytes,getDownloadURL}from'firebase/storage'
 import Layout from'../components/Layout'
-import{Plus,Trash2,Edit,X,ScrollText,Search,Eye,Printer,Download,ArrowLeft,QrCode}from'lucide-react'
+import{Plus,Trash2,Edit,ScrollText,Search,Eye,Printer,Download,ArrowLeft,Link,Mail,ThumbsUp,ThumbsDown,XCircle}from'lucide-react'
 import{QRCodeSVG}from'qrcode.react'
 import html2canvas from'html2canvas'
 import jsPDF from'jspdf'
 import ReactQuill from'react-quill'
 import'react-quill/dist/quill.snow.css'
+import{useRole}from'../hooks/useRole'
+import{sendInvoiceReminder}from'../utils/emailService'
 
 const STATUS=['draft','active','expired','cancelled']
 const statusColor={draft:'#64748b',active:'#16a34a',expired:'#d97706',cancelled:'#dc2626'}
@@ -28,6 +29,7 @@ export default function Contracts(){
 const[companyId,setCompanyId]=useState(null)
 const[company,setCompany]=useState(null)
 const[settings,setSettings]=useState({})
+const[companyInfo,setCompanyInfo]=useState({})
 const[contracts,setContracts]=useState([])
 const[customers,setCustomers]=useState([])
 const[loading,setLoading]=useState(true)
@@ -36,6 +38,7 @@ const[view,setView]=useState('list')
 const[selected,setSelected]=useState(null)
 const[saving,setSaving]=useState(false)
 const[downloading,setDownloading]=useState(false)
+const[sendingReminder,setSendingReminder]=useState(false)
 const[staffName,setStaffName]=useState('')
 const[adminName,setAdminName]=useState('')
 const[ownerName,setOwnerName]=useState('')
@@ -51,6 +54,7 @@ content:DEFAULT_CONTENT,
 partyASign:'',partyBSign:'',
 })
 const printRef=useRef()
+const{role}=useRole()
 
 useEffect(()=>{
 const load=async()=>{
@@ -65,7 +69,16 @@ getDocs(collection(db,'companies',cid,'customers')),
 getDoc(doc(db,'companies',cid,'_config','invoiceSettings'))
 ])
 setCustomers(cusSnap.docs.map(d=>({id:d.id,...d.data()})))
-if(sSnap.exists())setSettings(sSnap.data())
+if(sSnap.exists()){
+setSettings(sSnap.data())
+const sd=sSnap.data()
+setCompanyInfo({
+name:sd.companyName||'',
+email:sd.companyEmail||'',
+phone:sd.companyPhone||'',
+paymentMethods:sd.paymentMethods?.map(m=>`${m.bankName}: ${m.accountNo} (${m.accountName})`).join('\n')||''
+})
+}
 onSnapshot(collection(db,'companies',cid,'contracts'),snap=>{
 setContracts(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0)))
 setLoading(false)
@@ -172,6 +185,61 @@ setSaving(false)
 const handleDelete=async(id)=>{
 if(!confirm('Delete this contract?'))return
 await deleteDoc(doc(db,'companies',companyId,'contracts',id))
+}
+
+const handleCancel=async(c)=>{
+if(!confirm('Cancel this contract?'))return
+await updateDoc(doc(db,'companies',companyId,'contracts',c.id),{status:'cancelled'})
+if(selected?.id===c.id)setSelected({...selected,status:'cancelled'})
+}
+
+const handleApprove=async(c)=>{
+if(role==='admin'){
+await updateDoc(doc(db,'companies',companyId,'contracts',c.id),{
+status:'active',
+approvedBy:auth.currentUser.uid,
+approvedAt:new Date().toISOString(),
+})
+setSelected(s=>({...s,status:'active',approvedBy:auth.currentUser.uid}))
+alert('Contract approved ✓')
+}else if(role==='owner'){
+await updateDoc(doc(db,'companies',companyId,'contracts',c.id),{
+status:'active',
+ownerApprovedBy:auth.currentUser.uid,
+ownerApprovedAt:new Date().toISOString(),
+})
+setSelected(s=>({...s,status:'active',ownerApprovedBy:auth.currentUser.uid}))
+alert('Contract approved ✓')
+}
+}
+
+const handleShareLink=(c)=>{
+const url=`${window.location.origin}/verify/${companyId}/${c.securityCode||c.id}`
+navigator.clipboard.writeText(url)
+alert('Link copied!')
+}
+
+const handleSendEmail=async(c)=>{
+if(!c.clientEmail){alert('This client has no email address.');return}
+if(!confirm(`Send contract to ${c.clientName} (${c.clientEmail})?`))return
+setSendingReminder(true)
+try{
+const result=await sendInvoiceReminder({
+clientName:c.clientName,
+clientEmail:c.clientEmail,
+invoiceNumber:c.contractNumber,
+amount:c.value||0,
+status:c.status,
+companyName:companyInfo.name,
+companyEmail:companyInfo.email,
+companyPhone:companyInfo.phone,
+paymentMethods:companyInfo.paymentMethods,
+invoiceLink:`${window.location.origin}/verify/${companyId}/${c.securityCode||c.id}`,
+})
+if(result.success)alert(`Email sent to ${c.clientEmail} ✓`)
+else alert('Failed: '+result.error)
+}catch(e){alert(e.message)}
+setSendingReminder(false)
 }
 
 const handleDownloadPDF=async()=>{
@@ -291,11 +359,27 @@ body{background:white!important;margin:0}
 .ql-editor{padding:0!important}
 `}</style>
 
-<div className="no-print" style={{position:'fixed',top:0,left:0,right:0,zIndex:100,background:'rgba(255,255,255,0.95)',backdropFilter:'blur(12px)',borderBottom:'0.5px solid #e2e8f0',padding:'12px 24px',display:'flex',alignItems:'center',gap:12}}>
+<div className="no-print" style={{position:'fixed',top:0,left:0,right:0,zIndex:100,background:'rgba(255,255,255,0.95)',backdropFilter:'blur(12px)',borderBottom:'0.5px solid #e2e8f0',padding:'12px 24px',display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
 <button type="button" onClick={()=>setView('list')} className="btn btn-ghost" style={{padding:'8px 12px'}}><ArrowLeft size={16}/></button>
 <span style={{flex:1,fontWeight:500,fontSize:15}}>{selected.contractNumber} — {selected.title}</span>
-<button type="button" onClick={()=>window.print()} className="btn btn-ghost no-print"><Printer size={15}/>Print</button>
-<button type="button" onClick={handleDownloadPDF} disabled={downloading} className="btn btn-primary no-print">
+<button type="button" onClick={()=>handleShareLink(selected)} className="btn btn-ghost" style={{fontSize:13}}>
+<Link size={14}/>Share Link
+</button>
+<button type="button" onClick={()=>handleSendEmail(selected)} disabled={sendingReminder} className="btn btn-ghost" style={{fontSize:13}}>
+<Mail size={14}/>{sendingReminder?'Sending...':'Send Email'}
+</button>
+{(role==='admin'||role==='owner')&&selected.status==='draft'&&(
+<button type="button" onClick={()=>handleApprove(selected)} className="btn btn-ghost" style={{fontSize:13,color:'#16a34a',borderColor:'#16a34a'}}>
+<ThumbsUp size={14}/>Approve
+</button>
+)}
+{(role==='owner'||role==='admin')&&selected.status!=='cancelled'&&(
+<button type="button" onClick={()=>handleCancel(selected)} className="btn btn-ghost" style={{fontSize:13,color:'#dc2626',borderColor:'#dc2626'}}>
+<XCircle size={14}/>Cancel
+</button>
+)}
+<button type="button" onClick={()=>window.print()} className="btn btn-ghost"><Printer size={15}/>Print</button>
+<button type="button" onClick={handleDownloadPDF} disabled={downloading} className="btn btn-primary">
 <Download size={15}/>{downloading?'Generating...':'Download PDF'}
 </button>
 </div>
@@ -325,7 +409,7 @@ body{background:white!important;margin:0}
 </div>
 </div>
 
-<div style={{display:'flex',gap:24,marginBottom:28,fontSize:13}}>
+<div style={{display:'flex',gap:24,marginBottom:28,fontSize:13,flexWrap:'wrap'}}>
 {selected.startDate&&<div><span style={{color:'#9aa0b4'}}>Start Date: </span><strong>{selected.startDate}</strong></div>}
 {selected.endDate&&<div><span style={{color:'#9aa0b4'}}>End Date: </span><strong>{selected.endDate}</strong></div>}
 {selected.value>0&&<div><span style={{color:'#9aa0b4'}}>Contract Value: </span><strong>{Number(selected.value).toLocaleString()} Ks</strong></div>}
@@ -334,7 +418,6 @@ body{background:white!important;margin:0}
 
 <div style={{marginBottom:40,lineHeight:1.8,fontSize:13}} dangerouslySetInnerHTML={{__html:selected.content}}/>
 
-{/* Approval Signatures */}
 <div style={{marginTop:40,paddingTop:24,borderTop:'0.5px solid #e2e8f0'}}>
 <div style={{fontSize:11,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',marginBottom:16,letterSpacing:'0.05em'}}>Authorized Signatures</div>
 <div style={{display:'grid',gridTemplateColumns:`repeat(${hasOwnerApproval?3:hasAdminApproval?2:1},1fr)`,gap:24,marginBottom:24}}>
@@ -371,7 +454,6 @@ body{background:white!important;margin:0}
 )}
 </div>
 
-{/* Party Signatures */}
 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:40,paddingTop:24,borderTop:'0.5px solid #f1f5f9'}}>
 <div>
 <div style={{borderBottom:'1.5px solid #1a1d2e',paddingBottom:4,marginBottom:8,minHeight:48,display:'flex',alignItems:'flex-end'}}>
@@ -390,7 +472,6 @@ body{background:white!important;margin:0}
 </div>
 </div>
 
-{/* Footer + QR */}
 <div style={{marginTop:32,paddingTop:16,borderTop:'0.5px solid #e2e8f0',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
 <div>
 <div style={{fontSize:10,color:'#9aa0b4',marginBottom:2}}>This contract is system-generated and does not require a physical seal.</div>
@@ -459,9 +540,17 @@ return(
 </td>
 <td style={{textAlign:'center'}}>
 <div style={{display:'flex',gap:4,justifyContent:'center'}}>
-<button type="button" onClick={()=>openDetail(c)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--primary)',padding:4,borderRadius:6}}><Eye size={14}/></button>
-<button type="button" onClick={()=>openEdit(c)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Edit size={14}/></button>
-<button type="button" onClick={()=>handleDelete(c.id)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)',padding:4,borderRadius:6}}><Trash2 size={14}/></button>
+<button type="button" onClick={()=>openDetail(c)} title="View" style={{background:'none',border:'none',cursor:'pointer',color:'var(--primary)',padding:4,borderRadius:6}}><Eye size={14}/></button>
+<button type="button" onClick={()=>openEdit(c)} title="Edit" style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Edit size={14}/></button>
+<button type="button" onClick={()=>handleShareLink(c)} title="Share link" style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Link size={14}/></button>
+<button type="button" onClick={()=>handleSendEmail(c)} title="Send email" style={{background:'none',border:'none',cursor:'pointer',color:'#4F6EF7',padding:4,borderRadius:6}}><Mail size={14}/></button>
+{(role==='admin'||role==='owner')&&c.status==='draft'&&(
+<button type="button" onClick={()=>handleApprove(c)} title="Approve" style={{background:'none',border:'none',cursor:'pointer',color:'#16a34a',padding:4,borderRadius:6}}><ThumbsUp size={14}/></button>
+)}
+{(role==='owner'||role==='admin')&&c.status!=='cancelled'&&(
+<button type="button" onClick={()=>handleCancel(c)} title="Cancel" style={{background:'none',border:'none',cursor:'pointer',color:'#dc2626',padding:4,borderRadius:6}}><XCircle size={14}/></button>
+)}
+<button type="button" onClick={()=>handleDelete(c.id)} title="Delete" style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)',padding:4,borderRadius:6}}><Trash2 size={14}/></button>
 </div>
 </td>
 </tr>
