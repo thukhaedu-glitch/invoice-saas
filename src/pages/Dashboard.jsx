@@ -712,7 +712,7 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600
 {activeTab==='customer'?<>
 <th>ID</th><th>Name</th><th>Phone</th><th>Email</th><th style={{textAlign:'center'}}>Actions</th>
 </>:<>
-<th>Number</th><th>Client</th><th style={{textAlign:'right'}}>Amount</th><th style={{textAlign:'right'}}>Paid</th><th style={{textAlign:'center'}}>Status</th><th>Date</th><th style={{textAlign:'center'}}>Actions</th>
+<th>Number</th><th>Client</th><th style={{textAlign:'right'}}>Amount</th>{activeTab==='invoice'&&<th style={{textAlign:'right'}}>Paid</th>}<th style={{textAlign:'center'}}>Status</th><th>Date</th><th style={{textAlign:'center'}}>Actions</th>
 </>}
 </tr>
 </thead>
