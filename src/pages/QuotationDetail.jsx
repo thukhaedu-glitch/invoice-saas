@@ -20,6 +20,9 @@ const[converting,setConverting]=useState(false)
 const[staffName,setStaffName]=useState('')
 const[adminName,setAdminName]=useState('')
 const[ownerName,setOwnerName]=useState('')
+const[staffSig,setStaffSig]=useState('')
+const[adminSig,setAdminSig]=useState('')
+const[ownerSig,setOwnerSig]=useState('')
 const printRef=useRef()
 
 useEffect(()=>{
@@ -39,15 +42,24 @@ const qData={id:qSnap.id,...qSnap.data()}
 setQuotation(qData)
 if(qData.createdBy){
 const staffSnap=await getDoc(doc(db,'users',qData.createdBy))
-if(staffSnap.exists())setStaffName(staffSnap.data().displayName||staffSnap.data().email||'Staff')
+if(staffSnap.exists()){
+setStaffName(staffSnap.data().displayName||staffSnap.data().email||'Staff')
+setStaffSig(staffSnap.data().signatureUrl||'')
+}
 }
 if(qData.approvedBy){
 const adminSnap=await getDoc(doc(db,'users',qData.approvedBy))
-if(adminSnap.exists())setAdminName(adminSnap.data().displayName||adminSnap.data().email||'Admin')
+if(adminSnap.exists()){
+setAdminName(adminSnap.data().displayName||adminSnap.data().email||'Admin')
+setAdminSig(adminSnap.data().signatureUrl||'')
+}
 }
 if(qData.ownerApprovedBy){
 const ownerSnap=await getDoc(doc(db,'users',qData.ownerApprovedBy))
-if(ownerSnap.exists())setOwnerName(ownerSnap.data().displayName||ownerSnap.data().email||'Owner')
+if(ownerSnap.exists()){
+setOwnerName(ownerSnap.data().displayName||ownerSnap.data().email||'Owner')
+setOwnerSig(ownerSnap.data().signatureUrl||'')
+}
 }
 }
 if(sSnap.exists())setSettings(sSnap.data())
@@ -114,7 +126,6 @@ body{background:white!important;margin:0}
 }
 `}</style>
 
-{/* Topbar */}
 <div className="no-print" style={{position:'fixed',top:0,left:0,right:0,zIndex:100,background:'rgba(255,255,255,0.95)',backdropFilter:'blur(12px)',borderBottom:'0.5px solid #e2e8f0',padding:'12px 24px',display:'flex',alignItems:'center',gap:12}}>
 <button type="button" onClick={()=>navigate('/?tab=quotation')} className="btn btn-ghost" style={{padding:'8px 12px'}}><ArrowLeft size={16}/></button>
 <span style={{flex:1,fontWeight:500,fontSize:15}}>{quotation.quotationNumber}</span>
@@ -127,7 +138,6 @@ body{background:white!important;margin:0}
 </button>
 </div>
 
-{/* Print Area */}
 <div style={{minHeight:'100vh',background:'#f1f5f9',padding:'80px 24px 40px',display:'flex',justifyContent:'center'}}>
 <div ref={printRef} className="print-area" style={{width:'210mm',background:'white',boxShadow:'0 4px 32px rgba(0,0,0,0.08)',fontFamily:'Georgia,serif'}}>
 
@@ -260,21 +270,19 @@ body{background:white!important;margin:0}
 <div style={{fontSize:11,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',marginBottom:16,letterSpacing:'0.05em'}}>Authorized Signatures</div>
 <div style={{display:'grid',gridTemplateColumns:`repeat(${hasOwnerApproval?3:hasAdminApproval?2:1},1fr)`,gap:24}}>
 
-{/* Staff Signature */}
 <div style={{textAlign:'center'}}>
-<div style={{height:48,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:4}}>
-<span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{staffName||'—'}</span>
+<div style={{height:64,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:4}}>
+{staffSig?<img src={staffSig} style={{height:56,maxWidth:120,objectFit:'contain'}}/>:<span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{staffName||'—'}</span>}
 </div>
 <div style={{fontSize:10,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.05em'}}>Prepared by</div>
 <div style={{fontSize:12,fontWeight:500,color:'#1a1d2e',marginTop:2}}>{staffName||'Staff'}</div>
 {quotation.createdAt?.seconds&&<div style={{fontSize:10,color:'#9aa0b4',marginTop:2}}>{new Date(quotation.createdAt.seconds*1000).toLocaleDateString()}</div>}
 </div>
 
-{/* Admin Signature */}
 {hasAdminApproval&&(
 <div style={{textAlign:'center'}}>
-<div style={{height:48,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:4}}>
-<span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{adminName||'—'}</span>
+<div style={{height:64,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:4}}>
+{adminSig?<img src={adminSig} style={{height:56,maxWidth:120,objectFit:'contain'}}/>:<span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{adminName||'—'}</span>}
 </div>
 <div style={{fontSize:10,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.05em'}}>Approved by</div>
 <div style={{fontSize:12,fontWeight:500,color:'#1a1d2e',marginTop:2}}>{adminName||'Admin'}</div>
@@ -282,11 +290,10 @@ body{background:white!important;margin:0}
 </div>
 )}
 
-{/* Owner Signature */}
 {hasOwnerApproval&&(
 <div style={{textAlign:'center'}}>
-<div style={{height:48,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:4}}>
-<span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{ownerName||'—'}</span>
+<div style={{height:64,borderBottom:'1.5px solid #1a1d2e',margin Bottom:8,display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:4}}>
+{ownerSig?<img src={ownerSig} style={{height:56,maxWidth:120,objectFit:'contain'}}/>:<span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{ownerName||'—'}</span>}
 </div>
 <div style={{fontSize:10,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.05em'}}>Director Approved</div>
 <div style={{fontSize:12,fontWeight:500,color:'#1a1d2e',marginTop:2}}>{ownerName||'Director'}</div>
@@ -310,9 +317,6 @@ body{background:white!important;margin:0}
 <div style={{fontSize:9,color:'#9aa0b4',marginTop:4}}>Scan to verify</div>
 </div>
 )}
-<div style={{fontSize:11,color:'#9aa0b4',textAlign:'right',flexShrink:0}}>
-<div>SEC: {quotation.securityCode}</div>
-</div>
 </div>
 
 </div>
