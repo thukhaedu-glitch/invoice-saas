@@ -1,8 +1,10 @@
-import{useEffect,useState}from'react'
+import{useEffect,useState,useRef}from'react'
 import{useParams}from'react-router-dom'
 import{db}from'../firebase'
 import{collection,getDocs,query,where,doc,getDoc}from'firebase/firestore'
-import{CheckCircle,XCircle,Clock,FileText,Building2}from'lucide-react'
+import{CheckCircle,XCircle,Clock,FileText,Building2,Download}from'lucide-react'
+import html2canvas from'html2canvas'
+import jsPDF from'jspdf'
 
 export default function Verify(){
 const{companyId,code}=useParams()
@@ -12,6 +14,8 @@ const[company,setCompany]=useState(null)
 const[settings,setSettings]=useState({})
 const[loading,setLoading]=useState(true)
 const[notFound,setNotFound]=useState(false)
+const[downloading,setDownloading]=useState(false)
+const printRef=useRef()
 
 useEffect(()=>{
 const load=async()=>{
@@ -23,7 +27,6 @@ getDoc(doc(db,'companies',companyId,'_config','invoiceSettings'))
 if(compSnap.exists())setCompany(compSnap.data())
 if(sSnap.exists())setSettings(sSnap.data())
 
-// Check invoices first
 const invSnap=await getDocs(query(collection(db,'companies',companyId,'invoices'),where('securityCode','==',code)))
 if(!invSnap.empty){
 setInvoice({id:invSnap.docs[0].id,...invSnap.docs[0].data()})
@@ -32,7 +35,6 @@ setLoading(false)
 return
 }
 
-// Check quotations
 const quoSnap=await getDocs(query(collection(db,'companies',companyId,'quotations'),where('securityCode','==',code)))
 if(!quoSnap.empty){
 setInvoice({id:quoSnap.docs[0].id,...quoSnap.docs[0].data()})
@@ -41,7 +43,6 @@ setLoading(false)
 return
 }
 
-// Check contracts
 const conSnap=await getDocs(query(collection(db,'companies',companyId,'contracts'),where('securityCode','==',code)))
 if(!conSnap.empty){
 setInvoice({id:conSnap.docs[0].id,...conSnap.docs[0].data()})
@@ -57,9 +58,23 @@ setLoading(false)
 load()
 },[companyId,code])
 
+const handleDownloadPDF=async()=>{
+setDownloading(true)
+try{
+const el=printRef.current
+const canvas=await html2canvas(el,{scale:2,useCORS:true,backgroundColor:'#ffffff'})
+const imgData=canvas.toDataURL('image/png')
+const pdf=new jsPDF('p','mm','a4')
+const pdfWidth=pdf.internal.pageSize.getWidth()
+const pdfHeight=(canvas.height*pdfWidth)/canvas.width
+pdf.addImage(imgData,'PNG',0,0,pdfWidth,pdfHeight)
+pdf.save(`${invoice?.contractNumber||invoice?.invoiceNumber||invoice?.quotationNumber||'document'}.pdf`)
+}catch(e){console.error(e)}
+setDownloading(false)
+}
+
 const statusColor={paid:'#16a34a',pending:'#d97706',overdue:'#dc2626',refunded:'#6366f1',draft:'#64748b',active:'#16a34a',expired:'#d97706',cancelled:'#dc2626'}
 const statusBg={paid:'#eaf3de',pending:'#faeeda',overdue:'#fcebeb',refunded:'#ede9fe',draft:'#f1f5f9',active:'#eaf3de',expired:'#faeeda',cancelled:'#fcebeb'}
-
 const docTypeLabel={invoice:'Invoice',quotation:'Quotation',contract:'Contract'}
 const docNumber=invoice?.invoiceNumber||invoice?.quotationNumber||invoice?.contractNumber||'-'
 
@@ -84,11 +99,24 @@ const items=invoice.items||[]
 const subtotal=items.reduce((s,i)=>s+(i.qty||1)*(i.price||i.rate||0),0)
 
 return(
-<div style={{minHeight:'100vh',width:'100%',background:'linear-gradient(135deg,#e8f0fe,#f0f4ff,#e8f8f0)',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
-<div style={{width:'100%',maxWidth:600,background:'white',borderRadius:20,boxShadow:'0 8px 32px rgba(79,110,247,0.12)',overflow:'hidden'}}>
+<div style={{minHeight:'100vh',width:'100%',background:'linear-gradient(135deg,#e8f0fe,#f0f4ff,#e8f8f0)',padding:20}}>
+
+{/* Download button */}
+<div style={{display:'flex',justifyContent:'center',marginBottom:16}}>
+<button type="button" onClick={handleDownloadPDF} disabled={downloading} style={{
+background:'white',color:'#4F6EF7',border:'none',borderRadius:10,
+padding:'10px 20px',fontSize:13,fontWeight:600,cursor:'pointer',
+display:'flex',alignItems:'center',gap:8,
+boxShadow:'0 4px 16px rgba(79,110,247,0.3)',
+}}>
+<Download size={15}/>{downloading?'Generating PDF...':'Download PDF'}
+</button>
+</div>
+
+<div ref={printRef} style={{maxWidth:600,margin:'0 auto',background:'white',borderRadius:20,boxShadow:'0 8px 32px rgba(79,110,247,0.12)',overflow:'hidden'}}>
 
 {/* Header */}
-<div style={{background:'#ffffff',padding:'28px 32px',color:'white'}}>
+<div style={{background:'#4F6EF7',padding:'28px 32px',color:'white'}}>
 <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
 <div style={{width:48,height:48,background:'rgba(255,255,255,0.2)',borderRadius:12,display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',flexShrink:0}}>
 {settings.logoUrl?<img src={settings.logoUrl} style={{width:40,height:40,objectFit:'contain'}}/>:<FileText size={20} color="white"/>}
@@ -129,7 +157,17 @@ return(
 ))}
 </div>
 
-{/* Items — invoice/quotation only */}
+{/* Contract Content */}
+{docType==='contract'&&invoice.content&&(
+<div style={{padding:'20px 32px',borderBottom:'1px solid #f1f5f9'}}>
+<div style={{fontSize:12,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:12}}>Contract Details</div>
+{invoice.startDate&&<div style={{fontSize:13,marginBottom:6}}><span style={{color:'#9aa0b4'}}>Start Date: </span><strong>{invoice.startDate}</strong></div>}
+{invoice.endDate&&<div style={{fontSize:13,marginBottom:6}}><span style={{color:'#9aa0b4'}}>End Date: </span><strong>{invoice.endDate}</strong></div>}
+<div style={{marginTop:16,padding:16,background:'#f8fafc',borderRadius:10,fontSize:13,lineHeight:1.8,color:'#1a1d2e'}} dangerouslySetInnerHTML={{__html:invoice.content}}/>
+</div>
+)}
+
+{/* Items — invoice/quotation */}
 {items.length>0&&docType!=='contract'&&(
 <div style={{padding:'20px 32px',borderBottom:'1px solid #f1f5f9'}}>
 <div style={{fontSize:12,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:12}}>Items</div>
@@ -158,7 +196,7 @@ return(
 </div>
 )}
 
-{/* Totals — invoice/quotation only */}
+{/* Totals — invoice/quotation */}
 {docType!=='contract'&&(
 <div style={{padding:'16px 32px',borderBottom:'1px solid #f1f5f9'}}>
 <div style={{display:'flex',justifyContent:'space-between',padding:'6px 0',fontSize:13}}>
