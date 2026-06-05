@@ -25,6 +25,7 @@ import ChartOfAccounts from'./pages/ChartOfAccounts'
 import BankAccounts from'./pages/BankAccounts'
 import Invoices from'./pages/Invoices'
 import Quotations from'./pages/Quotations'
+import CustomerDetail from'./pages/CustomerDetail'
 
 
 export default function App(){
@@ -59,6 +60,7 @@ return(
 <Route path="/bank-accounts" element={user?<BankAccounts/>:<Navigate to="/login"/>}/>
 <Route path="/invoices" element={user?<Invoices/>:<Navigate to="/login"/>}/>
 <Route path="/quotations" element={user?<Quotations/>:<Navigate to="/login"/>}/>
+<Route path="/customer/:id" element={user?<CustomerDetail/>:<Navigate to="/login"/>}/>
 </Routes>
 </BrowserRouter>
 )
