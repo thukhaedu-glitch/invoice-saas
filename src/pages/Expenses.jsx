@@ -8,6 +8,7 @@ export default function Expenses(){
 const[companyId,setCompanyId]=useState(null)
 const[expenses,setExpenses]=useState([])
 const[projects,setProjects]=useState([])
+const[bankAccounts,setBankAccounts]=useState([])
 const[categories,setCategories]=useState(['Office','Transport','Food','Utilities','Marketing','Salary','Equipment','Software','Other'])
 const[paymentMethods,setPaymentMethods]=useState(['Cash','KBZ Pay','AYA Pay','Wave Pay','CB Pay','Bank Transfer','Other'])
 const[loading,setLoading]=useState(true)
@@ -20,7 +21,8 @@ const[saving,setSaving]=useState(false)
 const[form,setForm]=useState({
 title:'',amount:0,category:'',
 date:new Date().toISOString().split('T')[0],
-paymentMethod:'Cash',note:'',projectId:''
+paymentMethod:'Cash',note:'',projectId:'',
+fromAccountId:'',
 })
 
 useEffect(()=>{
@@ -29,9 +31,10 @@ const snap=await getDocs(query(collection(db,'companies'),where(`members.${auth.
 if(!snap.empty){
 const cid=snap.docs[0].id
 setCompanyId(cid)
-const[sSnap,pSnap]=await Promise.all([
+const[sSnap,pSnap,baSnap]=await Promise.all([
 getDoc(doc(db,'companies',cid,'_config','invoiceSettings')),
-getDocs(collection(db,'companies',cid,'projects'))
+getDocs(collection(db,'companies',cid,'projects')),
+getDocs(collection(db,'companies',cid,'bankAccounts')),
 ])
 if(sSnap.exists()){
 const sd=sSnap.data()
@@ -39,6 +42,7 @@ if(sd.expenseCategories?.length)setCategories(sd.expenseCategories)
 if(sd.paymentMethods?.length)setPaymentMethods(sd.paymentMethods.map(m=>m.bankName||m).filter(Boolean))
 }
 setProjects(pSnap.docs.map(d=>({id:d.id,...d.data()})))
+setBankAccounts(baSnap.docs.map(d=>({id:d.id,...d.data()})).filter(a=>a.isActive!==false))
 onSnapshot(collection(db,'companies',cid,'expenses'),snap=>{
 setExpenses(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.date||'').localeCompare(a.date||'')))
 setLoading(false)
@@ -49,13 +53,13 @@ load()
 },[])
 
 const openAdd=()=>{
-setForm({title:'',amount:0,category:categories[0]||'',date:new Date().toISOString().split('T')[0],paymentMethod:paymentMethods[0]||'Cash',note:'',projectId:''})
+setForm({title:'',amount:0,category:categories[0]||'',date:new Date().toISOString().split('T')[0],paymentMethod:paymentMethods[0]||'Cash',note:'',projectId:'',fromAccountId:''})
 setSelected(null)
 setModal('add')
 }
 
 const openEdit=(e)=>{
-setForm({title:e.title||'',amount:e.amount||0,category:e.category||categories[0]||'',date:e.date||'',paymentMethod:e.paymentMethod||paymentMethods[0]||'Cash',note:e.note||'',projectId:e.projectId||''})
+setForm({title:e.title||'',amount:e.amount||0,category:e.category||categories[0]||'',date:e.date||'',paymentMethod:e.paymentMethod||paymentMethods[0]||'Cash',note:e.note||'',projectId:e.projectId||'',fromAccountId:e.fromAccountId||''})
 setSelected(e)
 setModal('edit')
 }
@@ -64,15 +68,64 @@ const handleSave=async()=>{
 if(!form.title||!form.amount){alert('Title and amount required');return}
 setSaving(true)
 try{
+const amount=Number(form.amount)
 if(modal==='add'){
 await addDoc(collection(db,'companies',companyId,'expenses'),{
-...form,amount:Number(form.amount),
+...form,amount,
 createdAt:serverTimestamp(),
 createdBy:auth.currentUser.uid,
 })
+// Bank balance ကျ + journal entry
+if(form.fromAccountId){
+const acRef=doc(db,'companies',companyId,'bankAccounts',form.fromAccountId)
+const acSnap=await getDoc(acRef)
+if(acSnap.exists()){
+const newBalance=(acSnap.data().currentBalance||0)-amount
+await updateDoc(acRef,{currentBalance:newBalance,updatedAt:serverTimestamp()})
+// Journal entry
+await addDoc(collection(db,'companies',companyId,'journalEntries'),{
+date:form.date,
+description:`Expense: ${form.title}`,
+entries:[
+{account:'Expense',accountId:form.category,type:'debit',amount},
+{account:'Bank',accountId:form.fromAccountId,accountName:acSnap.data().name,type:'credit',amount},
+],
+ref:'EXP',
+createdAt:serverTimestamp(),
+createdBy:auth.currentUser.uid,
+})
+// Bank transaction
+await addDoc(collection(db,'companies',companyId,'bankAccounts',form.fromAccountId,'transactions'),{
+date:form.date,
+type:'out',
+amount,
+description:`Expense: ${form.title}`,
+reference:form.category,
+createdAt:serverTimestamp(),
+})
+}
+}
 }else{
+// Edit — undo old balance change, apply new
+if(selected.fromAccountId&&selected.fromAccountId!==form.fromAccountId){
+// old account restore
+const oldRef=doc(db,'companies',companyId,'bankAccounts',selected.fromAccountId)
+const oldSnap=await getDoc(oldRef)
+if(oldSnap.exists()){
+await updateDoc(oldRef,{currentBalance:(oldSnap.data().currentBalance||0)+Number(selected.amount||0)})
+}
+}
+if(form.fromAccountId){
+const acRef=doc(db,'companies',companyId,'bankAccounts',form.fromAccountId)
+const acSnap=await getDoc(acRef)
+if(acSnap.exists()){
+const oldAmt=selected.fromAccountId===form.fromAccountId?Number(selected.amount||0):0
+const newBalance=(acSnap.data().currentBalance||0)+oldAmt-amount
+await updateDoc(acRef,{currentBalance:newBalance,updatedAt:serverTimestamp()})
+}
+}
 await updateDoc(doc(db,'companies',companyId,'expenses',selected.id),{
-...form,amount:Number(form.amount),updatedAt:serverTimestamp()
+...form,amount,updatedAt:serverTimestamp()
 })
 }
 setModal(null)
@@ -82,6 +135,15 @@ setSaving(false)
 
 const handleDelete=async(id)=>{
 if(!confirm('Delete this expense?'))return
+const exp=expenses.find(e=>e.id===id)
+// Restore bank balance
+if(exp?.fromAccountId){
+const acRef=doc(db,'companies',companyId,'bankAccounts',exp.fromAccountId)
+const acSnap=await getDoc(acRef)
+if(acSnap.exists()){
+await updateDoc(acRef,{currentBalance:(acSnap.data().currentBalance||0)+Number(exp.amount||0)})
+}
+}
 await deleteDoc(doc(db,'companies',companyId,'expenses',id))
 }
 
@@ -138,6 +200,22 @@ return(
 {paymentMethods.map(m=><option key={m}>{m}</option>)}
 </select>
 </div>
+
+{/* From Account — Bank */}
+<div style={{gridColumn:'1/-1'}}>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>
+From Account <span style={{color:'var(--primary)',fontSize:11}}>(Bank balance auto ကျမည်)</span>
+</label>
+<select className="form-input" value={form.fromAccountId} onChange={e=>setForm(f=>({...f,fromAccountId:e.target.value}))}>
+<option value="">— Cash / Not linked —</option>
+{bankAccounts.map(a=>(
+<option key={a.id} value={a.id}>
+{a.name} {a.bankName?`(${a.bankName})`:''} — {Number(a.currentBalance||a.openingBalance||0).toLocaleString()} {a.currency||'MMK'}
+</option>
+))}
+</select>
+</div>
+
 <div style={{gridColumn:'1/-1'}}>
 <label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Link to Project (optional)</label>
 <select className="form-input" value={form.projectId} onChange={e=>setForm(f=>({...f,projectId:e.target.value}))}>
@@ -216,6 +294,7 @@ return(
 <th>Date</th>
 <th>Title</th>
 <th>Category</th>
+<th>From Account</th>
 <th>Project</th>
 <th>Method</th>
 <th style={{textAlign:'right'}}>Amount</th>
@@ -228,6 +307,7 @@ return(
 <td style={{color:'var(--text-3)',fontSize:12,whiteSpace:'nowrap'}}>{e.date||'-'}</td>
 <td style={{fontWeight:500}}>{e.title}</td>
 <td><span style={{background:'var(--primary-light)',color:'var(--primary)',padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:500}}>{e.category}</span></td>
+<td style={{fontSize:12,color:'var(--text-2)'}}>{e.fromAccountId?bankAccounts.find(a=>a.id===e.fromAccountId)?.name||'-':'-'}</td>
 <td style={{fontSize:12,color:'var(--text-2)'}}>
 {e.projectId?projects.find(p=>p.id===e.projectId)?.name||'-':'-'}
 </td>
