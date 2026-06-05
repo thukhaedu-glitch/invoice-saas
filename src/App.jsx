@@ -21,6 +21,7 @@ import Signup from'./pages/Signup'
 import JoinCompany from'./pages/JoinCompany'
 import QuotationDetail from'./pages/QuotationDetail'
 import EditQuotation from'./pages/EditQuotation'
+import ChartOfAccounts from'./pages/ChartOfAccounts'
 
 export default function App(){
 const[user,setUser]=useState(null)
@@ -49,6 +50,7 @@ return(
 <Route path="/join" element={!user?<JoinCompany/>:<Navigate to="/"/>}/>
 <Route path="/quotation/:id" element={user?<QuotationDetail/>:<Navigate to="/login"/>}/>
 <Route path="/edit-quotation/:id" element={user?<EditQuotation/>:<Navigate to="/login"/>}/>
+<Route path="/chart-of-accounts" element={user?<ChartOfAccounts/>:<Navigate to="/login"/>}/>
 <Route path="*" element={<Navigate to="/"/>}/>
 </Routes>
 </BrowserRouter>
