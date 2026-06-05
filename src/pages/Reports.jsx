@@ -26,6 +26,7 @@ const[invoices,setInvoices]=useState([])
 const[expenses,setExpenses]=useState([])
 const[projects,setProjects]=useState([])
 const[bankAccounts,setBankAccounts]=useState([])
+const[bills,setBills]=useState([])
 const[loading,setLoading]=useState(true)
 const[activeTab,setActiveTab]=useState('pnl')
 const[filterYear,setFilterYear]=useState(new Date().getFullYear().toString())
@@ -39,16 +40,18 @@ const snap=await getDocs(query(collection(db,'companies'),where(`members.${auth.
 if(!snap.empty){
 const cid=snap.docs[0].id
 setCompanyId(cid)
-const[invSnap,expSnap,prjSnap,baSnap]=await Promise.all([
+const[invSnap,expSnap,prjSnap,baSnap,billSnap]=await Promise.all([
 getDocs(collection(db,'companies',cid,'invoices')),
 getDocs(collection(db,'companies',cid,'expenses')),
 getDocs(collection(db,'companies',cid,'projects')),
 getDocs(collection(db,'companies',cid,'bankAccounts')),
+getDocs(collection(db,'companies',cid,'bills')),
 ])
 setInvoices(invSnap.docs.map(d=>({id:d.id,...d.data()})))
 setExpenses(expSnap.docs.map(d=>({id:d.id,...d.data()})))
 setProjects(prjSnap.docs.map(d=>({id:d.id,...d.data()})))
 setBankAccounts(baSnap.docs.map(d=>({id:d.id,...d.data()})).filter(a=>a.isActive!==false))
+setBills(billSnap.docs.map(d=>({id:d.id,...d.data()})))
 }
 setLoading(false)
 }
@@ -73,22 +76,36 @@ if(filterMonth&&!d.startsWith(`${filterYear}-${filterMonth}`))return false
 return true
 })
 
+const filteredBills=bills.filter(b=>{
+const d=b.billDate
+if(!d)return false
+if(filterYear&&!d.startsWith(filterYear))return false
+if(filterMonth&&!d.startsWith(`${filterYear}-${filterMonth}`))return false
+return true
+})
+
 const paidInvoices=filteredInvoices.filter(i=>i.status==='paid'||i.status==='partial')
 const totalRevenue=paidInvoices.reduce((s,i)=>s+Number(i.paidAmount||i.totalAmount||0),0)
-const totalExpenses=filteredExpenses.reduce((s,e)=>s+Number(e.amount||0),0)
+const totalCashExpenses=filteredExpenses.reduce((s,e)=>s+Number(e.amount||0),0)
+const totalBillsPaid=filteredBills.filter(b=>b.status==='paid'||b.status==='partial').reduce((s,b)=>s+Number(b.paidAmount||b.amount||0),0)
+const totalExpenses=totalCashExpenses+totalBillsPaid
 const netProfit=totalRevenue-totalExpenses
 
 const years=[...new Set([
 ...invoices.map(i=>getInvDate(i)?.slice(0,4)),
-...expenses.map(e=>e.date?.slice(0,4))
+...expenses.map(e=>e.date?.slice(0,4)),
+...bills.map(b=>b.billDate?.slice(0,4)),
 ].filter(Boolean))].sort().reverse()
 
 const pnlMonths=months.map((m,idx)=>{
 const mInv=invoices.filter(i=>getInvDate(i)?.startsWith(`${filterYear}-${m}`))
 const mExp=expenses.filter(e=>e.date?.startsWith(`${filterYear}-${m}`))
+const mBills=bills.filter(b=>b.billDate?.startsWith(`${filterYear}-${m}`)&&(b.status==='paid'||b.status==='partial'))
 const revenue=mInv.filter(i=>i.status==='paid'||i.status==='partial').reduce((s,i)=>s+Number(i.paidAmount||i.totalAmount||0),0)
-const expense=mExp.reduce((s,e)=>s+Number(e.amount||0),0)
-return{month:monthNamesFull[idx],shortMonth:monthNames[idx],mNum:m,revenue,expense,profit:revenue-expense}
+const expenseCash=mExp.reduce((s,e)=>s+Number(e.amount||0),0)
+const expenseBills=mBills.reduce((s,b)=>s+Number(b.paidAmount||b.amount||0),0)
+const expense=expenseCash+expenseBills
+return{month:monthNamesFull[idx],shortMonth:monthNames[idx],mNum:m,revenue,expense,expenseCash,expenseBills,profit:revenue-expense}
 }).filter(m=>m.revenue>0||m.expense>0)
 
 const totalTax=filteredInvoices.reduce((s,i)=>Number(i.taxRate||0)>0?s+(Number(i.totalAmount||0)*(Number(i.taxRate||0)/100)):s,0)
@@ -116,6 +133,11 @@ debit:Number(i.totalAmount||0),credit:0,status:i.status,
 ...filteredExpenses.map(e=>({
 date:e.date||'-',type:'Expense',ref:e.category||'-',
 description:e.title,debit:0,credit:Number(e.amount||0),status:'paid',
+})),
+...filteredBills.map(b=>({
+date:b.billDate||'-',type:'Bill',ref:b.billNumber||'-',
+description:`Bill: ${b.title}${b.vendor?' — '+b.vendor:''}`,
+debit:0,credit:Number(b.amount||0),status:b.status,
 })),
 ].sort((a,b)=>a.date.localeCompare(b.date))
 
@@ -192,7 +214,7 @@ color:activeTab===t.id?'#fff':'var(--text-2)',
 <div className="card" style={{overflow:'hidden'}}>
 <div style={{padding:'16px 20px',borderBottom:'0.5px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
 <div style={{fontWeight:600,fontSize:14,display:'flex',alignItems:'center',gap:8}}><FileText size={15}/>Profit & Loss — {filterYear}</div>
-<button type="button" onClick={()=>exportCSV(pnlMonths.map(m=>({Month:m.month,Revenue:m.revenue,Expenses:m.expense,'Net Profit':m.profit})),`PnL_${filterYear}.csv`)} className="btn btn-ghost" style={{fontSize:12}}>
+<button type="button" onClick={()=>exportCSV(pnlMonths.map(m=>({Month:m.month,Revenue:m.revenue,'Cash Expenses':m.expenseCash,'Bill Expenses':m.expenseBills,'Total Expenses':m.expense,'Net Profit':m.profit})),`PnL_${filterYear}.csv`)} className="btn btn-ghost" style={{fontSize:12}}>
 <Download size={14}/>Export CSV
 </button>
 </div>
@@ -200,17 +222,20 @@ color:activeTab===t.id?'#fff':'var(--text-2)',
 <thead><tr>
 <th style={th}>Month</th>
 <th style={{...th,textAlign:'right'}}>Revenue (Ks)</th>
-<th style={{...th,textAlign:'right'}}>Expenses (Ks)</th>
+<th style={{...th,textAlign:'right'}}>Cash Exp (Ks)</th>
+<th style={{...th,textAlign:'right'}}>Bills Paid (Ks)</th>
+<th style={{...th,textAlign:'right'}}>Total Exp (Ks)</th>
 <th style={{...th,textAlign:'right'}}>Net Profit (Ks)</th>
 <th style={{...th,textAlign:'right'}}>Margin</th>
 </tr></thead>
 <tbody>
 {pnlMonths.length===0?(
-<tr><td colSpan={5} style={{...td,textAlign:'center',color:'var(--text-3)',padding:40}}>No data</td></tr>
+<tr><td colSpan={7} style={{...td,textAlign:'center',color:'var(--text-3)',padding:40}}>No data</td></tr>
 ):pnlMonths.map(m=>{
 const isExpanded=expandedMonth===m.month
 const mInvs=invoices.filter(i=>getInvDate(i)?.startsWith(`${filterYear}-${m.mNum}`)&&(i.status==='paid'||i.status==='partial'))
 const mExps=expenses.filter(e=>e.date?.startsWith(`${filterYear}-${m.mNum}`))
+const mBills=bills.filter(b=>b.billDate?.startsWith(`${filterYear}-${m.mNum}`)&&(b.status==='paid'||b.status==='partial'))
 return(
 <>
 <tr key={m.month} onClick={()=>setExpandedMonth(isExpanded?null:m.month)} style={{cursor:'pointer',background:isExpanded?'rgba(79,110,247,0.04)':'white'}}>
@@ -221,7 +246,9 @@ return(
 </span>
 </td>
 <td style={{...tdR,color:'#4F6EF7'}}>{m.revenue.toLocaleString()}</td>
-<td style={{...tdR,color:'#dc2626'}}>{m.expense.toLocaleString()}</td>
+<td style={{...tdR,color:'#dc2626'}}>{m.expenseCash.toLocaleString()}</td>
+<td style={{...tdR,color:'#d97706'}}>{m.expenseBills.toLocaleString()}</td>
+<td style={{...tdR,color:'#dc2626',fontWeight:600}}>{m.expense.toLocaleString()}</td>
 <td style={{...tdR,fontWeight:600,color:m.profit>=0?'#16a34a':'#dc2626'}}>{m.profit.toLocaleString()}</td>
 <td style={{...tdR,fontSize:12,color:m.profit>=0?'#16a34a':'#dc2626'}}>
 {m.revenue>0?`${Math.round(m.profit/m.revenue*100)}%`:'-'}
@@ -229,11 +256,11 @@ return(
 </tr>
 {isExpanded&&(
 <tr key={m.month+'_detail'}>
-<td colSpan={5} style={{padding:0,background:'#f8fafc'}}>
+<td colSpan={7} style={{padding:0,background:'#f8fafc'}}>
 <div style={{padding:16}}>
 {mInvs.length>0&&(
 <div style={{marginBottom:12}}>
-<div style={{fontSize:11,fontWeight:600,color:'#4F6EF7',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:8}}>Invoices ({mInvs.length})</div>
+<div style={{fontSize:11,fontWeight:600,color:'#4F6EF7',textTransform:'uppercase',marginBottom:8}}>Invoices ({mInvs.length})</div>
 <table style={{width:'100%',borderCollapse:'collapse',background:'white',borderRadius:8,overflow:'hidden'}}>
 <thead><tr style={{background:'rgba(79,110,247,0.06)'}}>
 <th style={{...th,padding:'7px 12px'}}>Number</th>
@@ -249,9 +276,7 @@ return(
 <td style={{...td,padding:'7px 12px',fontWeight:500}}>{i.clientName}</td>
 <td style={{...td,padding:'7px 12px',textAlign:'right'}}>{Number(i.totalAmount||0).toLocaleString()} Ks</td>
 <td style={{...td,padding:'7px 12px',textAlign:'right',color:'#16a34a',fontWeight:500}}>{Number(i.paidAmount||i.totalAmount||0).toLocaleString()} Ks</td>
-<td style={{...td,padding:'7px 12px',textAlign:'center'}}>
-<span style={{background:i.status==='paid'?'#eaf3de':'#e6f1fb',color:i.status==='paid'?'#16a34a':'#2563eb',padding:'2px 8px',borderRadius:20,fontSize:10,fontWeight:500}}>{i.status}</span>
-</td>
+<td style={{...td,padding:'7px 12px',textAlign:'center'}}><span style={{background:i.status==='paid'?'#eaf3de':'#e6f1fb',color:i.status==='paid'?'#16a34a':'#2563eb',padding:'2px 8px',borderRadius:20,fontSize:10,fontWeight:500}}>{i.status}</span></td>
 </tr>
 ))}
 </tbody>
@@ -259,8 +284,8 @@ return(
 </div>
 )}
 {mExps.length>0&&(
-<div>
-<div style={{fontSize:11,fontWeight:600,color:'#dc2626',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:8}}>Expenses ({mExps.length})</div>
+<div style={{marginBottom:12}}>
+<div style={{fontSize:11,fontWeight:600,color:'#dc2626',textTransform:'uppercase',marginBottom:8}}>Cash Expenses ({mExps.length})</div>
 <table style={{width:'100%',borderCollapse:'collapse',background:'white',borderRadius:8,overflow:'hidden'}}>
 <thead><tr style={{background:'rgba(220,38,38,0.04)'}}>
 <th style={{...th,padding:'7px 12px'}}>Title</th>
@@ -281,7 +306,32 @@ return(
 </table>
 </div>
 )}
-{mInvs.length===0&&mExps.length===0&&<div style={{textAlign:'center',color:'var(--text-3)',fontSize:13,padding:20}}>No detailed records</div>}
+{mBills.length>0&&(
+<div>
+<div style={{fontSize:11,fontWeight:600,color:'#d97706',textTransform:'uppercase',marginBottom:8}}>Bills Paid ({mBills.length})</div>
+<table style={{width:'100%',borderCollapse:'collapse',background:'white',borderRadius:8,overflow:'hidden'}}>
+<thead><tr style={{background:'rgba(217,119,6,0.04)'}}>
+<th style={{...th,padding:'7px 12px'}}>Bill</th>
+<th style={{...th,padding:'7px 12px'}}>Vendor</th>
+<th style={{...th,padding:'7px 12px'}}>Category</th>
+<th style={{...th,padding:'7px 12px',textAlign:'right'}}>Amount</th>
+<th style={{...th,padding:'7px 12px',textAlign:'center'}}>Status</th>
+</tr></thead>
+<tbody>
+{mBills.map(b=>(
+<tr key={b.id}>
+<td style={{...td,padding:'7px 12px',fontFamily:'monospace',fontSize:11,color:'#d97706'}}>{b.billNumber}</td>
+<td style={{...td,padding:'7px 12px',fontWeight:500}}>{b.vendor||'-'}</td>
+<td style={{...td,padding:'7px 12px'}}><span style={{background:'#faeeda',color:'#d97706',padding:'2px 8px',borderRadius:20,fontSize:10}}>{b.category}</span></td>
+<td style={{...td,padding:'7px 12px',textAlign:'right',color:'#d97706',fontWeight:500}}>{Number(b.paidAmount||b.amount||0).toLocaleString()} Ks</td>
+<td style={{...td,padding:'7px 12px',textAlign:'center'}}><span style={{background:'#eaf3de',color:'#16a34a',padding:'2px 8px',borderRadius:20,fontSize:10,fontWeight:500}}>{b.status}</span></td>
+</tr>
+))}
+</tbody>
+</table>
+</div>
+)}
+{mInvs.length===0&&mExps.length===0&&mBills.length===0&&<div style={{textAlign:'center',color:'var(--text-3)',fontSize:13,padding:20}}>No detailed records</div>}
 </div>
 </td>
 </tr>
@@ -294,6 +344,8 @@ return(
 <tfoot><tr style={{background:'#f8fafc'}}>
 <td style={{...td,fontWeight:700}}>Total</td>
 <td style={{...tdR,fontWeight:700,color:'#4F6EF7'}}>{pnlMonths.reduce((s,m)=>s+m.revenue,0).toLocaleString()}</td>
+<td style={{...tdR,fontWeight:700,color:'#dc2626'}}>{pnlMonths.reduce((s,m)=>s+m.expenseCash,0).toLocaleString()}</td>
+<td style={{...tdR,fontWeight:700,color:'#d97706'}}>{pnlMonths.reduce((s,m)=>s+m.expenseBills,0).toLocaleString()}</td>
 <td style={{...tdR,fontWeight:700,color:'#dc2626'}}>{pnlMonths.reduce((s,m)=>s+m.expense,0).toLocaleString()}</td>
 <td style={{...tdR,fontWeight:700,color:netProfit>=0?'#16a34a':'#dc2626'}}>{netProfit.toLocaleString()}</td>
 <td style={{...tdR,fontWeight:700,color:netProfit>=0?'#16a34a':'#dc2626'}}>{totalRevenue>0?`${Math.round(netProfit/totalRevenue*100)}%`:'-'}</td>
@@ -324,7 +376,7 @@ return(
 </div>
 <div style={{display:'flex',gap:20,marginTop:8,justifyContent:'center'}}>
 <div style={{display:'flex',alignItems:'center',gap:6,fontSize:12,color:'var(--text-2)'}}><div style={{width:12,height:12,borderRadius:3,background:'#4F6EF7'}}/>Revenue</div>
-<div style={{display:'flex',alignItems:'center',gap:6,fontSize:12,color:'var(--text-2)'}}><div style={{width:12,height:12,borderRadius:3,background:'#ef4444'}}/>Expenses</div>
+<div style={{display:'flex',alignItems:'center',gap:6,fontSize:12,color:'var(--text-2)'}}><div style={{width:12,height:12,borderRadius:3,background:'#ef4444'}}/>Total Expenses</div>
 </div>
 <div style={{marginTop:24,padding:16,background:'#f8fafc',borderRadius:12}}>
 <div style={{fontSize:12,fontWeight:600,color:'var(--text-2)',marginBottom:12,textTransform:'uppercase',letterSpacing:'0.05em'}}>Monthly Profit</div>
@@ -337,25 +389,6 @@ return(
 ))}
 </div>
 </div>
-{filteredExpenses.length>0&&(
-<div style={{marginTop:20}}>
-<div style={{fontSize:12,fontWeight:600,color:'var(--text-2)',marginBottom:12,textTransform:'uppercase',letterSpacing:'0.05em'}}>Expenses by Category</div>
-<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:8}}>
-{[...new Set(filteredExpenses.map(e=>e.category))].map(cat=>{
-const total=filteredExpenses.filter(e=>e.category===cat).reduce((s,e)=>s+Number(e.amount||0),0)
-const pct=Math.round(total/totalExpenses*100)
-return(
-<div key={cat} style={{padding:12,background:'white',borderRadius:10,border:'0.5px solid var(--border)'}}>
-<div style={{fontSize:11,color:'var(--text-2)',marginBottom:4}}>{cat}</div>
-<div style={{fontSize:14,fontWeight:600,color:'#dc2626'}}>{total.toLocaleString()} Ks</div>
-<div style={{height:4,background:'#f1f5f9',borderRadius:2,marginTop:6}}><div style={{height:4,background:'#dc2626',borderRadius:2,width:`${pct}%`}}/></div>
-<div style={{fontSize:10,color:'var(--text-3)',marginTop:4}}>{pct}%</div>
-</div>
-)
-})}
-</div>
-</div>
-)}
 </>
 )}
 </div>
@@ -448,12 +481,10 @@ return(
 <tr key={t.month+'_detail'}>
 <td colSpan={4} style={{padding:0,background:'#f8fafc'}}>
 <div style={{padding:16}}>
-<div style={{fontSize:11,fontWeight:600,color:'#8b5cf6',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:8}}>Taxable Invoices — {t.month}</div>
 <table style={{width:'100%',borderCollapse:'collapse',background:'white',borderRadius:8,overflow:'hidden'}}>
 <thead><tr style={{background:'rgba(139,92,246,0.06)'}}>
 <th style={{...th,padding:'7px 12px'}}>Invoice</th>
 <th style={{...th,padding:'7px 12px'}}>Client</th>
-<th style={{...th,padding:'7px 12px'}}>Date</th>
 <th style={{...th,padding:'7px 12px',textAlign:'right'}}>Amount</th>
 <th style={{...th,padding:'7px 12px',textAlign:'center'}}>Tax Rate</th>
 <th style={{...th,padding:'7px 12px',textAlign:'right'}}>Tax Amount</th>
@@ -464,7 +495,6 @@ return(
 <tr key={i.id}>
 <td style={{...td,padding:'7px 12px',fontFamily:'monospace',fontSize:11,color:'var(--primary)'}}>{i.invoiceNumber}</td>
 <td style={{...td,padding:'7px 12px',fontWeight:500}}>{i.clientName}</td>
-<td style={{...td,padding:'7px 12px',color:'var(--text-3)',fontSize:12}}>{getInvDate(i)||'-'}</td>
 <td style={{...td,padding:'7px 12px',textAlign:'right'}}>{Number(i.totalAmount||0).toLocaleString()} Ks</td>
 <td style={{...td,padding:'7px 12px',textAlign:'center'}}><span style={{background:'rgba(139,92,246,0.1)',color:'#8b5cf6',padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:600}}>{i.taxRate}%</span></td>
 <td style={{...td,padding:'7px 12px',textAlign:'right',fontWeight:600,color:'#8b5cf6'}}>{Math.round(Number(i.totalAmount||0)*(Number(i.taxRate||0)/100)).toLocaleString()} Ks</td>
@@ -472,13 +502,6 @@ return(
 </tr>
 ))}
 </tbody>
-<tfoot><tr style={{background:'rgba(139,92,246,0.04)'}}>
-<td colSpan={3} style={{...td,padding:'7px 12px',fontWeight:700}}>Total</td>
-<td style={{...td,padding:'7px 12px',textAlign:'right',fontWeight:700,color:'#4F6EF7'}}>{mInvs.reduce((s,i)=>s+Number(i.totalAmount||0),0).toLocaleString()} Ks</td>
-<td/>
-<td style={{...td,padding:'7px 12px',textAlign:'right',fontWeight:700,color:'#8b5cf6'}}>{Math.round(mInvs.reduce((s,i)=>s+Number(i.totalAmount||0)*(Number(i.taxRate||0)/100),0)).toLocaleString()} Ks</td>
-<td/>
-</tr></tfoot>
 </table>
 </div>
 </td>
@@ -504,7 +527,7 @@ return(
 {activeTab==='balance'&&(()=>{
 const totalBankBalance=bankAccounts.reduce((s,a)=>s+Number(a.currentBalance||a.openingBalance||0),0)
 const totalReceivable=invoices.filter(i=>i.status==='pending'||i.status==='partial').reduce((s,i)=>s+Number(i.remainingAmount||i.totalAmount||0),0)
-const totalPayable=expenses.reduce((s,e)=>s+Number(e.amount||0),0)
+const totalPayable=bills.filter(b=>b.status==='unpaid'||b.status==='partial').reduce((s,b)=>s+Number(b.remainingAmount||b.amount||0),0)
 const totalAssets=totalBankBalance+totalReceivable
 const equity=totalAssets-totalPayable
 return(
@@ -542,9 +565,15 @@ return(
 </div>
 <div style={{padding:20}}>
 <div style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'0.5px solid #f1f5f9'}}>
-<span style={{fontSize:13,color:'var(--text-2)'}}>Accounts Payable (Expenses)</span>
+<span style={{fontSize:13,color:'var(--text-2)'}}>Accounts Payable (Unpaid Bills)</span>
 <span style={{fontSize:13,fontWeight:600,color:'#dc2626'}}>{totalPayable.toLocaleString()} Ks</span>
 </div>
+{bills.filter(b=>b.status==='unpaid'||b.status==='partial').map(b=>(
+<div key={b.id} style={{display:'flex',justifyContent:'space-between',padding:'6px 0 6px 16px',borderBottom:'0.5px solid #f8fafc'}}>
+<span style={{fontSize:12,color:'var(--text-3)'}}>↳ {b.title}{b.vendor?` (${b.vendor})`:''}</span>
+<span style={{fontSize:12,color:'#dc2626'}}>{Number(b.remainingAmount||b.amount||0).toLocaleString()} Ks</span>
+</div>
+))}
 <div style={{display:'flex',justifyContent:'space-between',padding:'12px 0',marginTop:4}}>
 <span style={{fontSize:14,fontWeight:700}}>Total Liabilities</span>
 <span style={{fontSize:14,fontWeight:700,color:'#dc2626'}}>{totalPayable.toLocaleString()} Ks</span>
@@ -557,7 +586,7 @@ return(
 </div>
 <div style={{padding:20}}>
 <div style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'0.5px solid #f1f5f9'}}>
-<span style={{fontSize:13,color:'var(--text-2)'}}>Net Profit (Assets - Liabilities)</span>
+<span style={{fontSize:13,color:'var(--text-2)'}}>Net Equity (Assets - Liabilities)</span>
 <span style={{fontSize:13,fontWeight:600,color:equity>=0?'#16a34a':'#dc2626'}}>{equity.toLocaleString()} Ks</span>
 </div>
 <div style={{display:'flex',justifyContent:'space-between',padding:'12px 0',marginTop:4}}>
@@ -601,11 +630,28 @@ balance:Number(i.remainingAmount||i.totalAmount||0),
 status:i.status,
 daysOld:i.createdAt?.seconds?Math.floor((Date.now()-i.createdAt.seconds*1000)/(1000*60*60*24)):0,
 })).sort((a,b)=>b.balance-a.balance)
+
+const payables=bills.filter(b=>b.status==='unpaid'||b.status==='partial').map(b=>({
+vendor:b.vendor||'-',billNumber:b.billNumber,title:b.title,
+date:b.billDate||'-',dueDate:b.dueDate||'-',
+total:Number(b.amount||0),
+paid:Number(b.paidAmount||0),
+balance:Number(b.remainingAmount||b.amount||0),
+status:b.status,
+isOverdue:b.dueDate&&new Date(b.dueDate)<new Date(),
+})).sort((a,b)=>b.balance-a.balance)
+
 const totalAR=receivables.reduce((s,r)=>s+r.balance,0)
 const overdueAR=receivables.filter(r=>r.daysOld>30).reduce((s,r)=>s+r.balance,0)
+const totalAP=payables.reduce((s,p)=>s+p.balance,0)
+const overdueAP=payables.filter(p=>p.isOverdue).reduce((s,p)=>s+p.balance,0)
+
 return(
 <div>
-<div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginBottom:16}}>
+{/* AR Section */}
+<div style={{marginBottom:24}}>
+<div style={{fontWeight:700,fontSize:15,color:'#4F6EF7',marginBottom:12}}>Accounts Receivable (AR)</div>
+<div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginBottom:12}}>
 {[
 {label:'Total Receivable',value:totalAR,color:'#4F6EF7'},
 {label:'Overdue (>30 days)',value:overdueAR,color:'#dc2626'},
@@ -618,11 +664,8 @@ return(
 ))}
 </div>
 <div className="card" style={{overflow:'hidden'}}>
-<div style={{padding:'16px 20px',borderBottom:'0.5px solid var(--border)',background:'rgba(79,110,247,0.04)'}}>
-<div style={{fontWeight:700,fontSize:14,color:'#4F6EF7'}}>Accounts Receivable — Outstanding Invoices</div>
-</div>
 {receivables.length===0?(
-<div style={{padding:40,textAlign:'center',color:'var(--text-3)'}}>All invoices paid 🎉</div>
+<div style={{padding:32,textAlign:'center',color:'var(--text-3)'}}>All invoices paid 🎉</div>
 ):(
 <table style={{width:'100%',borderCollapse:'collapse'}}>
 <thead><tr>
@@ -648,12 +691,66 @@ return(
 ))}
 </tbody>
 <tfoot><tr style={{background:'#f8fafc'}}>
-<td colSpan={5} style={{...td,fontWeight:700}}>Total Outstanding</td>
+<td colSpan={5} style={{...td,fontWeight:700}}>Total AR</td>
 <td style={{...tdR,fontWeight:700,color:'#dc2626'}}>{totalAR.toLocaleString()} Ks</td>
 <td colSpan={2}/>
 </tr></tfoot>
 </table>
 )}
+</div>
+</div>
+
+{/* AP Section */}
+<div>
+<div style={{fontWeight:700,fontSize:15,color:'#dc2626',marginBottom:12}}>Accounts Payable (AP)</div>
+<div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginBottom:12}}>
+{[
+{label:'Total Payable',value:totalAP,color:'#dc2626'},
+{label:'Overdue Bills',value:overdueAP,color:'#7c2d12'},
+{label:'Current',value:totalAP-overdueAP,color:'#d97706'},
+].map(({label,value,color})=>(
+<div key={label} className="card" style={{padding:16}}>
+<div style={{fontSize:12,color:'var(--text-2)',marginBottom:6}}>{label}</div>
+<div style={{fontSize:20,fontWeight:700,color}}>{value.toLocaleString()} Ks</div>
+</div>
+))}
+</div>
+<div className="card" style={{overflow:'hidden'}}>
+{payables.length===0?(
+<div style={{padding:32,textAlign:'center',color:'var(--text-3)'}}>No outstanding bills 🎉</div>
+):(
+<table style={{width:'100%',borderCollapse:'collapse'}}>
+<thead><tr>
+<th style={th}>Bill #</th><th style={th}>Title</th><th style={th}>Vendor</th>
+<th style={th}>Bill Date</th><th style={th}>Due Date</th>
+<th style={{...th,textAlign:'right'}}>Total</th>
+<th style={{...th,textAlign:'right'}}>Paid</th>
+<th style={{...th,textAlign:'right'}}>Balance</th>
+<th style={{...th,textAlign:'center'}}>Status</th>
+</tr></thead>
+<tbody>
+{payables.map((p,i)=>(
+<tr key={i} style={{background:p.isOverdue?'rgba(220,38,38,0.02)':'white'}}>
+<td style={{...td,fontFamily:'monospace',fontSize:11,color:'#d97706'}}>{p.billNumber}</td>
+<td style={{...td,fontWeight:500}}>{p.title}</td>
+<td style={{...td,color:'var(--text-2)',fontSize:12}}>{p.vendor}</td>
+<td style={{...td,color:'var(--text-3)',fontSize:12}}>{p.date}</td>
+<td style={{...td,fontSize:12,color:p.isOverdue?'#dc2626':'var(--text-3)',fontWeight:p.isOverdue?600:400}}>{p.dueDate}{p.isOverdue&&' ⚠️'}</td>
+<td style={tdR}>{p.total.toLocaleString()} Ks</td>
+<td style={{...tdR,color:'#16a34a'}}>{p.paid.toLocaleString()} Ks</td>
+<td style={{...tdR,fontWeight:700,color:p.isOverdue?'#dc2626':'#d97706'}}>{p.balance.toLocaleString()} Ks</td>
+<td style={{...td,textAlign:'center'}}><span style={{background:p.status==='partial'?'#e6f1fb':'#faeeda',color:p.status==='partial'?'#2563eb':'#d97706',padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:500,textTransform:'capitalize'}}>{p.status}</span></td>
+</tr>
+))}
+</tbody>
+<tfoot><tr style={{background:'#f8fafc'}}>
+<td colSpan={7} style={{...td,fontWeight:700}}>Total AP</td>
+<td style={{...tdR,fontWeight:700,color:'#dc2626'}}>{totalAP.toLocaleString()} Ks</td>
+<td/>
+</tr></tfoot>
+</table>
+)}
+</div>
 </div>
 </div>
 )
@@ -664,7 +761,7 @@ return(
 <div className="card" style={{overflow:'hidden'}}>
 <div style={{padding:'16px 20px',borderBottom:'0.5px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
 <div style={{fontWeight:600,fontSize:14,display:'flex',alignItems:'center',gap:8}}><BookOpen size={15}/>Journal Report</div>
-<button type="button" onClick={()=>exportCSV(journalEntries.map(e=>({Date:e.date,Type:e.type,Reference:e.ref,Description:e.description,Debit:e.debit,Credit:e.credit})),`Journal_${filterYear}.csv`)} className="btn btn-ghost" style={{fontSize:12}}><Download size={14}/>Export CSV</button>
+<button type="button" onClick={()=>exportCSV(journalEntries.map(e=>({Date:e.date,Type:e.type,Reference:e.ref,Description:e.description,Debit:e.debit,Credit:e.credit,Status:e.status})),`Journal_${filterYear}.csv`)} className="btn btn-ghost" style={{fontSize:12}}><Download size={14}/>Export CSV</button>
 </div>
 <table style={{width:'100%',borderCollapse:'collapse'}}>
 <thead><tr>
@@ -678,12 +775,12 @@ return(
 ):journalEntries.map((e,i)=>(
 <tr key={i}>
 <td style={{...td,color:'var(--text-3)',whiteSpace:'nowrap'}}>{e.date}</td>
-<td style={td}><span style={{background:e.type==='Invoice'?'rgba(79,110,247,0.1)':'rgba(220,38,38,0.1)',color:e.type==='Invoice'?'#4F6EF7':'#dc2626',padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:500}}>{e.type}</span></td>
+<td style={td}><span style={{background:e.type==='Invoice'?'rgba(79,110,247,0.1)':e.type==='Bill'?'rgba(217,119,6,0.1)':'rgba(220,38,38,0.1)',color:e.type==='Invoice'?'#4F6EF7':e.type==='Bill'?'#d97706':'#dc2626',padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:500}}>{e.type}</span></td>
 <td style={{...td,fontFamily:'monospace',fontSize:12}}>{e.ref}</td>
 <td style={td}>{e.description}</td>
 <td style={{...tdR,color:'#4F6EF7',fontWeight:500}}>{e.debit>0?e.debit.toLocaleString():'-'}</td>
 <td style={{...tdR,color:'#dc2626',fontWeight:500}}>{e.credit>0?e.credit.toLocaleString():'-'}</td>
-<td style={{...td,textAlign:'center'}}><span style={{background:e.status==='paid'?'#eaf3de':e.status==='pending'?'#faeeda':'#f1f5f9',color:e.status==='paid'?'#16a34a':e.status==='pending'?'#d97706':'#64748b',padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:500,textTransform:'capitalize'}}>{e.status}</span></td>
+<td style={{...td,textAlign:'center'}}><span style={{background:e.status==='paid'?'#eaf3de':e.status==='pending'?'#faeeda':e.status==='unpaid'?'#faeeda':'#f1f5f9',color:e.status==='paid'?'#16a34a':e.status==='pending'||e.status==='unpaid'?'#d97706':'#64748b',padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:500,textTransform:'capitalize'}}>{e.status}</span></td>
 </tr>
 ))}
 </tbody>
