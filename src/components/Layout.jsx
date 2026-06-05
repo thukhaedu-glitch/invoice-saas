@@ -12,7 +12,6 @@ import{useRole}from'../hooks/useRole'
 const NAV_MAIN=[
 {path:'/',label:'Dashboard',icon:LayoutDashboard},
 {path:'/invoices',label:'Invoices',icon:FileText},
-{path:'/',tab:'quotation',label:'Quotations',icon:FileCheck},
 {path:'/contracts',label:'Contracts',icon:ScrollText},
 {path:'/customers',label:'Customers',icon:Users},
 {path:'/expenses',label:'Expenses',icon:Wallet},
