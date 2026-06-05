@@ -6,8 +6,10 @@ import{Plus,Trash2,Edit,ScrollText,Search,Eye,Printer,Download,ArrowLeft,Link,Ma
 import{QRCodeSVG}from'qrcode.react'
 import html2canvas from'html2canvas'
 import jsPDF from'jspdf'
-import ReactQuill from'react-quill'
-import'react-quill/dist/quill.snow.css'
+import ReactQuill from'react-quill-new'
+import'react-quill-new/dist/quill.snow.css'
+
+
 import{useRole}from'../hooks/useRole'
 import{sendInvoiceReminder}from'../utils/emailService'
 
