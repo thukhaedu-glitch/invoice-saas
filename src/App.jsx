@@ -23,6 +23,7 @@ import QuotationDetail from'./pages/QuotationDetail'
 import EditQuotation from'./pages/EditQuotation'
 import ChartOfAccounts from'./pages/ChartOfAccounts'
 import BankAccounts from'./pages/BankAccounts'
+import Invoices from'./pages/Invoices'
 
 
 export default function App(){
@@ -55,7 +56,7 @@ return(
 <Route path="/chart-of-accounts" element={user?<ChartOfAccounts/>:<Navigate to="/login"/>}/>
 <Route path="*" element={<Navigate to="/"/>}/>
 <Route path="/bank-accounts" element={user?<BankAccounts/>:<Navigate to="/login"/>}/>
-
+<Route path="/invoices" element={user?<Invoices/>:<Navigate to="/login"/>}/>
 </Routes>
 </BrowserRouter>
 )
