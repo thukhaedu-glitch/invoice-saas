@@ -2,7 +2,7 @@ import{useState,useEffect}from'react'
 import{db,auth}from'../firebase'
 import{doc,getDoc,setDoc,getDocs,collection,query,where}from'firebase/firestore'
 import Layout from'../components/Layout'
-import{Save,Upload,Building2,CreditCard,FileText,Plus,Trash2,Wallet,ShieldCheck}from'lucide-react'
+import{Save,Upload,Building2,CreditCard,FileText,Plus,Trash2,Wallet,ShieldCheck,DollarSign}from'lucide-react'
 
 const Section=({title,icon:Icon,children})=>(
 <div className="card" style={{padding:24,marginBottom:16}}>
@@ -19,6 +19,12 @@ const Field=({label,children})=>(
 {children}
 </div>
 )
+
+const DEFAULT_CURRENCIES=[
+{code:'MMK',symbol:'Ks',name:'Myanmar Kyat'},
+{code:'USD',symbol:'$',name:'US Dollar'},
+{code:'THB',symbol:'฿',name:'Thai Baht'},
+]
 
 export default function Settings(){
 const[companyId,setCompanyId]=useState(null)
@@ -40,6 +46,8 @@ paymentTerms:'',
 paymentMethods:[],
 expenseCategories:['Office','Transport','Food','Utilities','Marketing','Salary','Equipment','Software','Other'],
 approvalThreshold:0,
+currencies:DEFAULT_CURRENCIES,
+baseCurrency:'MMK',
 })
 
 useEffect(()=>{
@@ -85,6 +93,14 @@ arr[i]=v
 setSettings(s=>({...s,expenseCategories:arr}))
 }
 const removeCategory=i=>setSettings(s=>({...s,expenseCategories:s.expenseCategories.filter((_,j)=>j!==i)}))
+
+const addCurrency=()=>setSettings(s=>({...s,currencies:[...(s.currencies||[]),{code:'',symbol:'',name:''}]}))
+const updateCurrency=(i,k,v)=>{
+const arr=[...(settings.currencies||[])]
+arr[i]={...arr[i],[k]:v}
+setSettings(s=>({...s,currencies:arr}))
+}
+const removeCurrency=i=>setSettings(s=>({...s,currencies:(s.currencies||[]).filter((_,j)=>j!==i)}))
 
 const templates=['classic','modern','minimal','elegant']
 const colors=['#4F6EF7','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#1a1d2e']
@@ -177,6 +193,51 @@ transition:'all 0.15s'
 <Field label="Address">
 <input className="form-input" value={settings.companyAddress} onChange={e=>setSettings(s=>({...s,companyAddress:e.target.value}))} placeholder="Company address..."/>
 </Field>
+</Section>
+
+{/* Currencies Section */}
+<Section title="Currencies" icon={DollarSign}>
+<div style={{marginBottom:12,fontSize:12,color:'var(--text-2)',padding:'10px 12px',background:'rgba(79,110,247,0.06)',borderRadius:8}}>
+Bank Accounts နဲ့ Invoices မှာ သုံးမည့် currencies တွေ ထည့်ပါ။
+</div>
+<Field label="Base Currency (Primary)">
+<select className="form-input" value={settings.baseCurrency||'MMK'} onChange={e=>setSettings(s=>({...s,baseCurrency:e.target.value}))}>
+{(settings.currencies||DEFAULT_CURRENCIES).filter(c=>c.code).map(c=>(
+<option key={c.code} value={c.code}>{c.code} — {c.name} ({c.symbol})</option>
+))}
+</select>
+</Field>
+<div style={{marginBottom:12}}>
+{(settings.currencies||DEFAULT_CURRENCIES).length>0&&(
+<table style={{width:'100%',borderCollapse:'collapse',fontSize:13,marginBottom:12}}>
+<thead>
+<tr style={{background:'#f8fafc'}}>
+<th style={{padding:'8px 10px',textAlign:'left',fontSize:11,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase'}}>Code</th>
+<th style={{padding:'8px 10px',textAlign:'left',fontSize:11,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase'}}>Symbol</th>
+<th style={{padding:'8px 10px',textAlign:'left',fontSize:11,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase'}}>Name</th>
+<th style={{width:40}}></th>
+</tr>
+</thead>
+<tbody>
+{(settings.currencies||DEFAULT_CURRENCIES).map((c,i)=>(
+<tr key={i} style={{borderBottom:'0.5px solid var(--border)'}}>
+<td style={{padding:'6px 8px'}}><input className="form-input" value={c.code} onChange={e=>updateCurrency(i,'code',e.target.value.toUpperCase())} placeholder="USD" style={{fontFamily:'monospace',fontWeight:600}}/></td>
+<td style={{padding:'6px 8px'}}><input className="form-input" value={c.symbol} onChange={e=>updateCurrency(i,'symbol',e.target.value)} placeholder="$" style={{maxWidth:80}}/></td>
+<td style={{padding:'6px 8px'}}><input className="form-input" value={c.name} onChange={e=>updateCurrency(i,'name',e.target.value)} placeholder="US Dollar"/></td>
+<td style={{padding:'6px 8px',textAlign:'center'}}>
+<button type="button" onClick={()=>removeCurrency(i)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)'}}>
+<Trash2 size={14}/>
+</button>
+</td>
+</tr>
+))}
+</tbody>
+</table>
+)}
+<button type="button" onClick={addCurrency} className="btn btn-ghost" style={{fontSize:13}}>
+<Plus size={14}/>Add Currency
+</button>
+</div>
 </Section>
 
 <Section title="Payment Methods" icon={CreditCard}>
