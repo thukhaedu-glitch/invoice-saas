@@ -13,20 +13,15 @@ const STATUS=['draft','active','expired','cancelled']
 const statusColor={draft:'#64748b',active:'#16a34a',expired:'#d97706',cancelled:'#dc2626'}
 const statusBg={draft:'#f1f5f9',active:'#eaf3de',expired:'#faeeda',cancelled:'#fcebeb'}
 
-const DEFAULT_CONTENT=`Service Agreement
-
-This agreement is made between the parties listed below.
-
-1. Services
-The service provider agrees to provide the following services:
-- Service item 1
-- Service item 2
-
-2. Payment Terms
-Payment shall be made as agreed upon by both parties.
-
-3. Terms & Conditions
-Both parties agree to the terms outlined in this contract.`
+const DEFAULT_CONTENT=`<h2>Service Agreement</h2>
+<p>This agreement is made between the parties listed below.</p>
+<h3>1. Services</h3>
+<p>The service provider agrees to provide the following services:</p>
+<ul><li>Service item 1</li><li>Service item 2</li></ul>
+<h3>2. Payment Terms</h3>
+<p>Payment shall be made as agreed upon by both parties.</p>
+<h3>3. Terms &amp; Conditions</h3>
+<p>Both parties agree to the terms outlined in this contract.</p>`
 
 export default function Contracts(){
 const[companyId,setCompanyId]=useState(null)
@@ -57,7 +52,14 @@ content:DEFAULT_CONTENT,
 partyASign:'',partyBSign:'',
 })
 const printRef=useRef()
+const editorRef=useRef()
 const{role}=useRole()
+
+useEffect(()=>{
+if(view==='editor'&&editorRef.current){
+editorRef.current.innerHTML=form.content||DEFAULT_CONTENT
+}
+},[view])
 
 useEffect(()=>{
 const load=async()=>{
@@ -90,6 +92,11 @@ setLoading(false)
 }
 load()
 },[])
+
+const execCmd=(cmd,val=null)=>{
+document.execCommand(cmd,false,val)
+editorRef.current?.focus()
+}
 
 const loadSignatureNames=async(cid,contract)=>{
 try{
@@ -165,11 +172,12 @@ setView('detail')
 
 const handleSave=async()=>{
 if(!form.title||!form.clientName){alert('Title and client required');return}
+const content=editorRef.current?.innerHTML||form.content
 setSaving(true)
 try{
 if(!selected){
 await addDoc(collection(db,'companies',companyId,'contracts'),{
-...form,value:Number(form.value),
+...form,content,value:Number(form.value),
 contractNumber:'CON-'+Date.now().toString().slice(-6),
 securityCode:'SEC-'+Math.random().toString(36).substring(2,8).toUpperCase(),
 createdAt:serverTimestamp(),
@@ -177,7 +185,7 @@ createdBy:auth.currentUser.uid,
 })
 }else{
 await updateDoc(doc(db,'companies',companyId,'contracts',selected.id),{
-...form,value:Number(form.value),updatedAt:serverTimestamp()
+...form,content,value:Number(form.value),updatedAt:serverTimestamp()
 })
 }
 setView('list')
@@ -281,6 +289,7 @@ if(view==='editor')return(
 {saving?'Saving...':'Save Contract'}
 </button>
 </div>
+
 <div className="card" style={{padding:20,marginBottom:16}}>
 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
 <div style={{gridColumn:'1/-1'}}>
@@ -317,14 +326,75 @@ if(view==='editor')return(
 </div>
 </div>
 
+{/* Rich Text Editor */}
 <div className="card" style={{padding:20,marginBottom:16}}>
 <div style={{fontSize:12,fontWeight:600,color:'var(--text-2)',marginBottom:12,textTransform:'uppercase',letterSpacing:'0.05em'}}>Contract Content</div>
-<textarea
-className="form-input"
-value={form.content}
-onChange={e=>setForm(f=>({...f,content:e.target.value}))}
-placeholder="Contract content..."
-style={{minHeight:400,fontSize:14,lineHeight:1.8,resize:'vertical',fontFamily:'inherit'}}
+
+{/* Toolbar */}
+<div style={{display:'flex',flexWrap:'wrap',gap:4,padding:'8px',background:'#f8fafc',borderRadius:'8px 8px 0 0',border:'0.5px solid var(--border)',borderBottom:'none',alignItems:'center'}}>
+{[
+{cmd:'bold',label:<strong>B</strong>},
+{cmd:'italic',label:<em>I</em>},
+{cmd:'underline',label:<u>U</u>},
+].map(({cmd,label})=>(
+<button key={cmd} type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>execCmd(cmd)}
+style={{padding:'4px 10px',borderRadius:6,border:'0.5px solid var(--border)',background:'white',cursor:'pointer',fontSize:13,minWidth:32}}>
+{label}
+</button>
+))}
+<div style={{width:1,background:'var(--border)',margin:'0 2px',alignSelf:'stretch'}}/>
+{[
+{cmd:'justifyLeft',label:'≡L'},
+{cmd:'justifyCenter',label:'≡C'},
+{cmd:'justifyRight',label:'≡R'},
+].map(({cmd,label})=>(
+<button key={cmd} type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>execCmd(cmd)}
+style={{padding:'4px 8px',borderRadius:6,border:'0.5px solid var(--border)',background:'white',cursor:'pointer',fontSize:12}}>
+{label}
+</button>
+))}
+<div style={{width:1,background:'var(--border)',margin:'0 2px',alignSelf:'stretch'}}/>
+<button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>execCmd('insertUnorderedList')}
+style={{padding:'4px 10px',borderRadius:6,border:'0.5px solid var(--border)',background:'white',cursor:'pointer',fontSize:12}}>
+- List
+</button>
+<button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>execCmd('insertOrderedList')}
+style={{padding:'4px 10px',borderRadius:6,border:'0.5px solid var(--border)',background:'white',cursor:'pointer',fontSize:12}}>
+1. List
+</button>
+<div style={{width:1,background:'var(--border)',margin:'0 2px',alignSelf:'stretch'}}/>
+<select onMouseDown={e=>e.stopPropagation()} onChange={e=>execCmd('fontSize',e.target.value)} defaultValue="3"
+style={{padding:'4px 8px',borderRadius:6,border:'0.5px solid var(--border)',background:'white',fontSize:12,cursor:'pointer'}}>
+{[1,2,3,4,5,6,7].map(n=><option key={n} value={n}>Size {n}</option>)}
+</select>
+<div style={{width:1,background:'var(--border)',margin:'0 2px',alignSelf:'stretch'}}/>
+{[
+{cmd:'formatBlock',val:'h2',label:'H2'},
+{cmd:'formatBlock',val:'h3',label:'H3'},
+{cmd:'formatBlock',val:'p',label:'P'},
+].map(({cmd,val,label})=>(
+<button key={val} type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>execCmd(cmd,val)}
+style={{padding:'4px 8px',borderRadius:6,border:'0.5px solid var(--border)',background:'white',cursor:'pointer',fontSize:12}}>
+{label}
+</button>
+))}
+</div>
+
+{/* Editor area */}
+<div
+ref={editorRef}
+contentEditable
+suppressContentEditableWarning
+onInput={e=>setForm(f=>({...f,content:e.currentTarget.innerHTML}))}
+style={{
+minHeight:400,padding:16,
+border:'0.5px solid var(--border)',
+borderRadius:'0 0 8px 8px',
+fontSize:14,lineHeight:1.8,
+outline:'none',
+background:'white',
+fontFamily:'inherit',
+}}
 />
 </div>
 
@@ -413,9 +483,7 @@ body{background:white!important;margin:0}
 <div><span style={{color:'#9aa0b4'}}>Status: </span><strong style={{color:statusColor[selected.status],textTransform:'capitalize'}}>{selected.status}</strong></div>
 </div>
 
-<div style={{marginBottom:40,lineHeight:1.8,fontSize:13,whiteSpace:'pre-wrap'}}>
-{selected.content}
-</div>
+<div style={{marginBottom:40,lineHeight:1.8,fontSize:13}} dangerouslySetInnerHTML={{__html:selected.content}}/>
 
 <div style={{marginTop:40,paddingTop:24,borderTop:'0.5px solid #e2e8f0'}}>
 <div style={{fontSize:11,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',marginBottom:16,letterSpacing:'0.05em'}}>Authorized Signatures</div>
