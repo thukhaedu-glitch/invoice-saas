@@ -1,18 +1,17 @@
 import{useState,useEffect}from'react'
-
 import{auth,db}from'../firebase'
 import{signOut}from'firebase/auth'
 import{useLocation,useNavigate,useSearchParams}from'react-router-dom'
-import{FileText,FileCheck,ScrollText,Users,Wallet,Briefcase,BarChart2,User,Settings,LogOut,Menu,X,BookOpen,Landmark}from'lucide-react'
+import{FileText,FileCheck,ScrollText,Users,Wallet,Briefcase,BarChart2,User,Settings,LogOut,Menu,X,BookOpen,Landmark,LayoutDashboard}from'lucide-react'
 import{getDocs,collection,query,where}from'firebase/firestore'
 import Notifications from'./Notifications'
 import{useNotifications}from'../hooks/useNotifications'
 import{useRecurring}from'../hooks/useRecurring'
 import{useRole}from'../hooks/useRole'
 
-
 const NAV_MAIN=[
-{path:'/',tab:'invoice',label:'Invoices',icon:FileText},
+{path:'/',label:'Dashboard',icon:LayoutDashboard},
+{path:'/invoices',label:'Invoices',icon:FileText},
 {path:'/',tab:'quotation',label:'Quotations',icon:FileCheck},
 {path:'/contracts',label:'Contracts',icon:ScrollText},
 {path:'/customers',label:'Customers',icon:Users},
@@ -20,12 +19,11 @@ const NAV_MAIN=[
 {path:'/projects',label:'Projects',icon:Briefcase},
 ]
 
-// Ankora X Logo SVG
 const AnkoraLogo=()=>(
 <svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="34" height="34" rx="10" fill="url(#grad)"/>
+<rect width="34" height="34" rx="10" fill="url(#ankoraGrad)"/>
 <defs>
-<linearGradient id="grad" x1="0" y1="0" x2="34" y2="34" gradientUnits="userSpaceOnUse">
+<linearGradient id="ankoraGrad" x1="0" y1="0" x2="34" y2="34" gradientUnits="userSpaceOnUse">
 <stop offset="0%" stopColor="#4F6EF7"/>
 <stop offset="100%" stopColor="#7C3AED"/>
 </linearGradient>
@@ -56,8 +54,11 @@ useNotifications(companyId)
 useRecurring(companyId)
 
 const isActive=(item)=>{
+if(item.path==='/'&&!item.tab){
+return location.pathname==='/'&&!searchParams.get('tab')
+}
 if(item.tab){
-const currentTab=searchParams.get('tab')||'invoice'
+const currentTab=searchParams.get('tab')||''
 return location.pathname==='/'&&currentTab===item.tab
 }
 return location.pathname===item.path
@@ -89,23 +90,24 @@ return(
 <item.icon size={17}/><span>{item.label}</span>
 </div>
 ))}
-{canReports&&(
-<div className={`nav-item${location.pathname==='/reports'?' active':''}`} onClick={()=>{navigate('/reports');setOpen(false)}}>
-<BarChart2 size={17}/><span>Reports</span>
-</div>
-)}
 
+{canReports&&(
+<>
 <div style={{fontSize:10,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.07em',padding:'12px 8px 4px',marginTop:8}}>Finance</div>
 <div className={`nav-item${location.pathname==='/chart-of-accounts'?' active':''}`} onClick={()=>{navigate('/chart-of-accounts');setOpen(false)}}>
 <BookOpen size={17}/><span>Chart of Accounts</span>
 </div>
-
 <div className={`nav-item${location.pathname==='/bank-accounts'?' active':''}`} onClick={()=>{navigate('/bank-accounts');setOpen(false)}}>
 <Landmark size={17}/><span>Bank Accounts</span>
 </div>
+<div className={`nav-item${location.pathname==='/reports'?' active':''}`} onClick={()=>{navigate('/reports');setOpen(false)}}>
+<BarChart2 size={17}/><span>Reports</span>
+</div>
+</>
+)}
 
 <div style={{fontSize:10,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.07em',padding:'12px 8px 4px',marginTop:8}}>Account</div>
-<div className="nav-item" onClick={()=>{navigate('/profile');setOpen(false)}}>
+<div className={`nav-item${location.pathname==='/profile'?' active':''}`} onClick={()=>{navigate('/profile');setOpen(false)}}>
 <User size={17}/><span>Profile</span>
 </div>
 {canSettings&&(
