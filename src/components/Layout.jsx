@@ -8,6 +8,10 @@ import Notifications from'./Notifications'
 import{useNotifications}from'../hooks/useNotifications'
 import{useRecurring}from'../hooks/useRecurring'
 import{useRole}from'../hooks/useRole'
+import{BookOpen,Landmark,BarChart2,Receipt}from'lucide-react'
+
+
+
 
 const NAV_MAIN=[
 {path:'/',label:'Dashboard',icon:LayoutDashboard},
@@ -98,6 +102,9 @@ return(
 </div>
 <div className={`nav-item${location.pathname==='/bank-accounts'?' active':''}`} onClick={()=>{navigate('/bank-accounts');setOpen(false)}}>
 <Landmark size={17}/><span>Bank Accounts</span>
+</div>
+<div className={`nav-item${location.pathname==='/bills'?' active':''}`} onClick={()=>{navigate('/bills');setOpen(false)}}>
+<Receipt size={17}/><span>Bills & Payable</span>
 </div>
 <div className={`nav-item${location.pathname==='/reports'?' active':''}`} onClick={()=>{navigate('/reports');setOpen(false)}}>
 <BarChart2 size={17}/><span>Reports</span>
