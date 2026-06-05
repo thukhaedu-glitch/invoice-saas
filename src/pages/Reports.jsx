@@ -16,7 +16,6 @@ const TABS=[
 ]
 
 const BAR_H=160
-
 const monthNamesFull=['January','February','March','April','May','June','July','August','September','October','November','December']
 const monthNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const months=['01','02','03','04','05','06','07','08','09','10','11','12']
@@ -26,27 +25,30 @@ const[companyId,setCompanyId]=useState(null)
 const[invoices,setInvoices]=useState([])
 const[expenses,setExpenses]=useState([])
 const[projects,setProjects]=useState([])
+const[bankAccounts,setBankAccounts]=useState([])
 const[loading,setLoading]=useState(true)
 const[activeTab,setActiveTab]=useState('pnl')
 const[filterYear,setFilterYear]=useState(new Date().getFullYear().toString())
 const[filterMonth,setFilterMonth]=useState('')
 const[expandedMonth,setExpandedMonth]=useState(null)
 const[expandedTaxMonth,setExpandedTaxMonth]=useState(null)
-  
+
 useEffect(()=>{
 const load=async()=>{
 const snap=await getDocs(query(collection(db,'companies'),where(`members.${auth.currentUser.uid}`,'!=',null)))
 if(!snap.empty){
 const cid=snap.docs[0].id
 setCompanyId(cid)
-const[invSnap,expSnap,prjSnap]=await Promise.all([
+const[invSnap,expSnap,prjSnap,baSnap]=await Promise.all([
 getDocs(collection(db,'companies',cid,'invoices')),
 getDocs(collection(db,'companies',cid,'expenses')),
 getDocs(collection(db,'companies',cid,'projects')),
+getDocs(collection(db,'companies',cid,'bankAccounts')),
 ])
 setInvoices(invSnap.docs.map(d=>({id:d.id,...d.data()})))
 setExpenses(expSnap.docs.map(d=>({id:d.id,...d.data()})))
 setProjects(prjSnap.docs.map(d=>({id:d.id,...d.data()})))
+setBankAccounts(baSnap.docs.map(d=>({id:d.id,...d.data()})).filter(a=>a.isActive!==false))
 }
 setLoading(false)
 }
@@ -144,7 +146,6 @@ if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:
 return(
 <Layout title="Reports">
 
-{/* Filters */}
 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20,flexWrap:'wrap',gap:12}}>
 <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
 <select className="form-input" style={{width:'auto'}} value={filterYear} onChange={e=>{setFilterYear(e.target.value);setFilterMonth('');setExpandedMonth(null)}}>
@@ -168,7 +169,6 @@ color:activeTab===t.id?'#fff':'var(--text-2)',
 </div>
 </div>
 
-{/* Summary Cards */}
 <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginBottom:20}}>
 {[
 {label:'Total Revenue',value:totalRevenue,icon:TrendingUp,color:'#4F6EF7',bg:'rgba(79,110,247,0.10)'},
@@ -231,23 +231,17 @@ return(
 <tr key={m.month+'_detail'}>
 <td colSpan={5} style={{padding:0,background:'#f8fafc'}}>
 <div style={{padding:16}}>
-
-{/* Invoices Detail */}
 {mInvs.length>0&&(
 <div style={{marginBottom:12}}>
-<div style={{fontSize:11,fontWeight:600,color:'#4F6EF7',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:8}}>
-Invoices ({mInvs.length})
-</div>
+<div style={{fontSize:11,fontWeight:600,color:'#4F6EF7',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:8}}>Invoices ({mInvs.length})</div>
 <table style={{width:'100%',borderCollapse:'collapse',background:'white',borderRadius:8,overflow:'hidden'}}>
-<thead>
-<tr style={{background:'rgba(79,110,247,0.06)'}}>
+<thead><tr style={{background:'rgba(79,110,247,0.06)'}}>
 <th style={{...th,padding:'7px 12px'}}>Number</th>
 <th style={{...th,padding:'7px 12px'}}>Client</th>
 <th style={{...th,padding:'7px 12px',textAlign:'right'}}>Amount</th>
 <th style={{...th,padding:'7px 12px',textAlign:'right'}}>Paid</th>
 <th style={{...th,padding:'7px 12px',textAlign:'center'}}>Status</th>
-</tr>
-</thead>
+</tr></thead>
 <tbody>
 {mInvs.map(i=>(
 <tr key={i.id}>
@@ -264,29 +258,21 @@ Invoices ({mInvs.length})
 </table>
 </div>
 )}
-
-{/* Expenses Detail */}
 {mExps.length>0&&(
 <div>
-<div style={{fontSize:11,fontWeight:600,color:'#dc2626',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:8}}>
-Expenses ({mExps.length})
-</div>
+<div style={{fontSize:11,fontWeight:600,color:'#dc2626',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:8}}>Expenses ({mExps.length})</div>
 <table style={{width:'100%',borderCollapse:'collapse',background:'white',borderRadius:8,overflow:'hidden'}}>
-<thead>
-<tr style={{background:'rgba(220,38,38,0.04)'}}>
+<thead><tr style={{background:'rgba(220,38,38,0.04)'}}>
 <th style={{...th,padding:'7px 12px'}}>Title</th>
 <th style={{...th,padding:'7px 12px'}}>Category</th>
 <th style={{...th,padding:'7px 12px'}}>Date</th>
 <th style={{...th,padding:'7px 12px',textAlign:'right'}}>Amount</th>
-</tr>
-</thead>
+</tr></thead>
 <tbody>
 {mExps.map(e=>(
 <tr key={e.id}>
 <td style={{...td,padding:'7px 12px',fontWeight:500}}>{e.title}</td>
-<td style={{...td,padding:'7px 12px'}}>
-<span style={{background:'var(--primary-light)',color:'var(--primary)',padding:'2px 8px',borderRadius:20,fontSize:10}}>{e.category}</span>
-</td>
+<td style={{...td,padding:'7px 12px'}}><span style={{background:'var(--primary-light)',color:'var(--primary)',padding:'2px 8px',borderRadius:20,fontSize:10}}>{e.category}</span></td>
 <td style={{...td,padding:'7px 12px',color:'var(--text-3)',fontSize:12}}>{e.date}</td>
 <td style={{...td,padding:'7px 12px',textAlign:'right',color:'#dc2626',fontWeight:500}}>{Number(e.amount||0).toLocaleString()} Ks</td>
 </tr>
@@ -295,10 +281,7 @@ Expenses ({mExps.length})
 </table>
 </div>
 )}
-
-{mInvs.length===0&&mExps.length===0&&(
-<div style={{textAlign:'center',color:'var(--text-3)',fontSize:13,padding:20}}>No detailed records</div>
-)}
+{mInvs.length===0&&mExps.length===0&&<div style={{textAlign:'center',color:'var(--text-3)',fontSize:13,padding:20}}>No detailed records</div>}
 </div>
 </td>
 </tr>
@@ -313,9 +296,7 @@ Expenses ({mExps.length})
 <td style={{...tdR,fontWeight:700,color:'#4F6EF7'}}>{pnlMonths.reduce((s,m)=>s+m.revenue,0).toLocaleString()}</td>
 <td style={{...tdR,fontWeight:700,color:'#dc2626'}}>{pnlMonths.reduce((s,m)=>s+m.expense,0).toLocaleString()}</td>
 <td style={{...tdR,fontWeight:700,color:netProfit>=0?'#16a34a':'#dc2626'}}>{netProfit.toLocaleString()}</td>
-<td style={{...tdR,fontWeight:700,color:netProfit>=0?'#16a34a':'#dc2626'}}>
-{totalRevenue>0?`${Math.round(netProfit/totalRevenue*100)}%`:'-'}
-</td>
+<td style={{...tdR,fontWeight:700,color:netProfit>=0?'#16a34a':'#dc2626'}}>{totalRevenue>0?`${Math.round(netProfit/totalRevenue*100)}%`:'-'}</td>
 </tr></tfoot>
 )}
 </table>
@@ -334,29 +315,23 @@ Expenses ({mExps.length})
 {pnlMonths.map(m=>(
 <div key={m.month} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4,minWidth:48,flex:1}}>
 <div style={{display:'flex',alignItems:'flex-end',gap:3,height:BAR_H}}>
-<div title={`Revenue: ${m.revenue.toLocaleString()} Ks`} style={{width:18,borderRadius:'4px 4px 0 0',background:'#4F6EF7',height:`${Math.round(m.revenue/chartMax*BAR_H)}px`,minHeight:m.revenue>0?4:0,cursor:'pointer',transition:'height 0.3s'}}/>
-<div title={`Expense: ${m.expense.toLocaleString()} Ks`} style={{width:18,borderRadius:'4px 4px 0 0',background:'#ef4444',height:`${Math.round(m.expense/chartMax*BAR_H)}px`,minHeight:m.expense>0?4:0,cursor:'pointer',transition:'height 0.3s'}}/>
+<div title={`Revenue: ${m.revenue.toLocaleString()} Ks`} style={{width:18,borderRadius:'4px 4px 0 0',background:'#4F6EF7',height:`${Math.round(m.revenue/chartMax*BAR_H)}px`,minHeight:m.revenue>0?4:0,transition:'height 0.3s'}}/>
+<div title={`Expense: ${m.expense.toLocaleString()} Ks`} style={{width:18,borderRadius:'4px 4px 0 0',background:'#ef4444',height:`${Math.round(m.expense/chartMax*BAR_H)}px`,minHeight:m.expense>0?4:0,transition:'height 0.3s'}}/>
 </div>
 <div style={{fontSize:10,color:'var(--text-3)',textAlign:'center'}}>{m.shortMonth}</div>
 </div>
 ))}
 </div>
 <div style={{display:'flex',gap:20,marginTop:8,justifyContent:'center'}}>
-<div style={{display:'flex',alignItems:'center',gap:6,fontSize:12,color:'var(--text-2)'}}>
-<div style={{width:12,height:12,borderRadius:3,background:'#4F6EF7'}}/>Revenue
-</div>
-<div style={{display:'flex',alignItems:'center',gap:6,fontSize:12,color:'var(--text-2)'}}>
-<div style={{width:12,height:12,borderRadius:3,background:'#ef4444'}}/>Expenses
-</div>
+<div style={{display:'flex',alignItems:'center',gap:6,fontSize:12,color:'var(--text-2)'}}><div style={{width:12,height:12,borderRadius:3,background:'#4F6EF7'}}/>Revenue</div>
+<div style={{display:'flex',alignItems:'center',gap:6,fontSize:12,color:'var(--text-2)'}}><div style={{width:12,height:12,borderRadius:3,background:'#ef4444'}}/>Expenses</div>
 </div>
 <div style={{marginTop:24,padding:16,background:'#f8fafc',borderRadius:12}}>
 <div style={{fontSize:12,fontWeight:600,color:'var(--text-2)',marginBottom:12,textTransform:'uppercase',letterSpacing:'0.05em'}}>Monthly Profit</div>
 <div style={{display:'flex',gap:8,overflowX:'auto'}}>
 {pnlMonths.map(m=>(
 <div key={m.month} style={{textAlign:'center',minWidth:48,flex:1}}>
-<div style={{fontSize:11,fontWeight:600,color:m.profit>=0?'#16a34a':'#dc2626'}}>
-{m.profit>=0?'+':''}{(m.profit/1000).toFixed(0)}K
-</div>
+<div style={{fontSize:11,fontWeight:600,color:m.profit>=0?'#16a34a':'#dc2626'}}>{m.profit>=0?'+':''}{(m.profit/1000).toFixed(0)}K</div>
 <div style={{fontSize:10,color:'var(--text-3)',marginTop:2}}>{m.shortMonth}</div>
 </div>
 ))}
@@ -373,9 +348,7 @@ return(
 <div key={cat} style={{padding:12,background:'white',borderRadius:10,border:'0.5px solid var(--border)'}}>
 <div style={{fontSize:11,color:'var(--text-2)',marginBottom:4}}>{cat}</div>
 <div style={{fontSize:14,fontWeight:600,color:'#dc2626'}}>{total.toLocaleString()} Ks</div>
-<div style={{height:4,background:'#f1f5f9',borderRadius:2,marginTop:6}}>
-<div style={{height:4,background:'#dc2626',borderRadius:2,width:`${pct}%`}}/>
-</div>
+<div style={{height:4,background:'#f1f5f9',borderRadius:2,marginTop:6}}><div style={{height:4,background:'#dc2626',borderRadius:2,width:`${pct}%`}}/></div>
 <div style={{fontSize:10,color:'var(--text-3)',marginTop:4}}>{pct}%</div>
 </div>
 )
@@ -388,14 +361,12 @@ return(
 </div>
 )}
 
-{/* Project P&L Tab */}
+{/* Project Tab */}
 {activeTab==='project'&&(
 <div className="card" style={{overflow:'hidden'}}>
 <div style={{padding:'16px 20px',borderBottom:'0.5px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
 <div style={{fontWeight:600,fontSize:14,display:'flex',alignItems:'center',gap:8}}><Briefcase size={15}/>Project P&L</div>
-<button type="button" onClick={()=>exportCSV(projectPnL.map(p=>({Project:p.name,Client:p.clientName||'-',Revenue:p.revenue,Expenses:p.expense,'Net Profit':p.profit})),`ProjectPnL.csv`)} className="btn btn-ghost" style={{fontSize:12}}>
-<Download size={14}/>Export CSV
-</button>
+<button type="button" onClick={()=>exportCSV(projectPnL.map(p=>({Project:p.name,Client:p.clientName||'-',Revenue:p.revenue,Expenses:p.expense,'Net Profit':p.profit})),`ProjectPnL.csv`)} className="btn btn-ghost" style={{fontSize:12}}><Download size={14}/>Export CSV</button>
 </div>
 {projectPnL.length===0?(
 <div style={{padding:40,textAlign:'center',color:'var(--text-3)'}}>No projects with linked invoices or expenses</div>
@@ -414,9 +385,7 @@ return(
 <tr key={p.id}>
 <td style={{...td,fontWeight:500}}>{p.name}</td>
 <td style={{...td,color:'var(--text-2)'}}>{p.clientName||'-'}</td>
-<td style={td}>
-<span style={{background:p.status==='active'?'rgba(22,163,74,0.1)':p.status==='completed'?'rgba(79,110,247,0.1)':'#f1f5f9',color:p.status==='active'?'#16a34a':p.status==='completed'?'#4F6EF7':'#64748b',padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:500,textTransform:'capitalize'}}>{p.status}</span>
-</td>
+<td style={td}><span style={{background:p.status==='active'?'rgba(22,163,74,0.1)':p.status==='completed'?'rgba(79,110,247,0.1)':'#f1f5f9',color:p.status==='active'?'#16a34a':p.status==='completed'?'#4F6EF7':'#64748b',padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:500,textTransform:'capitalize'}}>{p.status}</span></td>
 <td style={{...td,textAlign:'center',fontSize:12}}>{p.invoiceCount}</td>
 <td style={{...tdR,color:'#4F6EF7',fontWeight:500}}>{p.revenue.toLocaleString()}</td>
 <td style={{...tdR,color:'#dc2626',fontWeight:500}}>{p.expense.toLocaleString()}</td>
@@ -442,28 +411,15 @@ return(
 <div>
 <div className="card" style={{padding:20,marginBottom:16}}>
 <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12}}>
-<div>
-<div style={{fontSize:12,color:'var(--text-2)',marginBottom:4}}>Total Tax Collected</div>
-<div style={{fontSize:22,fontWeight:700,color:'#8b5cf6'}}>{Math.round(totalTax).toLocaleString()} Ks</div>
-</div>
-<div>
-<div style={{fontSize:12,color:'var(--text-2)',marginBottom:4}}>Taxable Invoices</div>
-<div style={{fontSize:22,fontWeight:700,color:'#4F6EF7'}}>{filteredInvoices.filter(i=>Number(i.taxRate||0)>0).length}</div>
-</div>
-<div>
-<div style={{fontSize:12,color:'var(--text-2)',marginBottom:4}}>Tax Rate Applied</div>
-<div style={{fontSize:22,fontWeight:700,color:'#d97706'}}>
-{[...new Set(filteredInvoices.filter(i=>Number(i.taxRate||0)>0).map(i=>i.taxRate+'%'))].join(', ')||'-'}
-</div>
-</div>
+<div><div style={{fontSize:12,color:'var(--text-2)',marginBottom:4}}>Total Tax Collected</div><div style={{fontSize:22,fontWeight:700,color:'#8b5cf6'}}>{Math.round(totalTax).toLocaleString()} Ks</div></div>
+<div><div style={{fontSize:12,color:'var(--text-2)',marginBottom:4}}>Taxable Invoices</div><div style={{fontSize:22,fontWeight:700,color:'#4F6EF7'}}>{filteredInvoices.filter(i=>Number(i.taxRate||0)>0).length}</div></div>
+<div><div style={{fontSize:12,color:'var(--text-2)',marginBottom:4}}>Tax Rate Applied</div><div style={{fontSize:22,fontWeight:700,color:'#d97706'}}>{[...new Set(filteredInvoices.filter(i=>Number(i.taxRate||0)>0).map(i=>i.taxRate+'%'))].join(', ')||'-'}</div></div>
 </div>
 </div>
 <div className="card" style={{overflow:'hidden'}}>
 <div style={{padding:'16px 20px',borderBottom:'0.5px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
 <div style={{fontWeight:600,fontSize:14,display:'flex',alignItems:'center',gap:8}}><Receipt size={15}/>Tax Summary by Month</div>
-<button type="button" onClick={()=>exportCSV(taxByMonth.map(t=>({Month:t.month,'Taxable Invoices':t.taxableInvoices,'Taxable Amount':t.totalAmount,'Tax Collected':Math.round(t.tax)})),`Tax_${filterYear}.csv`)} className="btn btn-ghost" style={{fontSize:12}}>
-<Download size={14}/>Export CSV
-</button>
+<button type="button" onClick={()=>exportCSV(taxByMonth.map(t=>({Month:t.month,'Taxable Invoices':t.taxableInvoices,'Taxable Amount':t.totalAmount,'Tax Collected':Math.round(t.tax)})),`Tax_${filterYear}.csv`)} className="btn btn-ghost" style={{fontSize:12}}><Download size={14}/>Export CSV</button>
 </div>
 {taxByMonth.length===0?(
 <div style={{padding:40,textAlign:'center',color:'var(--text-3)'}}>No taxable invoices found</div>
@@ -483,12 +439,7 @@ const mInvs=invoices.filter(i=>getInvDate(i)?.startsWith(`${filterYear}-${mNum}`
 return(
 <>
 <tr key={t.month} onClick={()=>setExpandedTaxMonth(isExpanded?null:t.month)} style={{cursor:'pointer',background:isExpanded?'rgba(139,92,246,0.04)':'white'}}>
-<td style={{...td,fontWeight:500}}>
-<span style={{display:'inline-flex',alignItems:'center',gap:6}}>
-<span style={{fontSize:10,color:'#8b5cf6'}}>{isExpanded?'▼':'▶'}</span>
-{t.month}
-</span>
-</td>
+<td style={{...td,fontWeight:500}}><span style={{display:'inline-flex',alignItems:'center',gap:6}}><span style={{fontSize:10,color:'#8b5cf6'}}>{isExpanded?'▼':'▶'}</span>{t.month}</span></td>
 <td style={{...td,textAlign:'center'}}>{t.taxableInvoices}</td>
 <td style={{...tdR,color:'#4F6EF7'}}>{t.totalAmount.toLocaleString()}</td>
 <td style={{...tdR,fontWeight:600,color:'#8b5cf6'}}>{Math.round(t.tax).toLocaleString()}</td>
@@ -497,12 +448,9 @@ return(
 <tr key={t.month+'_detail'}>
 <td colSpan={4} style={{padding:0,background:'#f8fafc'}}>
 <div style={{padding:16}}>
-<div style={{fontSize:11,fontWeight:600,color:'#8b5cf6',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:8}}>
-Taxable Invoices — {t.month}
-</div>
+<div style={{fontSize:11,fontWeight:600,color:'#8b5cf6',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:8}}>Taxable Invoices — {t.month}</div>
 <table style={{width:'100%',borderCollapse:'collapse',background:'white',borderRadius:8,overflow:'hidden'}}>
-<thead>
-<tr style={{background:'rgba(139,92,246,0.06)'}}>
+<thead><tr style={{background:'rgba(139,92,246,0.06)'}}>
 <th style={{...th,padding:'7px 12px'}}>Invoice</th>
 <th style={{...th,padding:'7px 12px'}}>Client</th>
 <th style={{...th,padding:'7px 12px'}}>Date</th>
@@ -510,8 +458,7 @@ Taxable Invoices — {t.month}
 <th style={{...th,padding:'7px 12px',textAlign:'center'}}>Tax Rate</th>
 <th style={{...th,padding:'7px 12px',textAlign:'right'}}>Tax Amount</th>
 <th style={{...th,padding:'7px 12px',textAlign:'center'}}>Status</th>
-</tr>
-</thead>
+</tr></thead>
 <tbody>
 {mInvs.map(i=>(
 <tr key={i.id}>
@@ -519,27 +466,19 @@ Taxable Invoices — {t.month}
 <td style={{...td,padding:'7px 12px',fontWeight:500}}>{i.clientName}</td>
 <td style={{...td,padding:'7px 12px',color:'var(--text-3)',fontSize:12}}>{getInvDate(i)||'-'}</td>
 <td style={{...td,padding:'7px 12px',textAlign:'right'}}>{Number(i.totalAmount||0).toLocaleString()} Ks</td>
-<td style={{...td,padding:'7px 12px',textAlign:'center'}}>
-<span style={{background:'rgba(139,92,246,0.1)',color:'#8b5cf6',padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:600}}>{i.taxRate}%</span>
-</td>
-<td style={{...td,padding:'7px 12px',textAlign:'right',fontWeight:600,color:'#8b5cf6'}}>
-{Math.round(Number(i.totalAmount||0)*(Number(i.taxRate||0)/100)).toLocaleString()} Ks
-</td>
-<td style={{...td,padding:'7px 12px',textAlign:'center'}}>
-<span style={{background:i.status==='paid'?'#eaf3de':'#faeeda',color:i.status==='paid'?'#16a34a':'#d97706',padding:'2px 8px',borderRadius:20,fontSize:10,fontWeight:500,textTransform:'capitalize'}}>{i.status}</span>
-</td>
+<td style={{...td,padding:'7px 12px',textAlign:'center'}}><span style={{background:'rgba(139,92,246,0.1)',color:'#8b5cf6',padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:600}}>{i.taxRate}%</span></td>
+<td style={{...td,padding:'7px 12px',textAlign:'right',fontWeight:600,color:'#8b5cf6'}}>{Math.round(Number(i.totalAmount||0)*(Number(i.taxRate||0)/100)).toLocaleString()} Ks</td>
+<td style={{...td,padding:'7px 12px',textAlign:'center'}}><span style={{background:i.status==='paid'?'#eaf3de':'#faeeda',color:i.status==='paid'?'#16a34a':'#d97706',padding:'2px 8px',borderRadius:20,fontSize:10,fontWeight:500,textTransform:'capitalize'}}>{i.status}</span></td>
 </tr>
 ))}
 </tbody>
-<tfoot>
-<tr style={{background:'rgba(139,92,246,0.04)'}}>
+<tfoot><tr style={{background:'rgba(139,92,246,0.04)'}}>
 <td colSpan={3} style={{...td,padding:'7px 12px',fontWeight:700}}>Total</td>
 <td style={{...td,padding:'7px 12px',textAlign:'right',fontWeight:700,color:'#4F6EF7'}}>{mInvs.reduce((s,i)=>s+Number(i.totalAmount||0),0).toLocaleString()} Ks</td>
 <td/>
 <td style={{...td,padding:'7px 12px',textAlign:'right',fontWeight:700,color:'#8b5cf6'}}>{Math.round(mInvs.reduce((s,i)=>s+Number(i.totalAmount||0)*(Number(i.taxRate||0)/100),0)).toLocaleString()} Ks</td>
 <td/>
-</tr>
-</tfoot>
+</tr></tfoot>
 </table>
 </div>
 </td>
@@ -561,14 +500,171 @@ Taxable Invoices — {t.month}
 </div>
 )}
 
+{/* Balance Sheet Tab */}
+{activeTab==='balance'&&(()=>{
+const totalBankBalance=bankAccounts.reduce((s,a)=>s+Number(a.currentBalance||a.openingBalance||0),0)
+const totalReceivable=invoices.filter(i=>i.status==='pending'||i.status==='partial').reduce((s,i)=>s+Number(i.remainingAmount||i.totalAmount||0),0)
+const totalPayable=expenses.reduce((s,e)=>s+Number(e.amount||0),0)
+const totalAssets=totalBankBalance+totalReceivable
+const equity=totalAssets-totalPayable
+return(
+<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
+<div className="card" style={{overflow:'hidden'}}>
+<div style={{padding:'16px 20px',borderBottom:'0.5px solid var(--border)',background:'rgba(79,110,247,0.04)'}}>
+<div style={{fontWeight:700,fontSize:14,color:'#4F6EF7'}}>Assets</div>
+</div>
+<div style={{padding:20}}>
+<div style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'0.5px solid #f1f5f9'}}>
+<span style={{fontSize:13,color:'var(--text-2)'}}>Cash & Bank Accounts</span>
+<span style={{fontSize:13,fontWeight:600,color:'#16a34a'}}>{totalBankBalance.toLocaleString()} Ks</span>
+</div>
+{bankAccounts.map(a=>(
+<div key={a.id} style={{display:'flex',justifyContent:'space-between',padding:'6px 0 6px 16px',borderBottom:'0.5px solid #f8fafc'}}>
+<span style={{fontSize:12,color:'var(--text-3)'}}>↳ {a.name}{a.bankName?` (${a.bankName})`:''}</span>
+<span style={{fontSize:12,color:'#16a34a'}}>{Number(a.currentBalance||a.openingBalance||0).toLocaleString()} {a.currency||'MMK'}</span>
+</div>
+))}
+<div style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'0.5px solid #f1f5f9',marginTop:4}}>
+<span style={{fontSize:13,color:'var(--text-2)'}}>Accounts Receivable (Pending Invoices)</span>
+<span style={{fontSize:13,fontWeight:600,color:'#d97706'}}>{totalReceivable.toLocaleString()} Ks</span>
+</div>
+<div style={{display:'flex',justifyContent:'space-between',padding:'12px 0',marginTop:4}}>
+<span style={{fontSize:14,fontWeight:700}}>Total Assets</span>
+<span style={{fontSize:14,fontWeight:700,color:'#4F6EF7'}}>{totalAssets.toLocaleString()} Ks</span>
+</div>
+</div>
+</div>
+
+<div style={{display:'flex',flexDirection:'column',gap:16}}>
+<div className="card" style={{overflow:'hidden'}}>
+<div style={{padding:'16px 20px',borderBottom:'0.5px solid var(--border)',background:'rgba(220,38,38,0.04)'}}>
+<div style={{fontWeight:700,fontSize:14,color:'#dc2626'}}>Liabilities</div>
+</div>
+<div style={{padding:20}}>
+<div style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'0.5px solid #f1f5f9'}}>
+<span style={{fontSize:13,color:'var(--text-2)'}}>Accounts Payable (Expenses)</span>
+<span style={{fontSize:13,fontWeight:600,color:'#dc2626'}}>{totalPayable.toLocaleString()} Ks</span>
+</div>
+<div style={{display:'flex',justifyContent:'space-between',padding:'12px 0',marginTop:4}}>
+<span style={{fontSize:14,fontWeight:700}}>Total Liabilities</span>
+<span style={{fontSize:14,fontWeight:700,color:'#dc2626'}}>{totalPayable.toLocaleString()} Ks</span>
+</div>
+</div>
+</div>
+<div className="card" style={{overflow:'hidden'}}>
+<div style={{padding:'16px 20px',borderBottom:'0.5px solid var(--border)',background:'rgba(22,163,74,0.04)'}}>
+<div style={{fontWeight:700,fontSize:14,color:'#16a34a'}}>Equity</div>
+</div>
+<div style={{padding:20}}>
+<div style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'0.5px solid #f1f5f9'}}>
+<span style={{fontSize:13,color:'var(--text-2)'}}>Net Profit (Assets - Liabilities)</span>
+<span style={{fontSize:13,fontWeight:600,color:equity>=0?'#16a34a':'#dc2626'}}>{equity.toLocaleString()} Ks</span>
+</div>
+<div style={{display:'flex',justifyContent:'space-between',padding:'12px 0',marginTop:4}}>
+<span style={{fontSize:14,fontWeight:700}}>Total Equity</span>
+<span style={{fontSize:14,fontWeight:700,color:equity>=0?'#16a34a':'#dc2626'}}>{equity.toLocaleString()} Ks</span>
+</div>
+</div>
+</div>
+</div>
+
+<div className="card" style={{gridColumn:'1/-1',padding:20,background:'rgba(79,110,247,0.04)',border:'0.5px solid rgba(79,110,247,0.2)'}}>
+<div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:16,flexWrap:'wrap'}}>
+<div style={{textAlign:'center'}}>
+<div style={{fontSize:11,color:'var(--text-3)',marginBottom:4}}>Total Assets</div>
+<div style={{fontSize:20,fontWeight:700,color:'#4F6EF7'}}>{totalAssets.toLocaleString()} Ks</div>
+</div>
+<div style={{fontSize:20,color:'var(--text-3)'}}>=</div>
+<div style={{textAlign:'center'}}>
+<div style={{fontSize:11,color:'var(--text-3)',marginBottom:4}}>Total Liabilities</div>
+<div style={{fontSize:20,fontWeight:700,color:'#dc2626'}}>{totalPayable.toLocaleString()} Ks</div>
+</div>
+<div style={{fontSize:20,color:'var(--text-3)'}}>+</div>
+<div style={{textAlign:'center'}}>
+<div style={{fontSize:11,color:'var(--text-3)',marginBottom:4}}>Equity</div>
+<div style={{fontSize:20,fontWeight:700,color:equity>=0?'#16a34a':'#dc2626'}}>{equity.toLocaleString()} Ks</div>
+</div>
+</div>
+</div>
+</div>
+)
+})()}
+
+{/* AP/AR Tab */}
+{activeTab==='ap'&&(()=>{
+const receivables=invoices.filter(i=>i.status==='pending'||i.status==='partial'||i.status==='overdue').map(i=>({
+client:i.clientName,invoiceNumber:i.invoiceNumber,
+date:getInvDate(i)||'-',
+total:Number(i.totalAmount||0),
+paid:Number(i.paidAmount||0),
+balance:Number(i.remainingAmount||i.totalAmount||0),
+status:i.status,
+daysOld:i.createdAt?.seconds?Math.floor((Date.now()-i.createdAt.seconds*1000)/(1000*60*60*24)):0,
+})).sort((a,b)=>b.balance-a.balance)
+const totalAR=receivables.reduce((s,r)=>s+r.balance,0)
+const overdueAR=receivables.filter(r=>r.daysOld>30).reduce((s,r)=>s+r.balance,0)
+return(
+<div>
+<div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginBottom:16}}>
+{[
+{label:'Total Receivable',value:totalAR,color:'#4F6EF7'},
+{label:'Overdue (>30 days)',value:overdueAR,color:'#dc2626'},
+{label:'Current',value:totalAR-overdueAR,color:'#16a34a'},
+].map(({label,value,color})=>(
+<div key={label} className="card" style={{padding:16}}>
+<div style={{fontSize:12,color:'var(--text-2)',marginBottom:6}}>{label}</div>
+<div style={{fontSize:20,fontWeight:700,color}}>{value.toLocaleString()} Ks</div>
+</div>
+))}
+</div>
+<div className="card" style={{overflow:'hidden'}}>
+<div style={{padding:'16px 20px',borderBottom:'0.5px solid var(--border)',background:'rgba(79,110,247,0.04)'}}>
+<div style={{fontWeight:700,fontSize:14,color:'#4F6EF7'}}>Accounts Receivable — Outstanding Invoices</div>
+</div>
+{receivables.length===0?(
+<div style={{padding:40,textAlign:'center',color:'var(--text-3)'}}>All invoices paid 🎉</div>
+):(
+<table style={{width:'100%',borderCollapse:'collapse'}}>
+<thead><tr>
+<th style={th}>Invoice</th><th style={th}>Client</th><th style={th}>Date</th>
+<th style={{...th,textAlign:'right'}}>Total</th>
+<th style={{...th,textAlign:'right'}}>Paid</th>
+<th style={{...th,textAlign:'right'}}>Balance</th>
+<th style={{...th,textAlign:'center'}}>Days</th>
+<th style={{...th,textAlign:'center'}}>Status</th>
+</tr></thead>
+<tbody>
+{receivables.map((r,i)=>(
+<tr key={i} style={{background:r.daysOld>30?'rgba(220,38,38,0.02)':'white'}}>
+<td style={{...td,fontFamily:'monospace',fontSize:11,color:'var(--primary)'}}>{r.invoiceNumber}</td>
+<td style={{...td,fontWeight:500}}>{r.client}</td>
+<td style={{...td,color:'var(--text-3)',fontSize:12}}>{r.date}</td>
+<td style={tdR}>{r.total.toLocaleString()} Ks</td>
+<td style={{...tdR,color:'#16a34a'}}>{r.paid.toLocaleString()} Ks</td>
+<td style={{...tdR,fontWeight:700,color:r.daysOld>30?'#dc2626':'#d97706'}}>{r.balance.toLocaleString()} Ks</td>
+<td style={{...td,textAlign:'center'}}><span style={{background:r.daysOld>30?'rgba(220,38,38,0.1)':'rgba(217,119,6,0.1)',color:r.daysOld>30?'#dc2626':'#d97706',padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:500}}>{r.daysOld}d</span></td>
+<td style={{...td,textAlign:'center'}}><span style={{background:r.status==='overdue'?'#fcebeb':r.status==='partial'?'#e6f1fb':'#faeeda',color:r.status==='overdue'?'#dc2626':r.status==='partial'?'#2563eb':'#d97706',padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:500,textTransform:'capitalize'}}>{r.status}</span></td>
+</tr>
+))}
+</tbody>
+<tfoot><tr style={{background:'#f8fafc'}}>
+<td colSpan={5} style={{...td,fontWeight:700}}>Total Outstanding</td>
+<td style={{...tdR,fontWeight:700,color:'#dc2626'}}>{totalAR.toLocaleString()} Ks</td>
+<td colSpan={2}/>
+</tr></tfoot>
+</table>
+)}
+</div>
+</div>
+)
+})()}
+
 {/* Journal Tab */}
 {activeTab==='journal'&&(
 <div className="card" style={{overflow:'hidden'}}>
 <div style={{padding:'16px 20px',borderBottom:'0.5px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
 <div style={{fontWeight:600,fontSize:14,display:'flex',alignItems:'center',gap:8}}><BookOpen size={15}/>Journal Report</div>
-<button type="button" onClick={()=>exportCSV(journalEntries.map(e=>({Date:e.date,Type:e.type,Reference:e.ref,Description:e.description,Debit:e.debit,Credit:e.credit})),`Journal_${filterYear}.csv`)} className="btn btn-ghost" style={{fontSize:12}}>
-<Download size={14}/>Export CSV
-</button>
+<button type="button" onClick={()=>exportCSV(journalEntries.map(e=>({Date:e.date,Type:e.type,Reference:e.ref,Description:e.description,Debit:e.debit,Credit:e.credit})),`Journal_${filterYear}.csv`)} className="btn btn-ghost" style={{fontSize:12}}><Download size={14}/>Export CSV</button>
 </div>
 <table style={{width:'100%',borderCollapse:'collapse'}}>
 <thead><tr>
@@ -608,9 +704,7 @@ Taxable Invoices — {t.month}
 <div className="card" style={{overflow:'hidden'}}>
 <div style={{padding:'16px 20px',borderBottom:'0.5px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
 <div style={{fontWeight:600,fontSize:14,display:'flex',alignItems:'center',gap:8}}><TrendingUp size={15}/>Account Ledger</div>
-<button type="button" onClick={()=>exportCSV(ledgerByClient.map(c=>({Client:c.name,Invoices:c.invoices,'Total Billed':c.totalBilled,'Total Paid':c.totalPaid,'Balance Due':c.balance})),`Ledger_${filterYear}.csv`)} className="btn btn-ghost" style={{fontSize:12}}>
-<Download size={14}/>Export CSV
-</button>
+<button type="button" onClick={()=>exportCSV(ledgerByClient.map(c=>({Client:c.name,Invoices:c.invoices,'Total Billed':c.totalBilled,'Total Paid':c.totalPaid,'Balance Due':c.balance})),`Ledger_${filterYear}.csv`)} className="btn btn-ghost" style={{fontSize:12}}><Download size={14}/>Export CSV</button>
 </div>
 <table style={{width:'100%',borderCollapse:'collapse'}}>
 <thead><tr>
@@ -644,172 +738,7 @@ Taxable Invoices — {t.month}
 </table>
 </div>
 )}
-{/* Balance Sheet Tab */}
-{activeTab==='balance'&&(()=>{
-const totalReceivable=invoices.filter(i=>i.status==='pending'||i.status==='partial').reduce((s,i)=>s+Number(i.remainingAmount||i.totalAmount||0),0)
-const totalCashReceived=invoices.filter(i=>i.status==='paid'||i.status==='partial').reduce((s,i)=>s+Number(i.paidAmount||i.totalAmount||0),0)
-const totalPayable=expenses.reduce((s,e)=>s+Number(e.amount||0),0)
-const equity=totalCashReceived-totalPayable
-const totalAssets=totalReceivable+totalCashReceived
-const totalLiabilities=totalPayable
-return(
-<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
-{/* Assets */}
-<div className="card" style={{overflow:'hidden'}}>
-<div style={{padding:'16px 20px',borderBottom:'0.5px solid var(--border)',background:'rgba(79,110,247,0.04)'}}>
-<div style={{fontWeight:700,fontSize:14,color:'#4F6EF7'}}>Assets</div>
-</div>
-<div style={{padding:20}}>
-{[
-{label:'Cash & Revenue Received',value:totalCashReceived,color:'#16a34a'},
-{label:'Accounts Receivable (Pending)',value:totalReceivable,color:'#d97706'},
-].map(({label,value,color})=>(
-<div key={label} style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'0.5px solid #f1f5f9'}}>
-<span style={{fontSize:13,color:'var(--text-2)'}}>{label}</span>
-<span style={{fontSize:13,fontWeight:600,color}}>{value.toLocaleString()} Ks</span>
-</div>
-))}
-<div style={{display:'flex',justifyContent:'space-between',padding:'12px 0',marginTop:4}}>
-<span style={{fontSize:14,fontWeight:700}}>Total Assets</span>
-<span style={{fontSize:14,fontWeight:700,color:'#4F6EF7'}}>{totalAssets.toLocaleString()} Ks</span>
-</div>
-</div>
-</div>
 
-{/* Liabilities + Equity */}
-<div style={{display:'flex',flexDirection:'column',gap:16}}>
-<div className="card" style={{overflow:'hidden'}}>
-<div style={{padding:'16px 20px',borderBottom:'0.5px solid var(--border)',background:'rgba(220,38,38,0.04)'}}>
-<div style={{fontWeight:700,fontSize:14,color:'#dc2626'}}>Liabilities</div>
-</div>
-<div style={{padding:20}}>
-<div style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'0.5px solid #f1f5f9'}}>
-<span style={{fontSize:13,color:'var(--text-2)'}}>Accounts Payable (Expenses)</span>
-<span style={{fontSize:13,fontWeight:600,color:'#dc2626'}}>{totalPayable.toLocaleString()} Ks</span>
-</div>
-<div style={{display:'flex',justifyContent:'space-between',padding:'12px 0',marginTop:4}}>
-<span style={{fontSize:14,fontWeight:700}}>Total Liabilities</span>
-<span style={{fontSize:14,fontWeight:700,color:'#dc2626'}}>{totalLiabilities.toLocaleString()} Ks</span>
-</div>
-</div>
-</div>
-
-<div className="card" style={{overflow:'hidden'}}>
-<div style={{padding:'16px 20px',borderBottom:'0.5px solid var(--border)',background:'rgba(22,163,74,0.04)'}}>
-<div style={{fontWeight:700,fontSize:14,color:'#16a34a'}}>Equity</div>
-</div>
-<div style={{padding:20}}>
-<div style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'0.5px solid #f1f5f9'}}>
-<span style={{fontSize:13,color:'var(--text-2)'}}>Net Profit (Revenue - Expenses)</span>
-<span style={{fontSize:13,fontWeight:600,color:equity>=0?'#16a34a':'#dc2626'}}>{equity.toLocaleString()} Ks</span>
-</div>
-<div style={{display:'flex',justifyContent:'space-between',padding:'12px 0',marginTop:4}}>
-<span style={{fontSize:14,fontWeight:700}}>Total Equity</span>
-<span style={{fontSize:14,fontWeight:700,color:equity>=0?'#16a34a':'#dc2626'}}>{equity.toLocaleString()} Ks</span>
-</div>
-</div>
-</div>
-</div>
-
-{/* Accounting Equation */}
-<div className="card" style={{gridColumn:'1/-1',padding:20,background:'rgba(79,110,247,0.04)',border:'0.5px solid rgba(79,110,247,0.2)'}}>
-<div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:16,flexWrap:'wrap'}}>
-<div style={{textAlign:'center'}}>
-<div style={{fontSize:11,color:'var(--text-3)',marginBottom:4}}>Total Assets</div>
-<div style={{fontSize:20,fontWeight:700,color:'#4F6EF7'}}>{totalAssets.toLocaleString()} Ks</div>
-</div>
-<div style={{fontSize:20,color:'var(--text-3)'}}>=</div>
-<div style={{textAlign:'center'}}>
-<div style={{fontSize:11,color:'var(--text-3)',marginBottom:4}}>Total Liabilities</div>
-<div style={{fontSize:20,fontWeight:700,color:'#dc2626'}}>{totalLiabilities.toLocaleString()} Ks</div>
-</div>
-<div style={{fontSize:20,color:'var(--text-3)'}}>+</div>
-<div style={{textAlign:'center'}}>
-<div style={{fontSize:11,color:'var(--text-3)',marginBottom:4}}>Equity</div>
-<div style={{fontSize:20,fontWeight:700,color:equity>=0?'#16a34a':'#dc2626'}}>{equity.toLocaleString()} Ks</div>
-</div>
-</div>
-</div>
-</div>
-)
-})()}
-
-{/* AP/AR Tab */}
-{activeTab==='ap'&&(()=>{
-const receivables=invoices.filter(i=>i.status==='pending'||i.status==='partial'||i.status==='overdue').map(i=>({
-client:i.clientName,
-invoiceNumber:i.invoiceNumber,
-date:getInvDate(i)||'-',
-total:Number(i.totalAmount||0),
-paid:Number(i.paidAmount||0),
-balance:Number(i.remainingAmount||i.totalAmount||0),
-status:i.status,
-daysOld:i.createdAt?.seconds?Math.floor((Date.now()-i.createdAt.seconds*1000)/(1000*60*60*24)):0,
-})).sort((a,b)=>b.balance-a.balance)
-
-const totalAR=receivables.reduce((s,r)=>s+r.balance,0)
-const overdueAR=receivables.filter(r=>r.daysOld>30).reduce((s,r)=>s+r.balance,0)
-
-return(
-<div>
-<div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginBottom:16}}>
-{[
-{label:'Total Receivable',value:totalAR,color:'#4F6EF7'},
-{label:'Overdue (>30 days)',value:overdueAR,color:'#dc2626'},
-{label:'Current',value:totalAR-overdueAR,color:'#16a34a'},
-].map(({label,value,color})=>(
-<div key={label} className="card" style={{padding:16}}>
-<div style={{fontSize:12,color:'var(--text-2)',marginBottom:6}}>{label}</div>
-<div style={{fontSize:20,fontWeight:700,color}}>{value.toLocaleString()} Ks</div>
-</div>
-))}
-</div>
-
-<div className="card" style={{overflow:'hidden',marginBottom:16}}>
-<div style={{padding:'16px 20px',borderBottom:'0.5px solid var(--border)',background:'rgba(79,110,247,0.04)'}}>
-<div style={{fontWeight:700,fontSize:14,color:'#4F6EF7'}}>Accounts Receivable — Outstanding Invoices</div>
-</div>
-{receivables.length===0?(
-<div style={{padding:40,textAlign:'center',color:'var(--text-3)'}}>All invoices paid 🎉</div>
-):(
-<table style={{width:'100%',borderCollapse:'collapse'}}>
-<thead><tr>
-<th style={th}>Invoice</th><th style={th}>Client</th><th style={th}>Date</th>
-<th style={{...th,textAlign:'right'}}>Total</th>
-<th style={{...th,textAlign:'right'}}>Paid</th>
-<th style={{...th,textAlign:'right'}}>Balance</th>
-<th style={{...th,textAlign:'center'}}>Days</th>
-<th style={{...th,textAlign:'center'}}>Status</th>
-</tr></thead>
-<tbody>
-{receivables.map((r,i)=>(
-<tr key={i} style={{background:r.daysOld>30?'rgba(220,38,38,0.02)':'white'}}>
-<td style={{...td,fontFamily:'monospace',fontSize:11,color:'var(--primary)'}}>{r.invoiceNumber}</td>
-<td style={{...td,fontWeight:500}}>{r.client}</td>
-<td style={{...td,color:'var(--text-3)',fontSize:12}}>{r.date}</td>
-<td style={{...tdR}}>{r.total.toLocaleString()} Ks</td>
-<td style={{...tdR,color:'#16a34a'}}>{r.paid.toLocaleString()} Ks</td>
-<td style={{...tdR,fontWeight:700,color:r.daysOld>30?'#dc2626':'#d97706'}}>{r.balance.toLocaleString()} Ks</td>
-<td style={{...td,textAlign:'center'}}>
-<span style={{background:r.daysOld>30?'rgba(220,38,38,0.1)':'rgba(217,119,6,0.1)',color:r.daysOld>30?'#dc2626':'#d97706',padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:500}}>{r.daysOld}d</span>
-</td>
-<td style={{...td,textAlign:'center'}}>
-<span style={{background:r.status==='overdue'?'#fcebeb':r.status==='partial'?'#e6f1fb':'#faeeda',color:r.status==='overdue'?'#dc2626':r.status==='partial'?'#2563eb':'#d97706',padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:500,textTransform:'capitalize'}}>{r.status}</span>
-</td>
-</tr>
-))}
-</tbody>
-<tfoot><tr style={{background:'#f8fafc'}}>
-<td colSpan={5} style={{...td,fontWeight:700}}>Total Outstanding</td>
-<td style={{...tdR,fontWeight:700,color:'#dc2626'}}>{totalAR.toLocaleString()} Ks</td>
-<td colSpan={2}/>
-</tr></tfoot>
-</table>
-)}
-</div>
-</div>
-)
-})()}
 </Layout>
 )
 }
