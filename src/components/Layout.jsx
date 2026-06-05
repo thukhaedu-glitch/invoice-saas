@@ -1,11 +1,13 @@
-import{useState,useEffect,useMemo}from'react'
-import{db,auth}from'../firebase'
-import{collection,onSnapshot,getDocs,query,where,getDoc,doc}from'firebase/firestore'
-import Layout from'../components/Layout'
-import{FileText,CheckCircle,Clock,AlertCircle,TrendingUp,TrendingDown,Wallet,Users,Briefcase,ArrowRight}from'lucide-react'
-import{useNavigate}from'react-router-dom'
+import{useState,useEffect}from'react'
+import{auth,db}from'../firebase'
+import{signOut}from'firebase/auth'
+import{useLocation,useNavigate,useSearchParams}from'react-router-dom'
+import{FileText,FileCheck,ScrollText,Users,Wallet,Briefcase,BarChart2,User,Settings,LogOut,Menu,X,BookOpen,Landmark,LayoutDashboard}from'lucide-react'
+import{getDocs,collection,query,where}from'firebase/firestore'
+import Notifications from'./Notifications'
+import{useNotifications}from'../hooks/useNotifications'
+import{useRecurring}from'../hooks/useRecurring'
 import{useRole}from'../hooks/useRole'
-
 
 const NAV_MAIN=[
 {path:'/',label:'Dashboard',icon:LayoutDashboard},
@@ -19,9 +21,9 @@ const NAV_MAIN=[
 
 const AnkoraLogo=()=>(
 <svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="34" height="34" rx="10" fill="url(#grad)"/>
+<rect width="34" height="34" rx="10" fill="url(#ankoraGrad)"/>
 <defs>
-<linearGradient id="grad" x1="0" y1="0" x2="34" y2="34" gradientUnits="userSpaceOnUse">
+<linearGradient id="ankoraGrad" x1="0" y1="0" x2="34" y2="34" gradientUnits="userSpaceOnUse">
 <stop offset="0%" stopColor="#4F6EF7"/>
 <stop offset="100%" stopColor="#7C3AED"/>
 </linearGradient>
@@ -88,12 +90,9 @@ return(
 <item.icon size={17}/><span>{item.label}</span>
 </div>
 ))}
-
-{canReports&&(
-<div style={{fontSize:10,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.07em',padding:'12px 8px 4px',marginTop:8}}>Finance</div>
-)}
 {canReports&&(
 <>
+<div style={{fontSize:10,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.07em',padding:'12px 8px 4px',marginTop:8}}>Finance</div>
 <div className={`nav-item${location.pathname==='/chart-of-accounts'?' active':''}`} onClick={()=>{navigate('/chart-of-accounts');setOpen(false)}}>
 <BookOpen size={17}/><span>Chart of Accounts</span>
 </div>
@@ -105,7 +104,6 @@ return(
 </div>
 </>
 )}
-
 <div style={{fontSize:10,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.07em',padding:'12px 8px 4px',marginTop:8}}>Account</div>
 <div className={`nav-item${location.pathname==='/profile'?' active':''}`} onClick={()=>{navigate('/profile');setOpen(false)}}>
 <User size={17}/><span>Profile</span>
