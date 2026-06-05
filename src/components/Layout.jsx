@@ -2,12 +2,13 @@ import{useState,useEffect}from'react'
 import{auth,db}from'../firebase'
 import{signOut}from'firebase/auth'
 import{useLocation,useNavigate,useSearchParams}from'react-router-dom'
-import{FileText,FileCheck,ScrollText,Users,Wallet,Briefcase,BarChart2,User,Settings,LogOut,Menu,X,BookOpen}from'lucide-react'
+import{FileText,FileCheck,ScrollText,Users,Wallet,Briefcase,BarChart2,User,Settings,LogOut,Menu,X,BookOpen,Landmark}from'lucide-react'
 import{getDocs,collection,query,where}from'firebase/firestore'
 import Notifications from'./Notifications'
 import{useNotifications}from'../hooks/useNotifications'
 import{useRecurring}from'../hooks/useRecurring'
 import{useRole}from'../hooks/useRole'
+
 
 const NAV_MAIN=[
 {path:'/',tab:'invoice',label:'Invoices',icon:FileText},
@@ -96,6 +97,10 @@ return(
 <div style={{fontSize:10,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.07em',padding:'12px 8px 4px',marginTop:8}}>Finance</div>
 <div className={`nav-item${location.pathname==='/chart-of-accounts'?' active':''}`} onClick={()=>{navigate('/chart-of-accounts');setOpen(false)}}>
 <BookOpen size={17}/><span>Chart of Accounts</span>
+</div>
+
+<div className={`nav-item${location.pathname==='/bank-accounts'?' active':''}`} onClick={()=>{navigate('/bank-accounts');setOpen(false)}}>
+<Landmark size={17}/><span>Bank Accounts</span>
 </div>
 
 <div style={{fontSize:10,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.07em',padding:'12px 8px 4px',marginTop:8}}>Account</div>
