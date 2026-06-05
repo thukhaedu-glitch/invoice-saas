@@ -1,15 +1,11 @@
 import{useState,useEffect}from'react'
 import{db,auth}from'../firebase'
-import{collection,getDocs,query,where,doc,addDoc,updateDoc,deleteDoc,serverTimestamp,onSnapshot}from'firebase/firestore'
+import{collection,getDocs,query,where,doc,addDoc,updateDoc,deleteDoc,serverTimestamp,onSnapshot,getDoc}from'firebase/firestore'
 import Layout from'../components/Layout'
 import{Plus,Edit,Trash2,Landmark,ArrowUpRight,ArrowDownLeft,Eye,ArrowLeft}from'lucide-react'
 
-const ACCOUNT_TYPES=['Cash','Bank','Mobile Banking','Pay','Other']
-const[currencies,setCurrencies]=useState(['MMK','USD','THB'])
-
-// useEffect load မှာ settings ကနေ currencies ယူပါ
-const currList=(sSnap.data().currencies||[]).filter(c=>c.code).map(c=>c.code)
-if(currList.length>0)setCurrencies(currList)
+const DEFAULT_CURRENCIES=['MMK','USD','THB']
+const ACCOUNT_TYPES=['Cash','Bank','Mobile Banking','Other']
 
 export default function BankAccounts(){
 const[companyId,setCompanyId]=useState(null)
@@ -19,8 +15,9 @@ const[loading,setLoading]=useState(true)
 const[view,setView]=useState('list')
 const[selected,setSelected]=useState(null)
 const[saving,setSaving]=useState(false)
+const[currencies,setCurrencies]=useState(DEFAULT_CURRENCIES)
 const[form,setForm]=useState({
-name:'',type:'Bank',currency:'Ks',
+name:'',type:'Bank',currency:'MMK',
 openingBalance:0,accountNumber:'',
 bankName:'',description:'',isActive:true,
 })
@@ -37,6 +34,12 @@ const snap=await getDocs(query(collection(db,'companies'),where(`members.${auth.
 if(!snap.empty){
 const cid=snap.docs[0].id
 setCompanyId(cid)
+// Load currencies from settings
+const sSnap=await getDoc(doc(db,'companies',cid,'_config','invoiceSettings'))
+if(sSnap.exists()&&sSnap.data().currencies){
+const currList=sSnap.data().currencies.filter(c=>c.code).map(c=>c.code)
+if(currList.length>0)setCurrencies(currList)
+}
 onSnapshot(collection(db,'companies',cid,'bankAccounts'),snap=>{
 setAccounts(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0)))
 setLoading(false)
@@ -52,14 +55,14 @@ setTransactions(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>new Date(b
 }
 
 const openNew=()=>{
-setForm({name:'',type:'Bank',currency:'Ks',openingBalance:0,accountNumber:'',bankName:'',description:'',isActive:true})
+setForm({name:'',type:'Bank',currency:currencies[0]||'MMK',openingBalance:0,accountNumber:'',bankName:'',description:'',isActive:true})
 setSelected(null)
 setView('form')
 }
 
 const openEdit=(a)=>{
 setForm({
-name:a.name,type:a.type,currency:a.currency||'Ks',
+name:a.name,type:a.type,currency:a.currency||currencies[0]||'MMK',
 openingBalance:a.openingBalance||0,accountNumber:a.accountNumber||'',
 bankName:a.bankName||'',description:a.description||'',isActive:a.isActive!==false,
 })
@@ -160,7 +163,7 @@ if(view==='form')return(
 <div>
 <label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Currency</label>
 <select className="form-input" value={form.currency} onChange={e=>setForm(f=>({...f,currency:e.target.value}))}>
-{CURRENCIES.map(c=><option key={c} value={c}>{c}</option>)}
+{currencies.map(c=><option key={c} value={c}>{c}</option>)}
 </select>
 </div>
 </div>
@@ -175,7 +178,7 @@ if(view==='form')return(
 </div>
 </div>
 <div>
-<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Opening Balance (Ks)</label>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Opening Balance</label>
 <input className="form-input" type="number" value={form.openingBalance} onChange={e=>setForm(f=>({...f,openingBalance:e.target.value}))} style={{textAlign:'right'}}/>
 </div>
 <div>
@@ -202,10 +205,9 @@ if(view==='detail'&&selected)return(
 <button type="button" onClick={()=>setShowTxForm(v=>!v)} className="btn btn-primary"><Plus size={15}/>Add Transaction</button>
 </div>
 
-{/* Balance Card */}
 <div className="card" style={{padding:24,marginBottom:16,background:'linear-gradient(135deg,#4F6EF7,#7C3AED)',color:'white'}}>
 <div style={{fontSize:12,opacity:0.8,marginBottom:8}}>Current Balance</div>
-<div style={{fontSize:32,fontWeight:700}}>{Number(selected.currentBalance||selected.openingBalance||0).toLocaleString()} {selected.currency||'Ks'}</div>
+<div style={{fontSize:32,fontWeight:700}}>{Number(selected.currentBalance||selected.openingBalance||0).toLocaleString()} {selected.currency||'MMK'}</div>
 <div style={{display:'flex',gap:24,marginTop:16,fontSize:12,opacity:0.8}}>
 {selected.bankName&&<span>🏦 {selected.bankName}</span>}
 {selected.accountNumber&&<span>#{selected.accountNumber}</span>}
@@ -213,7 +215,6 @@ if(view==='detail'&&selected)return(
 </div>
 </div>
 
-{/* Add Transaction Form */}
 {showTxForm&&(
 <div className="card" style={{padding:20,marginBottom:16}}>
 <div style={{fontSize:13,fontWeight:600,marginBottom:12}}>New Transaction</div>
@@ -253,7 +254,6 @@ if(view==='detail'&&selected)return(
 </div>
 )}
 
-{/* Transactions */}
 <div className="card" style={{overflow:'hidden'}}>
 <div style={{padding:'16px 20px',borderBottom:'0.5px solid var(--border)',fontWeight:600,fontSize:14}}>
 Transaction History
@@ -287,7 +287,7 @@ Transaction History
 }
 </td>
 <td style={{textAlign:'right',fontWeight:600,color:t.type==='in'?'#16a34a':'#dc2626'}}>
-{t.type==='in'?'+':'-'}{Number(t.amount).toLocaleString()} Ks
+{t.type==='in'?'+':'-'}{Number(t.amount).toLocaleString()} {selected.currency||'MMK'}
 </td>
 </tr>
 ))}
@@ -301,10 +301,9 @@ Transaction History
 
 return(
 <Layout title="Bank Accounts">
-{/* Total Balance */}
 <div className="card" style={{padding:24,marginBottom:20,background:'linear-gradient(135deg,#1a1d2e,#2d3260)',color:'white'}}>
 <div style={{fontSize:12,opacity:0.7,marginBottom:8,textTransform:'uppercase',letterSpacing:'0.05em'}}>Total Balance — All Accounts</div>
-<div style={{fontSize:36,fontWeight:700}}>{totalBalance.toLocaleString()} Ks</div>
+<div style={{fontSize:36,fontWeight:700}}>{totalBalance.toLocaleString()} MMK</div>
 <div style={{fontSize:12,opacity:0.6,marginTop:8}}>{accounts.filter(a=>a.isActive!==false).length} active accounts</div>
 </div>
 
@@ -335,9 +334,9 @@ return(
 </div>
 {a.accountNumber&&<div style={{fontSize:11,color:'var(--text-3)',fontFamily:'monospace',marginBottom:12}}>#{a.accountNumber}</div>}
 <div style={{fontSize:24,fontWeight:700,color:'var(--text-1)',marginBottom:4}}>
-{Number(a.currentBalance||a.openingBalance||0).toLocaleString()} <span style={{fontSize:13,color:'var(--text-3)'}}>{a.currency||'Ks'}</span>
+{Number(a.currentBalance||a.openingBalance||0).toLocaleString()} <span style={{fontSize:13,color:'var(--text-3)'}}>{a.currency||'MMK'}</span>
 </div>
-<div style={{fontSize:11,color:'var(--text-3)'}}>Opening: {Number(a.openingBalance||0).toLocaleString()} Ks</div>
+<div style={{fontSize:11,color:'var(--text-3)'}}>Opening: {Number(a.openingBalance||0).toLocaleString()} {a.currency||'MMK'}</div>
 <div style={{display:'flex',gap:8,marginTop:16}} onClick={e=>e.stopPropagation()}>
 <button type="button" onClick={()=>openDetail(a)} style={{flex:1,padding:'6px 0',borderRadius:8,border:'0.5px solid var(--border)',background:'none',cursor:'pointer',fontSize:12,color:'var(--primary)',display:'flex',alignItems:'center',justifyContent:'center',gap:4}}>
 <Eye size={12}/>View
