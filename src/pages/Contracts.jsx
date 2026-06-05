@@ -58,19 +58,14 @@ const{role}=useRole()
 
 useEffect(()=>{
 if(view==='editor'){
-setEditorKey(k=>k+1)
-}
-},[view])
-
-useEffect(()=>{
-if(view==='editor'&&editorRef.current){
-setTimeout(()=>{
+const timer=setTimeout(()=>{
 if(editorRef.current){
 editorRef.current.innerHTML=form.content||DEFAULT_CONTENT
 }
-},50)
+},100)
+return()=>clearTimeout(timer)
 }
-},[editorKey])
+},[view])
 
 useEffect(()=>{
 const load=async()=>{
