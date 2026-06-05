@@ -2,14 +2,10 @@ import{useState,useEffect,useRef}from'react'
 import{db,auth}from'../firebase'
 import{collection,onSnapshot,getDocs,query,where,doc,deleteDoc,addDoc,updateDoc,serverTimestamp,getDoc}from'firebase/firestore'
 import Layout from'../components/Layout'
-import{Plus,Trash2,Edit,ScrollText,Search,Eye,Printer,Download,ArrowLeft,Link,Mail,ThumbsUp,ThumbsDown,XCircle}from'lucide-react'
+import{Plus,Trash2,Edit,ScrollText,Search,Eye,Printer,Download,ArrowLeft,Link,Mail,ThumbsUp,XCircle}from'lucide-react'
 import{QRCodeSVG}from'qrcode.react'
 import html2canvas from'html2canvas'
 import jsPDF from'jspdf'
-import ReactQuill from'react-quill-new'
-import'react-quill-new/dist/quill.snow.css'
-
-
 import{useRole}from'../hooks/useRole'
 import{sendInvoiceReminder}from'../utils/emailService'
 
@@ -17,15 +13,20 @@ const STATUS=['draft','active','expired','cancelled']
 const statusColor={draft:'#64748b',active:'#16a34a',expired:'#d97706',cancelled:'#dc2626'}
 const statusBg={draft:'#f1f5f9',active:'#eaf3de',expired:'#faeeda',cancelled:'#fcebeb'}
 
-const DEFAULT_CONTENT=`<h2>Service Agreement</h2>
-<p>This agreement is made between the parties listed below.</p>
-<h3>1. Services</h3>
-<p>The service provider agrees to provide the following services:</p>
-<ul><li>Service item 1</li><li>Service item 2</li></ul>
-<h3>2. Payment Terms</h3>
-<p>Payment shall be made as agreed upon by both parties.</p>
-<h3>3. Terms & Conditions</h3>
-<p>Both parties agree to the terms outlined in this contract.</p>`
+const DEFAULT_CONTENT=`Service Agreement
+
+This agreement is made between the parties listed below.
+
+1. Services
+The service provider agrees to provide the following services:
+- Service item 1
+- Service item 2
+
+2. Payment Terms
+Payment shall be made as agreed upon by both parties.
+
+3. Terms & Conditions
+Both parties agree to the terms outlined in this contract.`
 
 export default function Contracts(){
 const[companyId,setCompanyId]=useState(null)
@@ -265,19 +266,6 @@ c.clientName?.toLowerCase().includes(search.toLowerCase())||
 c.contractNumber?.toLowerCase().includes(search.toLowerCase())
 )
 
-const modules={
-toolbar:[
-[{header:[1,2,3,false]}],
-['bold','italic','underline','strike'],
-[{align:[]}],
-[{list:'ordered'},{list:'bullet'}],
-[{indent:'-1'},{indent:'+1'}],
-['blockquote'],
-[{color:[]},{background:[]}],
-['clean']
-]
-}
-
 const hasAdminApproval=!!selected?.approvedBy||!!selected?.adminApprovedBy
 const hasOwnerApproval=!!selected?.ownerApprovedBy
 
@@ -328,10 +316,18 @@ if(view==='editor')return(
 </div>
 </div>
 </div>
+
 <div className="card" style={{padding:20,marginBottom:16}}>
 <div style={{fontSize:12,fontWeight:600,color:'var(--text-2)',marginBottom:12,textTransform:'uppercase',letterSpacing:'0.05em'}}>Contract Content</div>
-<ReactQuill theme="snow" value={form.content} onChange={v=>setForm(f=>({...f,content:v}))} modules={modules} style={{minHeight:400,fontSize:14}}/>
+<textarea
+className="form-input"
+value={form.content}
+onChange={e=>setForm(f=>({...f,content:e.target.value}))}
+placeholder="Contract content..."
+style={{minHeight:400,fontSize:14,lineHeight:1.8,resize:'vertical',fontFamily:'inherit'}}
+/>
 </div>
+
 <div className="card" style={{padding:20,marginBottom:16}}>
 <div style={{fontSize:12,fontWeight:600,color:'var(--text-2)',marginBottom:12,textTransform:'uppercase',letterSpacing:'0.05em'}}>Signatures</div>
 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
@@ -358,7 +354,6 @@ body{background:white!important;margin:0}
 .print-area{box-shadow:none!important;border-radius:0!important;max-width:100%!important;margin:0!important}
 @page{size:A4;margin:15mm}
 }
-.ql-editor{padding:0!important}
 `}</style>
 
 <div className="no-print" style={{position:'fixed',top:0,left:0,right:0,zIndex:100,background:'rgba(255,255,255,0.95)',backdropFilter:'blur(12px)',borderBottom:'0.5px solid #e2e8f0',padding:'12px 24px',display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
@@ -418,7 +413,9 @@ body{background:white!important;margin:0}
 <div><span style={{color:'#9aa0b4'}}>Status: </span><strong style={{color:statusColor[selected.status],textTransform:'capitalize'}}>{selected.status}</strong></div>
 </div>
 
-<div style={{marginBottom:40,lineHeight:1.8,fontSize:13}} dangerouslySetInnerHTML={{__html:selected.content}}/>
+<div style={{marginBottom:40,lineHeight:1.8,fontSize:13,whiteSpace:'pre-wrap'}}>
+{selected.content}
+</div>
 
 <div style={{marginTop:40,paddingTop:24,borderTop:'0.5px solid #e2e8f0'}}>
 <div style={{fontSize:11,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',marginBottom:16,letterSpacing:'0.05em'}}>Authorized Signatures</div>
