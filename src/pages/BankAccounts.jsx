@@ -1,27 +1,32 @@
 import{useState,useEffect}from'react'
 import{db,auth}from'../firebase'
-import{collection,onSnapshot,getDocs,query,where,doc,deleteDoc,addDoc,updateDoc,serverTimestamp,getDoc}from'firebase/firestore'
+import{collection,getDocs,query,where,doc,addDoc,updateDoc,deleteDoc,serverTimestamp,onSnapshot,getDoc}from'firebase/firestore'
 import Layout from'../components/Layout'
-import{Plus,Trash2,Edit,X,Save,Wallet,TrendingDown,Search}from'lucide-react'
+import{Plus,Edit,Trash2,Landmark,ArrowUpRight,ArrowDownLeft,Eye,ArrowLeft}from'lucide-react'
 
-export default function Expenses(){
+const DEFAULT_CURRENCIES=['MMK','USD','THB']
+const ACCOUNT_TYPES=['Cash','Bank','Mobile Banking','Other']
+
+export default function BankAccounts(){
 const[companyId,setCompanyId]=useState(null)
-const[expenses,setExpenses]=useState([])
-const[projects,setProjects]=useState([])
-const[categories,setCategories]=useState(['Office','Transport','Food','Utilities','Marketing','Salary','Equipment','Software','Other'])
-const[paymentMethods,setPaymentMethods]=useState(['Cash','KBZ Pay','AYA Pay','Wave Pay','CB Pay','Bank Transfer','Other'])
+const[accounts,setAccounts]=useState([])
+const[transactions,setTransactions]=useState([])
 const[loading,setLoading]=useState(true)
-const[search,setSearch]=useState('')
-const[filterMonth,setFilterMonth]=useState('')
-const[filterCategory,setFilterCategory]=useState('')
-const[modal,setModal]=useState(null)
+const[view,setView]=useState('list')
 const[selected,setSelected]=useState(null)
 const[saving,setSaving]=useState(false)
+const[currencies,setCurrencies]=useState(DEFAULT_CURRENCIES)
 const[form,setForm]=useState({
-title:'',amount:0,category:'',
-date:new Date().toISOString().split('T')[0],
-paymentMethod:'Cash',note:'',projectId:''
+name:'',type:'Bank',currency:'MMK',
+openingBalance:0,accountNumber:'',
+bankName:'',description:'',isActive:true,
 })
+const[txForm,setTxForm]=useState({
+date:new Date().toISOString().split('T')[0],
+type:'in',amount:0,description:'',reference:''
+})
+const[showTxForm,setShowTxForm]=useState(false)
+const[savingTx,setSavingTx]=useState(false)
 
 useEffect(()=>{
 const load=async()=>{
@@ -29,18 +34,14 @@ const snap=await getDocs(query(collection(db,'companies'),where(`members.${auth.
 if(!snap.empty){
 const cid=snap.docs[0].id
 setCompanyId(cid)
-const[sSnap,pSnap]=await Promise.all([
-getDoc(doc(db,'companies',cid,'_config','invoiceSettings')),
-getDocs(collection(db,'companies',cid,'projects'))
-])
-if(sSnap.exists()){
-const sd=sSnap.data()
-if(sd.expenseCategories?.length)setCategories(sd.expenseCategories)
-if(sd.paymentMethods?.length)setPaymentMethods(sd.paymentMethods.map(m=>m.bankName||m).filter(Boolean))
+// Load currencies from settings
+const sSnap=await getDoc(doc(db,'companies',cid,'_config','invoiceSettings'))
+if(sSnap.exists()&&sSnap.data().currencies){
+const currList=sSnap.data().currencies.filter(c=>c.code).map(c=>c.code)
+if(currList.length>0)setCurrencies(currList)
 }
-setProjects(pSnap.docs.map(d=>({id:d.id,...d.data()})))
-onSnapshot(collection(db,'companies',cid,'expenses'),snap=>{
-setExpenses(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.date||'').localeCompare(a.date||'')))
+onSnapshot(collection(db,'companies',cid,'bankAccounts'),snap=>{
+setAccounts(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0)))
 setLoading(false)
 })
 }
@@ -48,196 +49,245 @@ setLoading(false)
 load()
 },[])
 
-const openAdd=()=>{
-setForm({title:'',amount:0,category:categories[0]||'',date:new Date().toISOString().split('T')[0],paymentMethod:paymentMethods[0]||'Cash',note:'',projectId:''})
-setSelected(null)
-setModal('add')
+const loadTransactions=async(accountId)=>{
+const snap=await getDocs(collection(db,'companies',companyId,'bankAccounts',accountId,'transactions'))
+setTransactions(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>new Date(b.date)-new Date(a.date)))
 }
 
-const openEdit=(e)=>{
-setForm({title:e.title||'',amount:e.amount||0,category:e.category||categories[0]||'',date:e.date||'',paymentMethod:e.paymentMethod||paymentMethods[0]||'Cash',note:e.note||'',projectId:e.projectId||''})
-setSelected(e)
-setModal('edit')
+const openNew=()=>{
+setForm({name:'',type:'Bank',currency:currencies[0]||'MMK',openingBalance:0,accountNumber:'',bankName:'',description:'',isActive:true})
+setSelected(null)
+setView('form')
+}
+
+const openEdit=(a)=>{
+setForm({
+name:a.name,type:a.type,currency:a.currency||currencies[0]||'MMK',
+openingBalance:a.openingBalance||0,accountNumber:a.accountNumber||'',
+bankName:a.bankName||'',description:a.description||'',isActive:a.isActive!==false,
+})
+setSelected(a)
+setView('form')
+}
+
+const openDetail=async(a)=>{
+setSelected(a)
+await loadTransactions(a.id)
+setShowTxForm(false)
+setTxForm({date:new Date().toISOString().split('T')[0],type:'in',amount:0,description:'',reference:''})
+setView('detail')
 }
 
 const handleSave=async()=>{
-if(!form.title||!form.amount){alert('Title and amount required');return}
+if(!form.name){alert('Account name required');return}
 setSaving(true)
 try{
-if(modal==='add'){
-await addDoc(collection(db,'companies',companyId,'expenses'),{
-...form,amount:Number(form.amount),
+if(!selected){
+await addDoc(collection(db,'companies',companyId,'bankAccounts'),{
+...form,
+openingBalance:Number(form.openingBalance),
+currentBalance:Number(form.openingBalance),
 createdAt:serverTimestamp(),
 createdBy:auth.currentUser.uid,
 })
 }else{
-await updateDoc(doc(db,'companies',companyId,'expenses',selected.id),{
-...form,amount:Number(form.amount),updatedAt:serverTimestamp()
+await updateDoc(doc(db,'companies',companyId,'bankAccounts',selected.id),{
+...form,
+openingBalance:Number(form.openingBalance),
+updatedAt:serverTimestamp(),
 })
 }
-setModal(null)
+setView('list')
 }catch(e){alert(e.message)}
 setSaving(false)
 }
 
 const handleDelete=async(id)=>{
-if(!confirm('Delete this expense?'))return
-await deleteDoc(doc(db,'companies',companyId,'expenses',id))
+if(!confirm('Delete this account?'))return
+await deleteDoc(doc(db,'companies',companyId,'bankAccounts',id))
 }
 
-const filtered=expenses.filter(e=>{
-const matchSearch=e.title?.toLowerCase().includes(search.toLowerCase())||e.category?.toLowerCase().includes(search.toLowerCase())
-const matchMonth=filterMonth?e.date?.startsWith(filterMonth):true
-const matchCategory=filterCategory?e.category===filterCategory:true
-return matchSearch&&matchMonth&&matchCategory
+const handleAddTransaction=async()=>{
+if(!txForm.amount||!txForm.description){alert('Amount and description required');return}
+setSavingTx(true)
+try{
+const amount=Number(txForm.amount)
+const balanceChange=txForm.type==='in'?amount:-amount
+await addDoc(collection(db,'companies',companyId,'bankAccounts',selected.id,'transactions'),{
+...txForm,
+amount,
+createdAt:serverTimestamp(),
+createdBy:auth.currentUser.uid,
 })
+const newBalance=(selected.currentBalance||0)+balanceChange
+await updateDoc(doc(db,'companies',companyId,'bankAccounts',selected.id),{
+currentBalance:newBalance,
+updatedAt:serverTimestamp(),
+})
+setSelected(s=>({...s,currentBalance:newBalance}))
+setAccounts(a=>a.map(x=>x.id===selected.id?{...x,currentBalance:newBalance}:x))
+await loadTransactions(selected.id)
+setTxForm({date:new Date().toISOString().split('T')[0],type:'in',amount:0,description:'',reference:''})
+setShowTxForm(false)
+}catch(e){alert(e.message)}
+setSavingTx(false)
+}
 
-const totalAmt=filtered.reduce((s,e)=>s+Number(e.amount||0),0)
-const byCategory=categories.map(c=>({
-category:c,
-total:filtered.filter(e=>e.category===c).reduce((s,e)=>s+Number(e.amount||0),0)
-})).filter(c=>c.total>0).sort((a,b)=>b.total-a.total)
-
-const months=[...new Set(expenses.map(e=>e.date?.slice(0,7)))].filter(Boolean).sort().reverse()
+const totalBalance=accounts.filter(a=>a.isActive!==false).reduce((s,a)=>s+Number(a.currentBalance||a.openingBalance||0),0)
 
 if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh'}}>Loading...</div>
 
-return(
-<Layout title="Expenses">
-
-{modal&&(
-<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
-<div style={{background:'white',borderRadius:16,width:'100%',maxWidth:440,boxShadow:'0 20px 60px rgba(0,0,0,0.2)'}}>
-<div style={{padding:'20px 24px',borderBottom:'0.5px solid #f1f5f9',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-<div style={{fontWeight:600,fontSize:15}}>{modal==='add'?'Add Expense':'Edit Expense'}</div>
-<button type="button" onClick={()=>setModal(null)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-3)'}}><X size={18}/></button>
+if(view==='form')return(
+<Layout title={selected?'Edit Account':'New Bank Account'}>
+<div style={{maxWidth:560,margin:'0 auto'}}>
+<div style={{display:'flex',alignItems:'center',gap:12,marginBottom:20}}>
+<button type="button" onClick={()=>setView('list')} className="btn btn-ghost" style={{padding:'8px 12px'}}><ArrowLeft size={16}/></button>
+<h2 style={{fontSize:18,fontWeight:600,flex:1}}>{selected?'Edit Account':'New Bank Account'}</h2>
+<button type="button" onClick={handleSave} disabled={saving} className="btn btn-primary">
+{saving?'Saving...':'Save Account'}
+</button>
 </div>
-<div style={{padding:24}}>
-<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:16}}>
-<div style={{gridColumn:'1/-1'}}>
-<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Title *</label>
-<input className="form-input" value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="Expense title..."/>
+<div className="card" style={{padding:24}}>
+<div style={{display:'grid',gap:16}}>
+<div>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Account Name *</label>
+<input className="form-input" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="e.g. KBZ Main Account"/>
+</div>
+<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+<div>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Account Type</label>
+<select className="form-input" value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))}>
+{ACCOUNT_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
+</select>
 </div>
 <div>
-<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Amount (Ks) *</label>
-<input className="form-input" type="number" value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))} style={{textAlign:'right'}}/>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Currency</label>
+<select className="form-input" value={form.currency} onChange={e=>setForm(f=>({...f,currency:e.target.value}))}>
+{currencies.map(c=><option key={c} value={c}>{c}</option>)}
+</select>
+</div>
+</div>
+<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+<div>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Bank Name</label>
+<input className="form-input" value={form.bankName} onChange={e=>setForm(f=>({...f,bankName:e.target.value}))} placeholder="e.g. KBZ Bank"/>
+</div>
+<div>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Account Number</label>
+<input className="form-input" value={form.accountNumber} onChange={e=>setForm(f=>({...f,accountNumber:e.target.value}))} placeholder="09xxxxxxxxx"/>
+</div>
+</div>
+<div>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Opening Balance</label>
+<input className="form-input" type="number" value={form.openingBalance} onChange={e=>setForm(f=>({...f,openingBalance:e.target.value}))} style={{textAlign:'right'}}/>
+</div>
+<div>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Description</label>
+<input className="form-input" value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} placeholder="Optional..."/>
+</div>
+<div style={{display:'flex',alignItems:'center',gap:8}}>
+<input type="checkbox" id="isActive" checked={form.isActive} onChange={e=>setForm(f=>({...f,isActive:e.target.checked}))}/>
+<label htmlFor="isActive" style={{fontSize:13,color:'var(--text-2)'}}>Active Account</label>
+</div>
+</div>
+</div>
+</div>
+</Layout>
+)
+
+if(view==='detail'&&selected)return(
+<Layout title={selected.name}>
+<div style={{maxWidth:800,margin:'0 auto'}}>
+<div style={{display:'flex',alignItems:'center',gap:12,marginBottom:20}}>
+<button type="button" onClick={()=>setView('list')} className="btn btn-ghost" style={{padding:'8px 12px'}}><ArrowLeft size={16}/></button>
+<h2 style={{fontSize:18,fontWeight:600,flex:1}}>{selected.name}</h2>
+<button type="button" onClick={()=>openEdit(selected)} className="btn btn-ghost" style={{fontSize:13}}><Edit size={14}/>Edit</button>
+<button type="button" onClick={()=>setShowTxForm(v=>!v)} className="btn btn-primary"><Plus size={15}/>Add Transaction</button>
+</div>
+
+<div className="card" style={{padding:24,marginBottom:16,background:'linear-gradient(135deg,#4F6EF7,#7C3AED)',color:'white'}}>
+<div style={{fontSize:12,opacity:0.8,marginBottom:8}}>Current Balance</div>
+<div style={{fontSize:32,fontWeight:700}}>{Number(selected.currentBalance||selected.openingBalance||0).toLocaleString()} {selected.currency||'MMK'}</div>
+<div style={{display:'flex',gap:24,marginTop:16,fontSize:12,opacity:0.8}}>
+{selected.bankName&&<span>🏦 {selected.bankName}</span>}
+{selected.accountNumber&&<span>#{selected.accountNumber}</span>}
+<span style={{textTransform:'capitalize'}}>{selected.type}</span>
+</div>
+</div>
+
+{showTxForm&&(
+<div className="card" style={{padding:20,marginBottom:16}}>
+<div style={{fontSize:13,fontWeight:600,marginBottom:12}}>New Transaction</div>
+<div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12,marginBottom:12}}>
+<div>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Type</label>
+<select className="form-input" value={txForm.type} onChange={e=>setTxForm(f=>({...f,type:e.target.value}))}>
+<option value="in">💚 Money In</option>
+<option value="out">🔴 Money Out</option>
+</select>
+</div>
+<div>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Amount</label>
+<input className="form-input" type="number" value={txForm.amount} onChange={e=>setTxForm(f=>({...f,amount:e.target.value}))} style={{textAlign:'right'}}/>
 </div>
 <div>
 <label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Date</label>
-<input className="form-input" type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/>
+<input className="form-input" type="date" value={txForm.date} onChange={e=>setTxForm(f=>({...f,date:e.target.value}))}/>
+</div>
+</div>
+<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:12}}>
+<div>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Description *</label>
+<input className="form-input" value={txForm.description} onChange={e=>setTxForm(f=>({...f,description:e.target.value}))} placeholder="What is this transaction for?"/>
 </div>
 <div>
-<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Category</label>
-<select className="form-input" value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))}>
-{categories.map(c=><option key={c}>{c}</option>)}
-</select>
-</div>
-<div>
-<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Payment Method</label>
-<select className="form-input" value={form.paymentMethod} onChange={e=>setForm(f=>({...f,paymentMethod:e.target.value}))}>
-{paymentMethods.map(m=><option key={m}>{m}</option>)}
-</select>
-</div>
-<div style={{gridColumn:'1/-1'}}>
-<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Link to Project (optional)</label>
-<select className="form-input" value={form.projectId} onChange={e=>setForm(f=>({...f,projectId:e.target.value}))}>
-<option value="">— No Project —</option>
-{projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
-</select>
-</div>
-<div style={{gridColumn:'1/-1'}}>
-<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Note</label>
-<input className="form-input" value={form.note} onChange={e=>setForm(f=>({...f,note:e.target.value}))} placeholder="Optional..."/>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Reference</label>
+<input className="form-input" value={txForm.reference} onChange={e=>setTxForm(f=>({...f,reference:e.target.value}))} placeholder="INV-xxx or receipt no."/>
 </div>
 </div>
 <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
-<button type="button" onClick={()=>setModal(null)} className="btn btn-ghost">Cancel</button>
-<button type="button" onClick={handleSave} disabled={saving} className="btn btn-primary">
-<Save size={14}/>{saving?'Saving...':modal==='add'?'Add Expense':'Update'}
+<button type="button" onClick={()=>setShowTxForm(false)} className="btn btn-ghost">Cancel</button>
+<button type="button" onClick={handleAddTransaction} disabled={savingTx} className="btn btn-primary">
+{savingTx?'Saving...':'Save Transaction'}
 </button>
-</div>
-</div>
 </div>
 </div>
 )}
 
-<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16,gap:12,flexWrap:'wrap'}}>
-<div style={{display:'flex',gap:8,flex:1,flexWrap:'wrap'}}>
-<div style={{position:'relative',minWidth:180}}>
-<Search size={14} style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text-3)'}}/>
-<input className="form-input" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..." style={{paddingLeft:32}}/>
-</div>
-<select className="form-input" style={{width:'auto'}} value={filterMonth} onChange={e=>setFilterMonth(e.target.value)}>
-<option value="">All Months</option>
-{months.map(m=><option key={m} value={m}>{m}</option>)}
-</select>
-<select className="form-input" style={{width:'auto'}} value={filterCategory} onChange={e=>setFilterCategory(e.target.value)}>
-<option value="">All Categories</option>
-{categories.map(c=><option key={c} value={c}>{c}</option>)}
-</select>
-</div>
-<button type="button" onClick={openAdd} className="btn btn-primary">
-<Plus size={15}/>Add Expense
-</button>
-</div>
-
-<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:16}}>
-<div className="card" style={{padding:16}}>
-<div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
-<span style={{fontSize:12,fontWeight:500,color:'var(--text-2)'}}>Total Expenses</span>
-<div style={{width:32,height:32,borderRadius:8,background:'rgba(220,38,38,0.10)',display:'flex',alignItems:'center',justifyContent:'center'}}>
-<TrendingDown size={16} color="#dc2626"/>
-</div>
-</div>
-<div style={{fontSize:24,fontWeight:700,color:'#dc2626'}}>{totalAmt.toLocaleString()} Ks</div>
-<div style={{fontSize:12,color:'var(--text-3)',marginTop:2}}>{filtered.length} records</div>
-</div>
-<div className="card" style={{padding:16,overflowY:'auto',maxHeight:140}}>
-<div style={{fontSize:12,fontWeight:500,color:'var(--text-2)',marginBottom:10}}>By Category</div>
-{byCategory.length===0?<div style={{fontSize:12,color:'var(--text-3)'}}>No data</div>:byCategory.map(({category,total})=>(
-<div key={category} style={{display:'flex',justifyContent:'space-between',fontSize:12,padding:'3px 0'}}>
-<span style={{color:'var(--text-2)'}}>{category}</span>
-<span style={{fontWeight:500,color:'#dc2626'}}>{total.toLocaleString()} Ks</span>
-</div>
-))}
-</div>
-</div>
-
 <div className="card" style={{overflow:'hidden'}}>
-{filtered.length===0?(
-<div style={{padding:64,textAlign:'center',color:'var(--text-3)'}}>
-<Wallet size={40} style={{margin:'0 auto 12px',opacity:0.3}}/>
-<div>{search||filterMonth||filterCategory?'No results found':'No expenses yet'}</div>
+<div style={{padding:'16px 20px',borderBottom:'0.5px solid var(--border)',fontWeight:600,fontSize:14}}>
+Transaction History
+</div>
+{transactions.length===0?(
+<div style={{padding:48,textAlign:'center',color:'var(--text-3)'}}>
+<Landmark size={32} style={{margin:'0 auto 12px',opacity:0.3}}/>
+<div>No transactions yet</div>
 </div>
 ):(
 <table>
 <thead>
 <tr>
 <th>Date</th>
-<th>Title</th>
-<th>Category</th>
-<th>Project</th>
-<th>Method</th>
+<th>Description</th>
+<th>Reference</th>
+<th style={{textAlign:'center'}}>Type</th>
 <th style={{textAlign:'right'}}>Amount</th>
-<th style={{textAlign:'center'}}>Actions</th>
 </tr>
 </thead>
 <tbody>
-{filtered.map(e=>(
-<tr key={e.id}>
-<td style={{color:'var(--text-3)',fontSize:12,whiteSpace:'nowrap'}}>{e.date||'-'}</td>
-<td style={{fontWeight:500}}>{e.title}</td>
-<td><span style={{background:'var(--primary-light)',color:'var(--primary)',padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:500}}>{e.category}</span></td>
-<td style={{fontSize:12,color:'var(--text-2)'}}>
-{e.projectId?projects.find(p=>p.id===e.projectId)?.name||'-':'-'}
-</td>
-<td style={{color:'var(--text-2)',fontSize:12}}>{e.paymentMethod||'-'}</td>
-<td style={{textAlign:'right',fontWeight:500,color:'#dc2626'}}>{Number(e.amount||0).toLocaleString()} Ks</td>
+{transactions.map(t=>(
+<tr key={t.id}>
+<td style={{fontSize:12,color:'var(--text-3)'}}>{t.date}</td>
+<td style={{fontWeight:500}}>{t.description}</td>
+<td style={{fontSize:12,color:'var(--text-3)',fontFamily:'monospace'}}>{t.reference||'-'}</td>
 <td style={{textAlign:'center'}}>
-<div style={{display:'flex',gap:4,justifyContent:'center'}}>
-<button type="button" onClick={()=>openEdit(e)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Edit size={14}/></button>
-<button type="button" onClick={()=>handleDelete(e.id)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)',padding:4,borderRadius:6}}><Trash2 size={14}/></button>
-</div>
+{t.type==='in'
+?<span style={{color:'#16a34a',fontSize:12,fontWeight:600,display:'flex',alignItems:'center',justifyContent:'center',gap:4}}><ArrowDownLeft size={13}/>In</span>
+:<span style={{color:'#dc2626',fontSize:12,fontWeight:600,display:'flex',alignItems:'center',justifyContent:'center',gap:4}}><ArrowUpRight size={13}/>Out</span>
+}
+</td>
+<td style={{textAlign:'right',fontWeight:600,color:t.type==='in'?'#16a34a':'#dc2626'}}>
+{t.type==='in'?'+':'-'}{Number(t.amount).toLocaleString()} {selected.currency||'MMK'}
 </td>
 </tr>
 ))}
@@ -245,6 +295,63 @@ return(
 </table>
 )}
 </div>
+</div>
+</Layout>
+)
+
+return(
+<Layout title="Bank Accounts">
+<div className="card" style={{padding:24,marginBottom:20,background:'linear-gradient(135deg,#1a1d2e,#2d3260)',color:'white'}}>
+<div style={{fontSize:12,opacity:0.7,marginBottom:8,textTransform:'uppercase',letterSpacing:'0.05em'}}>Total Balance — All Accounts</div>
+<div style={{fontSize:36,fontWeight:700}}>{totalBalance.toLocaleString()} MMK</div>
+<div style={{fontSize:12,opacity:0.6,marginTop:8}}>{accounts.filter(a=>a.isActive!==false).length} active accounts</div>
+</div>
+
+<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+<h3 style={{fontSize:15,fontWeight:600}}>All Accounts</h3>
+<button type="button" onClick={openNew} className="btn btn-primary"><Plus size={15}/>New Account</button>
+</div>
+
+{accounts.length===0?(
+<div className="card" style={{padding:64,textAlign:'center',color:'var(--text-3)'}}>
+<Landmark size={40} style={{margin:'0 auto 12px',opacity:0.3}}/>
+<div style={{fontSize:15,fontWeight:500,marginBottom:8}}>No bank accounts yet</div>
+<div style={{fontSize:13,marginBottom:20}}>Add your bank accounts to track balances</div>
+<button type="button" onClick={openNew} className="btn btn-primary"><Plus size={15}/>Add First Account</button>
+</div>
+):(
+<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:16}}>
+{accounts.map(a=>(
+<div key={a.id} className="card" style={{padding:20,cursor:'pointer',opacity:a.isActive===false?0.6:1}} onClick={()=>openDetail(a)}>
+<div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16}}>
+<div>
+<div style={{fontWeight:600,fontSize:15}}>{a.name}</div>
+<div style={{fontSize:12,color:'var(--text-3)',marginTop:2}}>{a.bankName||a.type}</div>
+</div>
+<div style={{width:36,height:36,background:'var(--primary-light)',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center'}}>
+<Landmark size={18} style={{color:'var(--primary)'}}/>
+</div>
+</div>
+{a.accountNumber&&<div style={{fontSize:11,color:'var(--text-3)',fontFamily:'monospace',marginBottom:12}}>#{a.accountNumber}</div>}
+<div style={{fontSize:24,fontWeight:700,color:'var(--text-1)',marginBottom:4}}>
+{Number(a.currentBalance||a.openingBalance||0).toLocaleString()} <span style={{fontSize:13,color:'var(--text-3)'}}>{a.currency||'MMK'}</span>
+</div>
+<div style={{fontSize:11,color:'var(--text-3)'}}>Opening: {Number(a.openingBalance||0).toLocaleString()} {a.currency||'MMK'}</div>
+<div style={{display:'flex',gap:8,marginTop:16}} onClick={e=>e.stopPropagation()}>
+<button type="button" onClick={()=>openDetail(a)} style={{flex:1,padding:'6px 0',borderRadius:8,border:'0.5px solid var(--border)',background:'none',cursor:'pointer',fontSize:12,color:'var(--primary)',display:'flex',alignItems:'center',justifyContent:'center',gap:4}}>
+<Eye size={12}/>View
+</button>
+<button type="button" onClick={()=>openEdit(a)} style={{padding:'6px 10px',borderRadius:8,border:'0.5px solid var(--border)',background:'none',cursor:'pointer',fontSize:12,color:'var(--text-2)'}}>
+<Edit size={12}/>
+</button>
+<button type="button" onClick={()=>handleDelete(a.id)} style={{padding:'6px 10px',borderRadius:8,border:'0.5px solid var(--border)',background:'none',cursor:'pointer',fontSize:12,color:'var(--danger)'}}>
+<Trash2 size={12}/>
+</button>
+</div>
+</div>
+))}
+</div>
+)}
 </Layout>
 )
 }
