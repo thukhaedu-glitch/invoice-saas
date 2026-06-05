@@ -8,19 +8,15 @@ import Notifications from'./Notifications'
 import{useNotifications}from'../hooks/useNotifications'
 import{useRecurring}from'../hooks/useRecurring'
 import{useRole}from'../hooks/useRole'
-\
-
-
-
 
 const NAV_MAIN=[
 {path:'/',label:'Dashboard',icon:LayoutDashboard},
 {path:'/invoices',label:'Invoices',icon:FileText},
+{path:'/quotations',label:'Quotations',icon:FileCheck},
 {path:'/contracts',label:'Contracts',icon:ScrollText},
 {path:'/customers',label:'Customers',icon:Users},
 {path:'/expenses',label:'Expenses',icon:Wallet},
 {path:'/projects',label:'Projects',icon:Briefcase},
-{path:'/quotations',label:'Quotations',icon:FileCheck},
 ]
 
 const AnkoraLogo=()=>(
@@ -90,7 +86,7 @@ return(
 <nav style={{flex:1,padding:'12px 10px',overflowY:'auto'}}>
 <div style={{fontSize:10,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.07em',padding:'8px 8px 4px'}}>Main</div>
 {NAV_MAIN.map((item)=>(
-<div key={item.tab||item.path+item.label} className={`nav-item${isActive(item)?' active':''}`} onClick={()=>handleNav(item)}>
+<div key={item.path+item.label} className={`nav-item${isActive(item)?' active':''}`} onClick={()=>handleNav(item)}>
 <item.icon size={17}/><span>{item.label}</span>
 </div>
 ))}
