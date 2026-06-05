@@ -1,14 +1,10 @@
-import{useState,useEffect}from'react'
-import{auth,db}from'../firebase'
-import{signOut}from'firebase/auth'
-import{useLocation,useNavigate,useSearchParams}from'react-router-dom'
-import{FileText,FileCheck,ScrollText,Users,Wallet,Briefcase,BarChart2,User,Settings,LogOut,Menu,X,BookOpen,Landmark,LayoutDashboard}from'lucide-react'
-import{getDocs,collection,query,where}from'firebase/firestore'
-import Notifications from'./Notifications'
-import{useNotifications}from'../hooks/useNotifications'
-import{useRecurring}from'../hooks/useRecurring'
+import{useState,useEffect,useMemo}from'react'
+import{db,auth}from'../firebase'
+import{collection,onSnapshot,getDocs,query,where,doc,getDoc}from'firebase/firestore'
+import Layout from'../components/Layout'
+import{FileText,CheckCircle,Clock,AlertCircle,TrendingUp,TrendingDown,Wallet,Users,Briefcase,ArrowRight}from'lucide-react'
+import{useNavigate}from'react-router-dom'
 import{useRole}from'../hooks/useRole'
-
 const NAV_MAIN=[
 {path:'/',label:'Dashboard',icon:LayoutDashboard},
 {path:'/invoices',label:'Invoices',icon:FileText},
