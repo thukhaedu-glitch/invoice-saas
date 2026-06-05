@@ -2,7 +2,7 @@ import{useState,useEffect}from'react'
 import{db,auth}from'../firebase'
 import{collection,onSnapshot,getDocs,query,where,doc,deleteDoc,addDoc,updateDoc,serverTimestamp}from'firebase/firestore'
 import Layout from'../components/Layout'
-import{Plus,Trash2,Edit,X,Save,Users,Phone,Mail,MapPin,Search}from'lucide-react'
+import{Plus,Trash2,Edit,X,Save,Users,Search,Eye}from'lucide-react'
 
 export default function Customers(){
 const[companyId,setCompanyId]=useState(null)
