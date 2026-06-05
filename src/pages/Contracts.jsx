@@ -23,6 +23,63 @@ const DEFAULT_CONTENT=`<h2>Service Agreement</h2>
 <h3>3. Terms &amp; Conditions</h3>
 <p>Both parties agree to the terms outlined in this contract.</p>`
 
+// သီးသန့် Editor component
+function RichEditor({initialContent,onChange}){
+const ref=useRef()
+useEffect(()=>{
+if(ref.current){
+ref.current.innerHTML=initialContent||DEFAULT_CONTENT
+}
+},[])
+const execCmd=(cmd,val=null)=>{
+document.execCommand(cmd,false,val)
+ref.current?.focus()
+}
+return(
+<div>
+<div style={{display:'flex',flexWrap:'wrap',gap:4,padding:'8px',background:'#f8fafc',borderRadius:'8px 8px 0 0',border:'0.5px solid #e2e8f0',borderBottom:'none',alignItems:'center'}}>
+{[{cmd:'bold',label:<strong>B</strong>},{cmd:'italic',label:<em>I</em>},{cmd:'underline',label:<u>U</u>}].map(({cmd,label})=>(
+<button key={cmd} type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>execCmd(cmd)}
+style={{padding:'4px 10px',borderRadius:6,border:'0.5px solid #e2e8f0',background:'white',cursor:'pointer',fontSize:13,minWidth:32}}>
+{label}
+</button>
+))}
+<div style={{width:1,background:'#e2e8f0',margin:'0 2px',height:24}}/>
+{[{cmd:'justifyLeft',label:'≡L'},{cmd:'justifyCenter',label:'≡C'},{cmd:'justifyRight',label:'≡R'}].map(({cmd,label})=>(
+<button key={cmd} type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>execCmd(cmd)}
+style={{padding:'4px 8px',borderRadius:6,border:'0.5px solid #e2e8f0',background:'white',cursor:'pointer',fontSize:12}}>
+{label}
+</button>
+))}
+<div style={{width:1,background:'#e2e8f0',margin:'0 2px',height:24}}/>
+<button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>execCmd('insertUnorderedList')}
+style={{padding:'4px 10px',borderRadius:6,border:'0.5px solid #e2e8f0',background:'white',cursor:'pointer',fontSize:12}}>• List</button>
+<button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>execCmd('insertOrderedList')}
+style={{padding:'4px 10px',borderRadius:6,border:'0.5px solid #e2e8f0',background:'white',cursor:'pointer',fontSize:12}}>1. List</button>
+<div style={{width:1,background:'#e2e8f0',margin:'0 2px',height:24}}/>
+<select onMouseDown={e=>e.stopPropagation()} onChange={e=>execCmd('fontSize',e.target.value)} defaultValue="3"
+style={{padding:'4px 8px',borderRadius:6,border:'0.5px solid #e2e8f0',background:'white',fontSize:12,cursor:'pointer'}}>
+{[1,2,3,4,5,6,7].map(n=><option key={n} value={n}>Size {n}</option>)}
+</select>
+<div style={{width:1,background:'#e2e8f0',margin:'0 2px',height:24}}/>
+{[{cmd:'formatBlock',val:'h2',label:'H2'},{cmd:'formatBlock',val:'h3',label:'H3'},{cmd:'formatBlock',val:'p',label:'P'}].map(({cmd,val,label})=>(
+<button key={val} type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>execCmd(cmd,val)}
+style={{padding:'4px 8px',borderRadius:6,border:'0.5px solid #e2e8f0',background:'white',cursor:'pointer',fontSize:12,fontWeight:val==='h2'?700:val==='h3'?600:400}}>
+{label}
+</button>
+))}
+</div>
+<div
+ref={ref}
+contentEditable
+suppressContentEditableWarning
+onInput={e=>onChange(e.currentTarget.innerHTML)}
+style={{minHeight:400,padding:16,border:'0.5px solid #e2e8f0',borderRadius:'0 0 8px 8px',fontSize:14,lineHeight:1.8,outline:'none',background:'white',fontFamily:'inherit'}}
+/>
+</div>
+)
+}
+
 export default function Contracts(){
 const[companyId,setCompanyId]=useState(null)
 const[company,setCompany]=useState(null)
@@ -52,19 +109,7 @@ content:DEFAULT_CONTENT,
 partyASign:'',partyBSign:'',
 })
 const printRef=useRef()
-const editorRef=useRef()
 const{role}=useRole()
-
-useEffect(()=>{
-if(view==='editor'){
-const timer=setTimeout(()=>{
-if(editorRef.current){
-editorRef.current.innerHTML=form.content||DEFAULT_CONTENT
-}
-},150)
-return()=>clearTimeout(timer)
-}
-},[view])
 
 useEffect(()=>{
 const load=async()=>{
@@ -97,11 +142,6 @@ setLoading(false)
 }
 load()
 },[])
-
-const execCmd=(cmd,val=null)=>{
-document.execCommand(cmd,false,val)
-editorRef.current?.focus()
-}
 
 const loadSignatureNames=async(cid,contract)=>{
 try{
@@ -177,12 +217,11 @@ setView('detail')
 
 const handleSave=async()=>{
 if(!form.title||!form.clientName){alert('Title and client required');return}
-const content=editorRef.current?.innerHTML||form.content
 setSaving(true)
 try{
 if(!selected){
 await addDoc(collection(db,'companies',companyId,'contracts'),{
-...form,content,value:Number(form.value),
+...form,value:Number(form.value),
 contractNumber:'CON-'+Date.now().toString().slice(-6),
 securityCode:'SEC-'+Math.random().toString(36).substring(2,8).toUpperCase(),
 createdAt:serverTimestamp(),
@@ -190,7 +229,7 @@ createdBy:auth.currentUser.uid,
 })
 }else{
 await updateDoc(doc(db,'companies',companyId,'contracts',selected.id),{
-...form,content,value:Number(form.value),updatedAt:serverTimestamp()
+...form,value:Number(form.value),updatedAt:serverTimestamp()
 })
 }
 setView('list')
@@ -333,56 +372,10 @@ if(view==='editor')return(
 
 <div className="card" style={{padding:20,marginBottom:16}}>
 <div style={{fontSize:12,fontWeight:600,color:'var(--text-2)',marginBottom:12,textTransform:'uppercase',letterSpacing:'0.05em'}}>Contract Content</div>
-<div style={{display:'flex',flexWrap:'wrap',gap:4,padding:'8px',background:'#f8fafc',borderRadius:'8px 8px 0 0',border:'0.5px solid var(--border)',borderBottom:'none',alignItems:'center'}}>
-{[{cmd:'bold',label:<strong>B</strong>},{cmd:'italic',label:<em>I</em>},{cmd:'underline',label:<u>U</u>}].map(({cmd,label})=>(
-<button key={cmd} type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>execCmd(cmd)}
-style={{padding:'4px 10px',borderRadius:6,border:'0.5px solid var(--border)',background:'white',cursor:'pointer',fontSize:13,minWidth:32}}>
-{label}
-</button>
-))}
-<div style={{width:1,background:'var(--border)',margin:'0 2px',height:24}}/>
-{[{cmd:'justifyLeft',label:'≡L'},{cmd:'justifyCenter',label:'≡C'},{cmd:'justifyRight',label:'≡R'}].map(({cmd,label})=>(
-<button key={cmd} type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>execCmd(cmd)}
-style={{padding:'4px 8px',borderRadius:6,border:'0.5px solid var(--border)',background:'white',cursor:'pointer',fontSize:12}}>
-{label}
-</button>
-))}
-<div style={{width:1,background:'var(--border)',margin:'0 2px',height:24}}/>
-<button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>execCmd('insertUnorderedList')}
-style={{padding:'4px 10px',borderRadius:6,border:'0.5px solid var(--border)',background:'white',cursor:'pointer',fontSize:12}}>
-- List
-</button>
-<button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>execCmd('insertOrderedList')}
-style={{padding:'4px 10px',borderRadius:6,border:'0.5px solid var(--border)',background:'white',cursor:'pointer',fontSize:12}}>
-1. List
-</button>
-<div style={{width:1,background:'var(--border)',margin:'0 2px',height:24}}/>
-<select onMouseDown={e=>e.stopPropagation()} onChange={e=>execCmd('fontSize',e.target.value)} defaultValue="3"
-style={{padding:'4px 8px',borderRadius:6,border:'0.5px solid var(--border)',background:'white',fontSize:12,cursor:'pointer'}}>
-{[1,2,3,4,5,6,7].map(n=><option key={n} value={n}>Size {n}</option>)}
-</select>
-<div style={{width:1,background:'var(--border)',margin:'0 2px',height:24}}/>
-{[{cmd:'formatBlock',val:'h2',label:'H2'},{cmd:'formatBlock',val:'h3',label:'H3'},{cmd:'formatBlock',val:'p',label:'P'}].map(({cmd,val,label})=>(
-<button key={val} type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>execCmd(cmd,val)}
-style={{padding:'4px 8px',borderRadius:6,border:'0.5px solid var(--border)',background:'white',cursor:'pointer',fontSize:12,fontWeight:val==='h2'?700:val==='h3'?600:400}}>
-{label}
-</button>
-))}
-</div>
-<div
-ref={editorRef}
-contentEditable
-suppressContentEditableWarning
-onInput={e=>setForm(f=>({...f,content:e.currentTarget.innerHTML}))}
-style={{
-minHeight:400,padding:16,
-border:'0.5px solid var(--border)',
-borderRadius:'0 0 8px 8px',
-fontSize:14,lineHeight:1.8,
-outline:'none',
-background:'white',
-fontFamily:'inherit',
-}}
+<RichEditor
+key={selected?.id||'new'}
+initialContent={form.content}
+onChange={v=>setForm(f=>({...f,content:v}))}
 />
 </div>
 
@@ -413,7 +406,6 @@ body{background:white!important;margin:0}
 @page{size:A4;margin:15mm}
 }
 `}</style>
-
 <div className="no-print" style={{position:'fixed',top:0,left:0,right:0,zIndex:100,background:'rgba(255,255,255,0.95)',backdropFilter:'blur(12px)',borderBottom:'0.5px solid #e2e8f0',padding:'12px 24px',display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
 <button type="button" onClick={()=>setView('list')} className="btn btn-ghost" style={{padding:'8px 12px'}}><ArrowLeft size={16}/></button>
 <span style={{flex:1,fontWeight:500,fontSize:15}}>{selected.contractNumber} — {selected.title}</span>
@@ -428,16 +420,13 @@ body{background:white!important;margin:0}
 <button type="button" onClick={()=>window.print()} className="btn btn-ghost"><Printer size={15}/>Print</button>
 <button type="button" onClick={handleDownloadPDF} disabled={downloading} className="btn btn-primary"><Download size={15}/>{downloading?'Generating...':'Download PDF'}</button>
 </div>
-
 <div style={{minHeight:'100vh',background:'#f1f5f9',padding:'80px 24px 40px',display:'flex',justifyContent:'center'}}>
 <div ref={printRef} className="print-area" style={{width:'210mm',background:'white',boxShadow:'0 4px 32px rgba(0,0,0,0.08)',padding:'40px 50px',fontFamily:'Georgia,serif'}}>
-
 <div style={{textAlign:'center',marginBottom:32,borderBottom:'2px solid #1a1d2e',paddingBottom:24}}>
 {settings.logoUrl&&<img src={settings.logoUrl} style={{height:60,objectFit:'contain',marginBottom:12}}/>}
 <div style={{fontSize:22,fontWeight:700,color:'#1a1d2e',letterSpacing:1}}>{selected.title}</div>
 <div style={{fontSize:13,color:'#64748b',marginTop:6}}>{selected.contractNumber}</div>
 </div>
-
 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:32,marginBottom:28,padding:'16px 0',borderBottom:'0.5px solid #e2e8f0'}}>
 <div>
 <div style={{fontSize:10,fontWeight:700,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:6}}>Party A (Service Provider)</div>
@@ -453,16 +442,13 @@ body{background:white!important;margin:0}
 {selected.clientPhone&&<div style={{fontSize:12,color:'#64748b'}}>{selected.clientPhone}</div>}
 </div>
 </div>
-
 <div style={{display:'flex',gap:24,marginBottom:28,fontSize:13,flexWrap:'wrap'}}>
 {selected.startDate&&<div><span style={{color:'#9aa0b4'}}>Start Date: </span><strong>{selected.startDate}</strong></div>}
 {selected.endDate&&<div><span style={{color:'#9aa0b4'}}>End Date: </span><strong>{selected.endDate}</strong></div>}
 {selected.value>0&&<div><span style={{color:'#9aa0b4'}}>Contract Value: </span><strong>{Number(selected.value).toLocaleString()} Ks</strong></div>}
 <div><span style={{color:'#9aa0b4'}}>Status: </span><strong style={{color:statusColor[selected.status],textTransform:'capitalize'}}>{selected.status}</strong></div>
 </div>
-
 <div style={{marginBottom:40,lineHeight:1.8,fontSize:13}} dangerouslySetInnerHTML={{__html:selected.content}}/>
-
 <div style={{marginTop:40,paddingTop:24,borderTop:'0.5px solid #e2e8f0'}}>
 <div style={{fontSize:11,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',marginBottom:16,letterSpacing:'0.05em'}}>Authorized Signatures</div>
 <div style={{display:'grid',gridTemplateColumns:`repeat(${hasOwnerApproval?3:hasAdminApproval?2:1},1fr)`,gap:24,marginBottom:24}}>
@@ -512,7 +498,6 @@ body{background:white!important;margin:0}
 </div>
 </div>
 </div>
-
 <div style={{marginTop:32,paddingTop:16,borderTop:'0.5px solid #e2e8f0',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
 <div>
 <div style={{fontSize:10,color:'#9aa0b4',marginBottom:2}}>This contract is system-generated and does not require a physical seal.</div>
@@ -540,7 +525,6 @@ return(
 </div>
 <button type="button" onClick={openNew} className="btn btn-primary"><Plus size={15}/>New Contract</button>
 </div>
-
 <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:16}}>
 {STATUS.map(s=>(
 <div key={s} className="card" style={{padding:16}}>
@@ -550,7 +534,6 @@ return(
 </div>
 ))}
 </div>
-
 <div className="card" style={{overflow:'hidden'}}>
 {filtered.length===0?(
 <div style={{padding:64,textAlign:'center',color:'var(--text-3)'}}>
