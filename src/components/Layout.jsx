@@ -2,7 +2,7 @@ import{useState,useEffect}from'react'
 import{auth,db}from'../firebase'
 import{signOut}from'firebase/auth'
 import{useLocation,useNavigate,useSearchParams}from'react-router-dom'
-import{FileText,FileCheck,ScrollText,Users,Wallet,Briefcase,BarChart2,User,Settings,LogOut,Menu,X}from'lucide-react'
+import{FileText,FileCheck,ScrollText,Users,Wallet,Briefcase,BarChart2,User,Settings,LogOut,Menu,X,BookOpen}from'lucide-react'
 import{getDocs,collection,query,where}from'firebase/firestore'
 import Notifications from'./Notifications'
 import{useNotifications}from'../hooks/useNotifications'
@@ -17,6 +17,20 @@ const NAV_MAIN=[
 {path:'/expenses',label:'Expenses',icon:Wallet},
 {path:'/projects',label:'Projects',icon:Briefcase},
 ]
+
+// Ankora X Logo SVG
+const AnkoraLogo=()=>(
+<svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="34" height="34" rx="10" fill="url(#grad)"/>
+<defs>
+<linearGradient id="grad" x1="0" y1="0" x2="34" y2="34" gradientUnits="userSpaceOnUse">
+<stop offset="0%" stopColor="#4F6EF7"/>
+<stop offset="100%" stopColor="#7C3AED"/>
+</linearGradient>
+</defs>
+<text x="5" y="24" fontSize="18" fontWeight="800" fill="white" fontFamily="Georgia,serif">X</text>
+</svg>
+)
 
 export default function Layout({children,title}){
 const[open,setOpen]=useState(false)
@@ -59,11 +73,9 @@ return(
 <aside className={`sidebar${open?' open':''}`}>
 <div style={{padding:'20px 18px 16px',borderBottom:'0.5px solid var(--border)'}}>
 <div style={{display:'flex',alignItems:'center',gap:10}}>
-<div style={{width:34,height:34,background:'var(--primary)',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center'}}>
-<FileText size={18} color="#fff"/>
-</div>
+<AnkoraLogo/>
 <div>
-<div style={{fontWeight:600,fontSize:14,color:'var(--text-1)'}}>Invoice SaaS</div>
+<div style={{fontWeight:700,fontSize:15,color:'var(--text-1)',letterSpacing:'0.02em'}}>Ankora<span style={{color:'var(--primary)'}}>X</span></div>
 <div style={{fontSize:10,color:'var(--text-3)',marginTop:1}}>{auth.currentUser?.email}</div>
 </div>
 </div>
@@ -80,6 +92,12 @@ return(
 <BarChart2 size={17}/><span>Reports</span>
 </div>
 )}
+
+<div style={{fontSize:10,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.07em',padding:'12px 8px 4px',marginTop:8}}>Finance</div>
+<div className={`nav-item${location.pathname==='/chart-of-accounts'?' active':''}`} onClick={()=>{navigate('/chart-of-accounts');setOpen(false)}}>
+<BookOpen size={17}/><span>Chart of Accounts</span>
+</div>
+
 <div style={{fontSize:10,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.07em',padding:'12px 8px 4px',marginTop:8}}>Account</div>
 <div className="nav-item" onClick={()=>{navigate('/profile');setOpen(false)}}>
 <User size={17}/><span>Profile</span>
@@ -91,6 +109,9 @@ return(
 )}
 </nav>
 <div style={{padding:10,borderTop:'0.5px solid var(--border)'}}>
+<div style={{padding:'6px 8px',marginBottom:6,fontSize:11,color:'var(--text-3)',textAlign:'center'}}>
+Powered by <span style={{fontWeight:700,color:'var(--primary)'}}>AnkoraX</span>
+</div>
 <div className="nav-item" style={{color:'#ef4444'}} onClick={()=>signOut(auth)}>
 <LogOut size={17}/><span>Logout</span>
 </div>
