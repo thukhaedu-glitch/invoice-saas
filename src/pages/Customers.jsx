@@ -2,17 +2,19 @@ import{useState,useEffect}from'react'
 import{db,auth}from'../firebase'
 import{collection,onSnapshot,getDocs,query,where,doc,deleteDoc,addDoc,updateDoc,serverTimestamp}from'firebase/firestore'
 import Layout from'../components/Layout'
-import{ArrowLeft,FileText,FileCheck,ScrollText,Phone,Mail,MapPin,User,TrendingUp,Clock,CheckCircle}from'lucide-react'
+import{Plus,Trash2,Edit,X,Save,Users,Search,Eye,Phone,Mail,MapPin}from'lucide-react'
+import{useNavigate}from'react-router-dom'
 
 export default function Customers(){
 const[companyId,setCompanyId]=useState(null)
 const[customers,setCustomers]=useState([])
 const[loading,setLoading]=useState(true)
 const[search,setSearch]=useState('')
-const[modal,setModal]=useState(null) // null | 'add' | 'edit'
+const[modal,setModal]=useState(null)
 const[selected,setSelected]=useState(null)
 const[saving,setSaving]=useState(false)
 const[form,setForm]=useState({name:'',phone:'',email:'',address:'',note:''})
+const navigate=useNavigate()
 
 useEffect(()=>{
 const load=async()=>{
@@ -76,13 +78,12 @@ if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:
 return(
 <Layout title="Customers">
 
-{/* Modal */}
 {modal&&(
 <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
 <div style={{background:'white',borderRadius:16,width:'100%',maxWidth:480,boxShadow:'0 20px 60px rgba(0,0,0,0.2)'}}>
 <div style={{padding:'20px 24px',borderBottom:'0.5px solid #f1f5f9',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
 <div style={{fontWeight:600,fontSize:15}}>{modal==='add'?'Add Customer':'Edit Customer'}</div>
-<button onClick={()=>setModal(null)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-3)'}}><X size={18}/></button>
+<button type="button" onClick={()=>setModal(null)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-3)'}}><X size={18}/></button>
 </div>
 <div style={{padding:24}}>
 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:12}}>
@@ -108,8 +109,8 @@ return(
 </div>
 </div>
 <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
-<button onClick={()=>setModal(null)} className="btn btn-ghost">Cancel</button>
-<button onClick={handleSave} disabled={saving} className="btn btn-primary">
+<button type="button" onClick={()=>setModal(null)} className="btn btn-ghost">Cancel</button>
+<button type="button" onClick={handleSave} disabled={saving} className="btn btn-primary">
 <Save size={14}/>{saving?'Saving...':modal==='add'?'Add Customer':'Update'}
 </button>
 </div>
@@ -118,18 +119,16 @@ return(
 </div>
 )}
 
-{/* Header */}
 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16,gap:12}}>
 <div style={{position:'relative',flex:1,maxWidth:320}}>
 <Search size={14} style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text-3)'}}/>
 <input className="form-input" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search customers..." style={{paddingLeft:32}}/>
 </div>
-<button onClick={openAdd} className="btn btn-primary">
+<button type="button" onClick={openAdd} className="btn btn-primary">
 <Plus size={15}/>Add Customer
 </button>
 </div>
 
-{/* Stats */}
 <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginBottom:16}}>
 {[
 {label:'Total Customers',value:customers.length,icon:Users,color:'#4F6EF7',bg:'rgba(79,110,247,0.10)'},
@@ -148,7 +147,6 @@ return(
 ))}
 </div>
 
-{/* Table */}
 <div className="card" style={{overflow:'hidden'}}>
 {filtered.length===0?(
 <div style={{padding:64,textAlign:'center',color:'var(--text-3)'}}>
@@ -171,16 +169,15 @@ return(
 {filtered.map(c=>(
 <tr key={c.id}>
 <td style={{color:'var(--text-3)',fontFamily:'monospace',fontSize:11}}>{c.customerId||'-'}</td>
-<td style={{fontWeight:500}}>{c.name}</td>
+<td style={{fontWeight:500,cursor:'pointer',color:'var(--primary)'}} onClick={()=>navigate(`/customer/${c.id}`)}>{c.name}</td>
 <td style={{color:'var(--text-2)'}}>{c.phone||'-'}</td>
 <td style={{color:'var(--text-2)'}}>{c.email||'-'}</td>
 <td style={{color:'var(--text-2)',fontSize:12}}>{c.address||'-'}</td>
 <td style={{textAlign:'center'}}>
 <div style={{display:'flex',gap:4,justifyContent:'center'}}>
-  // table row မှာ
 <button type="button" onClick={()=>navigate(`/customer/${c.id}`)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--primary)',padding:4,borderRadius:6}}><Eye size={14}/></button>
-<button onClick={()=>openEdit(c)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Edit size={14}/></button>
-<button onClick={()=>handleDelete(c.id)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)',padding:4,borderRadius:6}}><Trash2 size={14}/></button>
+<button type="button" onClick={()=>openEdit(c)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Edit size={14}/></button>
+<button type="button" onClick={()=>handleDelete(c.id)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)',padding:4,borderRadius:6}}><Trash2 size={14}/></button>
 </div>
 </td>
 </tr>
