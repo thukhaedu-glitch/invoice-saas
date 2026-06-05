@@ -17,6 +17,7 @@ const NAV_MAIN=[
 {path:'/customers',label:'Customers',icon:Users},
 {path:'/expenses',label:'Expenses',icon:Wallet},
 {path:'/projects',label:'Projects',icon:Briefcase},
+{path:'/quotations',label:'Quotations',icon:FileCheck},
 ]
 
 const AnkoraLogo=()=>(
