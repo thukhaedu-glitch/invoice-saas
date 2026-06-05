@@ -4,8 +4,12 @@ import{collection,getDocs,query,where,doc,addDoc,updateDoc,deleteDoc,serverTimes
 import Layout from'../components/Layout'
 import{Plus,Edit,Trash2,Landmark,ArrowUpRight,ArrowDownLeft,Eye,ArrowLeft}from'lucide-react'
 
-const ACCOUNT_TYPES=['Cash','Bank','Mobile Banking','Other']
-const CURRENCIES=['Ks','USD','THB']
+const ACCOUNT_TYPES=['Cash','Bank','Mobile Banking','Pay','Other']
+const[currencies,setCurrencies]=useState(['MMK','USD','THB'])
+
+// useEffect load မှာ settings ကနေ currencies ယူပါ
+const currList=(sSnap.data().currencies||[]).filter(c=>c.code).map(c=>c.code)
+if(currList.length>0)setCurrencies(currList)
 
 export default function BankAccounts(){
 const[companyId,setCompanyId]=useState(null)
