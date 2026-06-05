@@ -5,8 +5,9 @@ import{onAuthStateChanged}from'firebase/auth'
 import Login from'./pages/Login'
 import Dashboard from'./pages/Dashboard'
 import Verify from'./pages/Verify'
+import VerifySearch from'./pages/VerifySearch'
 import InvoiceDetail from'./pages/InvoiceDetail'
-import Settings from'./pages/Settings' 
+import Settings from'./pages/Settings'
 import CreateInvoice from'./pages/CreateInvoice'
 import EditInvoice from'./pages/EditInvoice'
 import Customers from'./pages/Customers'
@@ -21,9 +22,6 @@ import JoinCompany from'./pages/JoinCompany'
 import QuotationDetail from'./pages/QuotationDetail'
 import EditQuotation from'./pages/EditQuotation'
 
-
-
-
 export default function App(){
 const[user,setUser]=useState(null)
 const[loading,setLoading]=useState(true)
@@ -33,6 +31,7 @@ return(
 <BrowserRouter>
 <Routes>
 <Route path="/login" element={!user?<Login/>:<Navigate to="/"/>}/>
+<Route path="/verify" element={<VerifySearch/>}/>
 <Route path="/verify/:companyId/:code" element={<Verify/>}/>
 <Route path="/" element={user?<Dashboard/>:<Navigate to="/login"/>}/>
 <Route path="/invoice/:id" element={user?<InvoiceDetail/>:<Navigate to="/login"/>}/>
@@ -45,15 +44,12 @@ return(
 <Route path="/contracts" element={user?<Contracts/>:<Navigate to="/login"/>}/>
 <Route path="/profile" element={user?<Profile/>:<Navigate to="/login"/>}/>
 <Route path="/settings" element={user?<Settings/>:<Navigate to="/login"/>}/>
-<Route path="*" element={<Navigate to="/"/>}/>
 <Route path="/projects" element={user?<Projects/>:<Navigate to="/login"/>}/>
-
 <Route path="/signup" element={!user?<Signup/>:<Navigate to="/"/>}/>
 <Route path="/join" element={!user?<JoinCompany/>:<Navigate to="/"/>}/>
 <Route path="/quotation/:id" element={user?<QuotationDetail/>:<Navigate to="/login"/>}/>
 <Route path="/edit-quotation/:id" element={user?<EditQuotation/>:<Navigate to="/login"/>}/>
-
-  
+<Route path="*" element={<Navigate to="/"/>}/>
 </Routes>
 </BrowserRouter>
 )
