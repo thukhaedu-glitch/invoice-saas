@@ -1,139 +1,266 @@
 import{useState,useEffect,useMemo}from'react'
 import{db,auth}from'../firebase'
-import{collection,onSnapshot,getDocs,query,where,doc,getDoc}from'firebase/firestore'
+import{collection,onSnapshot,getDocs,query,where,getDoc,doc}from'firebase/firestore'
 import Layout from'../components/Layout'
 import{FileText,CheckCircle,Clock,AlertCircle,TrendingUp,TrendingDown,Wallet,Users,Briefcase,ArrowRight}from'lucide-react'
 import{useNavigate}from'react-router-dom'
 import{useRole}from'../hooks/useRole'
-const NAV_MAIN=[
-{path:'/',label:'Dashboard',icon:LayoutDashboard},
-{path:'/invoices',label:'Invoices',icon:FileText},
-{path:'/',tab:'quotation',label:'Quotations',icon:FileCheck},
-{path:'/contracts',label:'Contracts',icon:ScrollText},
-{path:'/customers',label:'Customers',icon:Users},
-{path:'/expenses',label:'Expenses',icon:Wallet},
-{path:'/projects',label:'Projects',icon:Briefcase},
-]
 
-const AnkoraLogo=()=>(
-<svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="34" height="34" rx="10" fill="url(#grad)"/>
-<defs>
-<linearGradient id="grad" x1="0" y1="0" x2="34" y2="34" gradientUnits="userSpaceOnUse">
-<stop offset="0%" stopColor="#4F6EF7"/>
-<stop offset="100%" stopColor="#7C3AED"/>
-</linearGradient>
-</defs>
-<text x="5" y="24" fontSize="18" fontWeight="800" fill="white" fontFamily="Georgia,serif">X</text>
-</svg>
-)
+const months=['01','02','03','04','05','06','07','08','09','10','11','12']
+const monthNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+const BAR_H=100
 
-export default function Layout({children,title}){
-const[open,setOpen]=useState(false)
+export default function Dashboard(){
 const[companyId,setCompanyId]=useState(null)
-const location=useLocation()
+const[invoices,setInvoices]=useState([])
+const[expenses,setExpenses]=useState([])
+const[customers,setCustomers]=useState([])
+const[projects,setProjects]=useState([])
+const[bankAccounts,setBankAccounts]=useState([])
+const[loading,setLoading]=useState(true)
+const[filterYear,setFilterYear]=useState(new Date().getFullYear().toString())
 const navigate=useNavigate()
-const[searchParams]=useSearchParams()
-const{canSettings,canReports}=useRole()
+const{role}=useRole()
 
 useEffect(()=>{
 const load=async()=>{
 try{
-const snap=await getDocs(query(collection(db,'companies'),where(`members.${auth.currentUser?.uid}`,'!=',null)))
-if(!snap.empty)setCompanyId(snap.docs[0].id)
-}catch(e){}
+const snap=await getDocs(query(collection(db,'companies'),where(`members.${auth.currentUser.uid}`,'!=',null)))
+if(!snap.empty){
+const cid=snap.docs[0].id
+setCompanyId(cid)
+const unsubs=[]
+;[
+{name:'invoices',setter:setInvoices},
+{name:'expenses',setter:setExpenses},
+{name:'customers',setter:setCustomers},
+{name:'projects',setter:setProjects},
+].forEach(({name,setter})=>{
+const u=onSnapshot(collection(db,'companies',cid,name),snap=>
+setter(snap.docs.map(d=>({id:d.id,...d.data()}))))
+unsubs.push(u)
+})
+const baSnap=await getDocs(collection(db,'companies',cid,'bankAccounts'))
+setBankAccounts(baSnap.docs.map(d=>({id:d.id,...d.data()})).filter(a=>a.isActive!==false))
+setLoading(false)
+return()=>unsubs.forEach(u=>u())
+}
+}catch(e){console.error(e)}
+setLoading(false)
 }
 load()
 },[])
 
-useNotifications(companyId)
-useRecurring(companyId)
+const getInvDate=inv=>inv.date||(inv.createdAt?.seconds?new Date(inv.createdAt.seconds*1000).toISOString().split('T')[0]:null)
 
-const isActive=(item)=>{
-if(item.path==='/'&&!item.tab){
-return location.pathname==='/'&&!searchParams.get('tab')
-}
-if(item.tab){
-const currentTab=searchParams.get('tab')||''
-return location.pathname==='/'&&currentTab===item.tab
-}
-return location.pathname===item.path
-}
+const yearInvoices=useMemo(()=>invoices.filter(i=>getInvDate(i)?.startsWith(filterYear)),[invoices,filterYear])
+const yearExpenses=useMemo(()=>expenses.filter(e=>e.date?.startsWith(filterYear)),[expenses,filterYear])
 
-const handleNav=(item)=>{
-if(item.tab)navigate(`/?tab=${item.tab}`)
-else navigate(item.path)
-setOpen(false)
-}
+const totalRevenue=yearInvoices.filter(i=>i.status==='paid'||i.status==='partial').reduce((s,i)=>s+Number(i.paidAmount||i.totalAmount||0),0)
+const totalExpenses=yearExpenses.reduce((s,e)=>s+Number(e.amount||0),0)
+const netProfit=totalRevenue-totalExpenses
+const totalReceivable=invoices.filter(i=>i.status==='pending'||i.status==='partial').reduce((s,i)=>s+Number(i.remainingAmount||i.totalAmount||0),0)
+const totalBankBalance=bankAccounts.reduce((s,a)=>s+Number(a.currentBalance||a.openingBalance||0),0)
+
+const pendingApproval=invoices.filter(i=>i.status==='pending_approval')
+const adminApproved=invoices.filter(i=>i.status==='admin_approved')
+
+const chartData=months.map((m,idx)=>{
+const mInvs=invoices.filter(i=>getInvDate(i)?.startsWith(`${filterYear}-${m}`))
+const revenue=mInvs.filter(i=>i.status==='paid'||i.status==='partial').reduce((s,i)=>s+Number(i.paidAmount||i.totalAmount||0),0)
+const expense=expenses.filter(e=>e.date?.startsWith(`${filterYear}-${m}`)).reduce((s,e)=>s+Number(e.amount||0),0)
+return{month:monthNames[idx],revenue,expense}
+})
+const chartMax=Math.max(...chartData.map(m=>Math.max(m.revenue,m.expense)),1)
+
+const top5Clients=useMemo(()=>{
+const map={}
+invoices.filter(i=>i.status==='paid'||i.status==='partial').forEach(i=>{
+if(!map[i.clientName])map[i.clientName]=0
+map[i.clientName]+=Number(i.paidAmount||i.totalAmount||0)
+})
+return Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([name,amount])=>({name,amount}))
+},[invoices])
+
+const recentPayments=useMemo(()=>{
+const payments=[]
+invoices.forEach(inv=>{
+(inv.payments||[]).forEach(p=>{
+payments.push({...p,invoiceNumber:inv.invoiceNumber,clientName:inv.clientName})
+})
+})
+return payments.sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,5)
+},[invoices])
+
+const uniqueYears=[...new Set(invoices.map(i=>getInvDate(i)?.slice(0,4)).filter(Boolean))].sort().reverse()
+if(!uniqueYears.includes(new Date().getFullYear().toString()))uniqueYears.unshift(new Date().getFullYear().toString())
+
+const projectStats=useMemo(()=>{
+const s={planning:0,active:0,'on-hold':0,completed:0,cancelled:0}
+projects.forEach(p=>s[p.status]=(s[p.status]||0)+1)
+return s
+},[projects])
+
+if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh'}}>Loading...</div>
 
 return(
-<div style={{display:'flex',minHeight:'100vh'}}>
-{open&&<div onClick={()=>setOpen(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.3)',zIndex:98}}/>}
-<aside className={`sidebar${open?' open':''}`}>
-<div style={{padding:'20px 18px 16px',borderBottom:'0.5px solid var(--border)'}}>
-<div style={{display:'flex',alignItems:'center',gap:10}}>
-<AnkoraLogo/>
-<div>
-<div style={{fontWeight:700,fontSize:15,color:'var(--text-1)',letterSpacing:'0.02em'}}>Ankora<span style={{color:'var(--primary)'}}>X</span></div>
-<div style={{fontSize:10,color:'var(--text-3)',marginTop:1}}>{auth.currentUser?.email}</div>
+<Layout title="Dashboard">
+
+{role==='admin'&&pendingApproval.length>0&&(
+<div style={{background:'rgba(22,163,74,0.08)',border:'0.5px solid rgba(22,163,74,0.2)',borderRadius:12,padding:'12px 16px',marginBottom:16,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+<div style={{display:'flex',alignItems:'center',gap:8}}>
+<AlertCircle size={16} color="#16a34a"/>
+<span style={{fontSize:13,fontWeight:500,color:'#16a34a'}}>{pendingApproval.length} invoice{pendingApproval.length>1?'s':''} waiting for your approval</span>
+</div>
+<button type="button" onClick={()=>navigate('/invoices')} className="btn btn-primary" style={{fontSize:12,padding:'5px 12px',background:'#16a34a',boxShadow:'none'}}>Review Now</button>
+</div>
+)}
+{role==='owner'&&adminApproved.length>0&&(
+<div style={{background:'rgba(79,110,247,0.08)',border:'0.5px solid rgba(79,110,247,0.2)',borderRadius:12,padding:'12px 16px',marginBottom:16,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+<div style={{display:'flex',alignItems:'center',gap:8}}>
+<AlertCircle size={16} color="var(--primary)"/>
+<span style={{fontSize:13,fontWeight:500,color:'var(--primary)'}}>{adminApproved.length} invoice{adminApproved.length>1?'s':''} waiting for final approval</span>
+</div>
+<button type="button" onClick={()=>navigate('/invoices')} className="btn btn-primary" style={{fontSize:12,padding:'5px 12px'}}>Review Now</button>
+</div>
+)}
+
+<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+<h3 style={{fontSize:15,fontWeight:600,color:'var(--text-1)'}}>Overview — {filterYear}</h3>
+<select className="form-input" style={{width:'auto',fontSize:12,padding:'5px 8px'}} value={filterYear} onChange={e=>setFilterYear(e.target.value)}>
+{uniqueYears.map(y=><option key={y} value={y}>{y}</option>)}
+</select>
+</div>
+
+<div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:16}}>
+{[
+{label:'Total Revenue',value:totalRevenue,icon:TrendingUp,color:'#4F6EF7',bg:'rgba(79,110,247,0.10)'},
+{label:'Total Expenses',value:totalExpenses,icon:TrendingDown,color:'#dc2626',bg:'rgba(220,38,38,0.10)'},
+{label:'Net Profit',value:netProfit,icon:CheckCircle,color:netProfit>=0?'#16a34a':'#dc2626',bg:netProfit>=0?'rgba(22,163,74,0.10)':'rgba(220,38,38,0.10)'},
+{label:'Receivable',value:totalReceivable,icon:Clock,color:'#d97706',bg:'rgba(217,119,6,0.10)'},
+].map(({label,value,icon:Icon,color,bg})=>(
+<div key={label} className="card" style={{padding:16}}>
+<div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+<span style={{fontSize:12,fontWeight:500,color:'var(--text-2)'}}>{label}</span>
+<div style={{width:32,height:32,borderRadius:8,background:bg,display:'flex',alignItems:'center',justifyContent:'center'}}>
+<Icon size={16} color={color}/>
 </div>
 </div>
-</div>
-<nav style={{flex:1,padding:'12px 10px',overflowY:'auto'}}>
-<div style={{fontSize:10,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.07em',padding:'8px 8px 4px'}}>Main</div>
-{NAV_MAIN.map((item)=>(
-<div key={item.tab||item.path+item.label} className={`nav-item${isActive(item)?' active':''}`} onClick={()=>handleNav(item)}>
-<item.icon size={17}/><span>{item.label}</span>
+<div style={{fontSize:20,fontWeight:700,color,marginBottom:2}}>{value.toLocaleString()} Ks</div>
 </div>
 ))}
+</div>
 
-{canReports&&(
-<div style={{fontSize:10,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.07em',padding:'12px 8px 4px',marginTop:8}}>Finance</div>
-)}
-{canReports&&(
-<>
-<div className={`nav-item${location.pathname==='/chart-of-accounts'?' active':''}`} onClick={()=>{navigate('/chart-of-accounts');setOpen(false)}}>
-<BookOpen size={17}/><span>Chart of Accounts</span>
+{bankAccounts.length>0&&(
+<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:12,marginBottom:16}}>
+{bankAccounts.map(a=>(
+<div key={a.id} className="card" style={{padding:16,cursor:'pointer'}} onClick={()=>navigate('/bank-accounts')}>
+<div style={{fontSize:11,color:'var(--text-3)',marginBottom:4}}>{a.bankName||a.type}</div>
+<div style={{fontWeight:600,fontSize:14,marginBottom:4}}>{a.name}</div>
+<div style={{fontSize:18,fontWeight:700,color:'var(--primary)'}}>{Number(a.currentBalance||a.openingBalance||0).toLocaleString()} <span style={{fontSize:11,color:'var(--text-3)'}}>{a.currency||'MMK'}</span></div>
 </div>
-<div className={`nav-item${location.pathname==='/bank-accounts'?' active':''}`} onClick={()=>{navigate('/bank-accounts');setOpen(false)}}>
-<Landmark size={17}/><span>Bank Accounts</span>
+))}
+<div className="card" style={{padding:16,background:'linear-gradient(135deg,#1a1d2e,#2d3260)',color:'white'}}>
+<div style={{fontSize:11,opacity:0.7,marginBottom:4}}>Total Balance</div>
+<div style={{fontSize:18,fontWeight:700}}>{totalBankBalance.toLocaleString()} MMK</div>
 </div>
-<div className={`nav-item${location.pathname==='/reports'?' active':''}`} onClick={()=>{navigate('/reports');setOpen(false)}}>
-<BarChart2 size={17}/><span>Reports</span>
 </div>
-</>
 )}
 
-<div style={{fontSize:10,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.07em',padding:'12px 8px 4px',marginTop:8}}>Account</div>
-<div className={`nav-item${location.pathname==='/profile'?' active':''}`} onClick={()=>{navigate('/profile');setOpen(false)}}>
-<User size={17}/><span>Profile</span>
+<div className="card" style={{padding:20,marginBottom:16}}>
+<div style={{fontWeight:600,fontSize:14,marginBottom:16,color:'var(--text-1)'}}>Revenue vs Expenses — {filterYear}</div>
+<div style={{display:'flex',alignItems:'flex-end',gap:6,height:BAR_H+24,overflowX:'auto',paddingBottom:4}}>
+{chartData.map((m,i)=>(
+<div key={i} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3,minWidth:40,flex:1}}>
+<div style={{display:'flex',alignItems:'flex-end',gap:2,height:BAR_H}}>
+<div title={`Revenue: ${m.revenue.toLocaleString()} Ks`} style={{width:14,borderRadius:'3px 3px 0 0',background:'#4F6EF7',height:`${Math.round(m.revenue/chartMax*BAR_H)}px`,minHeight:m.revenue>0?3:0,transition:'height 0.3s'}}/>
+<div title={`Expense: ${m.expense.toLocaleString()} Ks`} style={{width:14,borderRadius:'3px 3px 0 0',background:'#ef4444',height:`${Math.round(m.expense/chartMax*BAR_H)}px`,minHeight:m.expense>0?3:0,transition:'height 0.3s'}}/>
 </div>
-{canSettings&&(
-<div className={`nav-item${location.pathname==='/settings'?' active':''}`} onClick={()=>{navigate('/settings');setOpen(false)}}>
-<Settings size={17}/><span>Settings</span>
+<div style={{fontSize:9,color:'var(--text-3)',textAlign:'center'}}>{m.month}</div>
 </div>
-)}
-</nav>
-<div style={{padding:10,borderTop:'0.5px solid var(--border)'}}>
-<div style={{padding:'6px 8px',marginBottom:6,fontSize:11,color:'var(--text-3)',textAlign:'center'}}>
-Powered by <span style={{fontWeight:700,color:'var(--primary)'}}>AnkoraX</span>
+))}
 </div>
-<div className="nav-item" style={{color:'#ef4444'}} onClick={()=>signOut(auth)}>
-<LogOut size={17}/><span>Logout</span>
+<div style={{display:'flex',gap:16,marginTop:8,justifyContent:'center'}}>
+<div style={{display:'flex',alignItems:'center',gap:5,fontSize:11,color:'var(--text-2)'}}>
+<div style={{width:10,height:10,borderRadius:2,background:'#4F6EF7'}}/>Revenue
+</div>
+<div style={{display:'flex',alignItems:'center',gap:5,fontSize:11,color:'var(--text-2)'}}>
+<div style={{width:10,height:10,borderRadius:2,background:'#ef4444'}}/>Expenses
 </div>
 </div>
-</aside>
-<div className="main-area">
-<div className="topbar">
-<button id="hamburger" onClick={()=>setOpen(v=>!v)} className="btn btn-ghost" style={{padding:'6px 8px'}}>
-{open?<X size={18}/>:<Menu size={18}/>}
+</div>
+
+<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}>
+<div className="card" style={{padding:20}}>
+<div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+<div style={{fontWeight:600,fontSize:13,color:'var(--text-1)',display:'flex',alignItems:'center',gap:8}}>
+<Users size={15} color="var(--primary)"/>Top 5 Clients
+</div>
+<button type="button" onClick={()=>navigate('/customers')} style={{background:'none',border:'none',cursor:'pointer',color:'var(--primary)',fontSize:11,display:'flex',alignItems:'center',gap:4}}>
+View all<ArrowRight size={11}/>
 </button>
-<div style={{flex:1,fontWeight:500,fontSize:15,color:'var(--text-1)'}}>{title}</div>
-<Notifications companyId={companyId}/>
-<span style={{fontSize:11,background:'var(--primary-light)',color:'var(--primary)',padding:'3px 10px',borderRadius:20,fontWeight:600}}>Free</span>
 </div>
-<div className="page-content">{children}</div>
+{top5Clients.length===0?<div style={{textAlign:'center',color:'var(--text-3)',fontSize:12,padding:20}}>No data yet</div>
+:top5Clients.map((c,i)=>{
+const maxAmt=top5Clients[0]?.amount||1
+return(
+<div key={c.name} style={{marginBottom:12}}>
+<div style={{display:'flex',justifyContent:'space-between',fontSize:13,marginBottom:4}}>
+<div style={{display:'flex',alignItems:'center',gap:6}}>
+<span style={{width:18,height:18,borderRadius:'50%',background:'var(--primary-light)',color:'var(--primary)',fontSize:10,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center'}}>{i+1}</span>
+<span style={{fontWeight:500}}>{c.name}</span>
+</div>
+<span style={{fontWeight:600,color:'#16a34a',fontSize:12}}>{c.amount.toLocaleString()} Ks</span>
+</div>
+<div style={{height:4,background:'#f1f5f9',borderRadius:2}}>
+<div style={{height:4,borderRadius:2,background:'var(--primary)',width:`${Math.round(c.amount/maxAmt*100)}%`,transition:'width 0.3s'}}/>
 </div>
 </div>
+)
+})}
+</div>
+
+<div className="card" style={{padding:20}}>
+<div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+<div style={{fontWeight:600,fontSize:13,color:'var(--text-1)',display:'flex',alignItems:'center',gap:8}}>
+<CheckCircle size={15} color="#16a34a"/>Recent Payments
+</div>
+<button type="button" onClick={()=>navigate('/invoices')} style={{background:'none',border:'none',cursor:'pointer',color:'var(--primary)',fontSize:11,display:'flex',alignItems:'center',gap:4}}>
+View all<ArrowRight size={11}/>
+</button>
+</div>
+{recentPayments.length===0?<div style={{textAlign:'center',color:'var(--text-3)',fontSize:12,padding:20}}>No payments yet</div>
+:recentPayments.map((p,i)=>(
+<div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom:'0.5px solid #f1f5f9'}}>
+<div>
+<div style={{fontSize:13,fontWeight:500,color:'var(--text-1)'}}>{p.clientName}</div>
+<div style={{fontSize:11,color:'var(--text-3)',marginTop:1}}>{p.invoiceNumber} · {p.date}</div>
+</div>
+<span style={{fontWeight:600,color:'#16a34a',fontSize:13}}>{Number(p.amount).toLocaleString()} Ks</span>
+</div>
+))}
+</div>
+</div>
+
+<div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12}}>
+{[
+{label:'Invoices',count:invoices.length,icon:FileText,color:'#4F6EF7',path:'/invoices'},
+{label:'Customers',count:customers.length,icon:Users,color:'#16a34a',path:'/customers'},
+{label:'Expenses',count:expenses.length,icon:Wallet,color:'#dc2626',path:'/expenses'},
+{label:'Projects',count:projects.length,icon:Briefcase,color:'#8b5cf6',path:'/projects'},
+].map(({label,count,icon:Icon,color,path})=>(
+<div key={label} className="card" style={{padding:16,cursor:'pointer',display:'flex',alignItems:'center',gap:12}} onClick={()=>navigate(path)}>
+<div style={{width:40,height:40,borderRadius:10,background:`${color}15`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+<Icon size={20} color={color}/>
+</div>
+<div>
+<div style={{fontSize:20,fontWeight:700,color:'var(--text-1)'}}>{count}</div>
+<div style={{fontSize:12,color:'var(--text-2)'}}>{label}</div>
+</div>
+</div>
+))}
+</div>
+
+</Layout>
 )
 }
