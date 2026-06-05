@@ -43,6 +43,7 @@ const[ownerName,setOwnerName]=useState('')
 const[staffSig,setStaffSig]=useState('')
 const[adminSig,setAdminSig]=useState('')
 const[ownerSig,setOwnerSig]=useState('')
+const[editorKey,setEditorKey]=useState(0)
 const[form,setForm]=useState({
 title:'Service Agreement',
 clientName:'',clientEmail:'',clientPhone:'',
@@ -56,10 +57,20 @@ const editorRef=useRef()
 const{role}=useRole()
 
 useEffect(()=>{
-if(view==='editor'&&editorRef.current){
-editorRef.current.innerHTML=form.content||DEFAULT_CONTENT
+if(view==='editor'){
+setEditorKey(k=>k+1)
 }
 },[view])
+
+useEffect(()=>{
+if(view==='editor'&&editorRef.current){
+setTimeout(()=>{
+if(editorRef.current){
+editorRef.current.innerHTML=form.content||DEFAULT_CONTENT
+}
+},50)
+}
+},[editorKey])
 
 useEffect(()=>{
 const load=async()=>{
@@ -326,34 +337,23 @@ if(view==='editor')return(
 </div>
 </div>
 
-{/* Rich Text Editor */}
 <div className="card" style={{padding:20,marginBottom:16}}>
 <div style={{fontSize:12,fontWeight:600,color:'var(--text-2)',marginBottom:12,textTransform:'uppercase',letterSpacing:'0.05em'}}>Contract Content</div>
-
-{/* Toolbar */}
 <div style={{display:'flex',flexWrap:'wrap',gap:4,padding:'8px',background:'#f8fafc',borderRadius:'8px 8px 0 0',border:'0.5px solid var(--border)',borderBottom:'none',alignItems:'center'}}>
-{[
-{cmd:'bold',label:<strong>B</strong>},
-{cmd:'italic',label:<em>I</em>},
-{cmd:'underline',label:<u>U</u>},
-].map(({cmd,label})=>(
+{[{cmd:'bold',label:<strong>B</strong>},{cmd:'italic',label:<em>I</em>},{cmd:'underline',label:<u>U</u>}].map(({cmd,label})=>(
 <button key={cmd} type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>execCmd(cmd)}
 style={{padding:'4px 10px',borderRadius:6,border:'0.5px solid var(--border)',background:'white',cursor:'pointer',fontSize:13,minWidth:32}}>
 {label}
 </button>
 ))}
-<div style={{width:1,background:'var(--border)',margin:'0 2px',alignSelf:'stretch'}}/>
-{[
-{cmd:'justifyLeft',label:'≡L'},
-{cmd:'justifyCenter',label:'≡C'},
-{cmd:'justifyRight',label:'≡R'},
-].map(({cmd,label})=>(
+<div style={{width:1,background:'var(--border)',margin:'0 2px',height:24}}/>
+{[{cmd:'justifyLeft',label:'≡L'},{cmd:'justifyCenter',label:'≡C'},{cmd:'justifyRight',label:'≡R'}].map(({cmd,label})=>(
 <button key={cmd} type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>execCmd(cmd)}
 style={{padding:'4px 8px',borderRadius:6,border:'0.5px solid var(--border)',background:'white',cursor:'pointer',fontSize:12}}>
 {label}
 </button>
 ))}
-<div style={{width:1,background:'var(--border)',margin:'0 2px',alignSelf:'stretch'}}/>
+<div style={{width:1,background:'var(--border)',margin:'0 2px',height:24}}/>
 <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>execCmd('insertUnorderedList')}
 style={{padding:'4px 10px',borderRadius:6,border:'0.5px solid var(--border)',background:'white',cursor:'pointer',fontSize:12}}>
 - List
@@ -362,26 +362,21 @@ style={{padding:'4px 10px',borderRadius:6,border:'0.5px solid var(--border)',bac
 style={{padding:'4px 10px',borderRadius:6,border:'0.5px solid var(--border)',background:'white',cursor:'pointer',fontSize:12}}>
 1. List
 </button>
-<div style={{width:1,background:'var(--border)',margin:'0 2px',alignSelf:'stretch'}}/>
+<div style={{width:1,background:'var(--border)',margin:'0 2px',height:24}}/>
 <select onMouseDown={e=>e.stopPropagation()} onChange={e=>execCmd('fontSize',e.target.value)} defaultValue="3"
 style={{padding:'4px 8px',borderRadius:6,border:'0.5px solid var(--border)',background:'white',fontSize:12,cursor:'pointer'}}>
 {[1,2,3,4,5,6,7].map(n=><option key={n} value={n}>Size {n}</option>)}
 </select>
-<div style={{width:1,background:'var(--border)',margin:'0 2px',alignSelf:'stretch'}}/>
-{[
-{cmd:'formatBlock',val:'h2',label:'H2'},
-{cmd:'formatBlock',val:'h3',label:'H3'},
-{cmd:'formatBlock',val:'p',label:'P'},
-].map(({cmd,val,label})=>(
+<div style={{width:1,background:'var(--border)',margin:'0 2px',height:24}}/>
+{[{cmd:'formatBlock',val:'h2',label:'H2'},{cmd:'formatBlock',val:'h3',label:'H3'},{cmd:'formatBlock',val:'p',label:'P'}].map(({cmd,val,label})=>(
 <button key={val} type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>execCmd(cmd,val)}
-style={{padding:'4px 8px',borderRadius:6,border:'0.5px solid var(--border)',background:'white',cursor:'pointer',fontSize:12}}>
+style={{padding:'4px 8px',borderRadius:6,border:'0.5px solid var(--border)',background:'white',cursor:'pointer',fontSize:12,fontWeight:val==='h2'?700:val==='h3'?600:400}}>
 {label}
 </button>
 ))}
 </div>
-
-{/* Editor area */}
 <div
+key={editorKey}
 ref={editorRef}
 contentEditable
 suppressContentEditableWarning
@@ -429,26 +424,16 @@ body{background:white!important;margin:0}
 <div className="no-print" style={{position:'fixed',top:0,left:0,right:0,zIndex:100,background:'rgba(255,255,255,0.95)',backdropFilter:'blur(12px)',borderBottom:'0.5px solid #e2e8f0',padding:'12px 24px',display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
 <button type="button" onClick={()=>setView('list')} className="btn btn-ghost" style={{padding:'8px 12px'}}><ArrowLeft size={16}/></button>
 <span style={{flex:1,fontWeight:500,fontSize:15}}>{selected.contractNumber} — {selected.title}</span>
-<button type="button" onClick={()=>handleShareLink(selected)} className="btn btn-ghost" style={{fontSize:13}}>
-<Link size={14}/>Share Link
-</button>
-<button type="button" onClick={()=>handleSendEmail(selected)} disabled={sendingReminder} className="btn btn-ghost" style={{fontSize:13}}>
-<Mail size={14}/>{sendingReminder?'Sending...':'Send Email'}
-</button>
+<button type="button" onClick={()=>handleShareLink(selected)} className="btn btn-ghost" style={{fontSize:13}}><Link size={14}/>Share Link</button>
+<button type="button" onClick={()=>handleSendEmail(selected)} disabled={sendingReminder} className="btn btn-ghost" style={{fontSize:13}}><Mail size={14}/>{sendingReminder?'Sending...':'Send Email'}</button>
 {(role==='admin'||role==='owner')&&selected.status==='draft'&&(
-<button type="button" onClick={()=>handleApprove(selected)} className="btn btn-ghost" style={{fontSize:13,color:'#16a34a',borderColor:'#16a34a'}}>
-<ThumbsUp size={14}/>Approve
-</button>
+<button type="button" onClick={()=>handleApprove(selected)} className="btn btn-ghost" style={{fontSize:13,color:'#16a34a',borderColor:'#16a34a'}}><ThumbsUp size={14}/>Approve</button>
 )}
 {(role==='owner'||role==='admin')&&selected.status!=='cancelled'&&(
-<button type="button" onClick={()=>handleCancel(selected)} className="btn btn-ghost" style={{fontSize:13,color:'#dc2626',borderColor:'#dc2626'}}>
-<XCircle size={14}/>Cancel
-</button>
+<button type="button" onClick={()=>handleCancel(selected)} className="btn btn-ghost" style={{fontSize:13,color:'#dc2626',borderColor:'#dc2626'}}><XCircle size={14}/>Cancel</button>
 )}
 <button type="button" onClick={()=>window.print()} className="btn btn-ghost"><Printer size={15}/>Print</button>
-<button type="button" onClick={handleDownloadPDF} disabled={downloading} className="btn btn-primary">
-<Download size={15}/>{downloading?'Generating...':'Download PDF'}
-</button>
+<button type="button" onClick={handleDownloadPDF} disabled={downloading} className="btn btn-primary"><Download size={15}/>{downloading?'Generating...':'Download PDF'}</button>
 </div>
 
 <div style={{minHeight:'100vh',background:'#f1f5f9',padding:'80px 24px 40px',display:'flex',justifyContent:'center'}}>
@@ -488,7 +473,6 @@ body{background:white!important;margin:0}
 <div style={{marginTop:40,paddingTop:24,borderTop:'0.5px solid #e2e8f0'}}>
 <div style={{fontSize:11,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',marginBottom:16,letterSpacing:'0.05em'}}>Authorized Signatures</div>
 <div style={{display:'grid',gridTemplateColumns:`repeat(${hasOwnerApproval?3:hasAdminApproval?2:1},1fr)`,gap:24,marginBottom:24}}>
-
 <div style={{textAlign:'center'}}>
 <div style={{height:64,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:4}}>
 {staffSig?<img src={staffSig} style={{height:56,maxWidth:120,objectFit:'contain'}}/>:<span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{staffName||'—'}</span>}
@@ -497,7 +481,6 @@ body{background:white!important;margin:0}
 <div style={{fontSize:12,fontWeight:500,color:'#1a1d2e',marginTop:2}}>{staffName||'Staff'}</div>
 {selected.createdAt?.seconds&&<div style={{fontSize:10,color:'#9aa0b4',marginTop:2}}>{new Date(selected.createdAt.seconds*1000).toLocaleDateString()}</div>}
 </div>
-
 {hasAdminApproval&&(
 <div style={{textAlign:'center'}}>
 <div style={{height:64,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:4}}>
@@ -508,7 +491,6 @@ body{background:white!important;margin:0}
 {selected.approvedAt&&<div style={{fontSize:10,color:'#9aa0b4',marginTop:2}}>{new Date(selected.approvedAt).toLocaleDateString()}</div>}
 </div>
 )}
-
 {hasOwnerApproval&&(
 <div style={{textAlign:'center'}}>
 <div style={{height:64,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:4}}>
@@ -520,7 +502,6 @@ body{background:white!important;margin:0}
 </div>
 )}
 </div>
-
 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:40,paddingTop:24,borderTop:'0.5px solid #f1f5f9'}}>
 <div>
 <div style={{borderBottom:'1.5px solid #1a1d2e',paddingBottom:4,marginBottom:8,minHeight:48,display:'flex',alignItems:'flex-end'}}>
@@ -552,7 +533,6 @@ body{background:white!important;margin:0}
 </div>
 )}
 </div>
-
 </div>
 </div>
 </>
@@ -565,9 +545,7 @@ return(
 <Search size={14} style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text-3)'}}/>
 <input className="form-input" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search contracts..." style={{paddingLeft:32}}/>
 </div>
-<button type="button" onClick={openNew} className="btn btn-primary">
-<Plus size={15}/>New Contract
-</button>
+<button type="button" onClick={openNew} className="btn btn-primary"><Plus size={15}/>New Contract</button>
 </div>
 
 <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:16}}>
