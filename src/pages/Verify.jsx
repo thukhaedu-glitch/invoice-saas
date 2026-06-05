@@ -3,6 +3,7 @@ import{useParams}from'react-router-dom'
 import{db}from'../firebase'
 import{collection,getDocs,query,where,doc,getDoc}from'firebase/firestore'
 import{CheckCircle,XCircle,Clock,FileText,Building2,Download}from'lucide-react'
+import{QRCodeSVG}from'qrcode.react'
 import html2canvas from'html2canvas'
 import jsPDF from'jspdf'
 
@@ -77,6 +78,7 @@ const statusColor={paid:'#16a34a',pending:'#d97706',overdue:'#dc2626',refunded:'
 const statusBg={paid:'#eaf3de',pending:'#faeeda',overdue:'#fcebeb',refunded:'#ede9fe',draft:'#f1f5f9',active:'#eaf3de',expired:'#faeeda',cancelled:'#fcebeb'}
 const docTypeLabel={invoice:'Invoice',quotation:'Quotation',contract:'Contract'}
 const docNumber=invoice?.invoiceNumber||invoice?.quotationNumber||invoice?.contractNumber||'-'
+const primaryColor=settings.primaryColor||'#4F6EF7'
 
 if(loading)return(
 <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'linear-gradient(135deg,#e8f0fe,#f0f4ff,#e8f8f0)'}}>
@@ -101,21 +103,9 @@ const subtotal=items.reduce((s,i)=>s+(i.qty||1)*(i.price||i.rate||0),0)
 return(
 <div style={{minHeight:'100vh',width:'100%',background:'linear-gradient(135deg,#e8f0fe,#f0f4ff,#e8f8f0)',padding:20}}>
 
-{/* Download button */}
-<div style={{display:'flex',justifyContent:'center',marginBottom:16}}>
-<button type="button" onClick={handleDownloadPDF} disabled={downloading} style={{
-background:'white',color:'#4F6EF7',border:'none',borderRadius:10,
-padding:'10px 20px',fontSize:13,fontWeight:600,cursor:'pointer',
-display:'flex',alignItems:'center',gap:8,
-boxShadow:'0 4px 16px rgba(79,110,247,0.3)',
-}}>
-<Download size={15}/>{downloading?'Generating PDF...':'Download PDF'}
-</button>
-</div>
+{/* Verify Card — user မြင်တဲ့ page */}
+<div style={{maxWidth:600,margin:'0 auto',background:'white',borderRadius:20,boxShadow:'0 8px 32px rgba(79,110,247,0.12)',overflow:'hidden',marginBottom:16}}>
 
-<div ref={printRef} style={{maxWidth:600,margin:'0 auto',background:'white',borderRadius:20,boxShadow:'0 8px 32px rgba(79,110,247,0.12)',overflow:'hidden'}}>
-
-{/* Header */}
 <div style={{background:'#4F6EF7',padding:'28px 32px',color:'white'}}>
 <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
 <div style={{width:48,height:48,background:'rgba(255,255,255,0.2)',borderRadius:12,display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',flexShrink:0}}>
@@ -131,7 +121,6 @@ boxShadow:'0 4px 16px rgba(79,110,247,0.3)',
 <div style={{fontSize:13,opacity:0.9}}>{docTypeLabel[docType]} #{docNumber}</div>
 </div>
 
-{/* Status */}
 <div style={{padding:'20px 32px',borderBottom:'1px solid #f1f5f9'}}>
 <div style={{display:'flex',alignItems:'center',gap:12}}>
 {s==='paid'||s==='active'?<CheckCircle size={32} color="#16a34a"/>:s==='pending'||s==='draft'?<Clock size={32} color="#d97706"/>:<XCircle size={32} color="#dc2626"/>}
@@ -142,7 +131,6 @@ boxShadow:'0 4px 16px rgba(79,110,247,0.3)',
 </div>
 </div>
 
-{/* Info */}
 <div style={{padding:'20px 32px',borderBottom:'1px solid #f1f5f9'}}>
 {[
 {label:'Company',value:company?.name||'-'},
@@ -157,7 +145,6 @@ boxShadow:'0 4px 16px rgba(79,110,247,0.3)',
 ))}
 </div>
 
-{/* Contract Content */}
 {docType==='contract'&&invoice.content&&(
 <div style={{padding:'20px 32px',borderBottom:'1px solid #f1f5f9'}}>
 <div style={{fontSize:12,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:12}}>Contract Details</div>
@@ -167,75 +154,184 @@ boxShadow:'0 4px 16px rgba(79,110,247,0.3)',
 </div>
 )}
 
-{/* Items — invoice/quotation */}
 {items.length>0&&docType!=='contract'&&(
 <div style={{padding:'20px 32px',borderBottom:'1px solid #f1f5f9'}}>
 <div style={{fontSize:12,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:12}}>Items</div>
-<div style={{overflowX:'auto'}}>
-<table style={{width:'100%',borderCollapse:'collapse',fontSize:13,minWidth:380}}>
+<table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
 <thead>
 <tr style={{borderBottom:'0.5px solid #e2e8f0'}}>
-<th style={{textAlign:'left',padding:'6px 8px 6px 0',color:'#9aa0b4',fontWeight:600,fontSize:11,textTransform:'uppercase'}}>Description</th>
-<th style={{textAlign:'center',padding:'6px 8px',color:'#9aa0b4',fontWeight:600,fontSize:11,textTransform:'uppercase',width:50}}>Qty</th>
-<th style={{textAlign:'right',padding:'6px 8px',color:'#9aa0b4',fontWeight:600,fontSize:11,textTransform:'uppercase',width:100}}>Rate</th>
-<th style={{textAlign:'right',padding:'6px 0 6px 8px',color:'#9aa0b4',fontWeight:600,fontSize:11,textTransform:'uppercase',width:100}}>Total</th>
+<th style={{textAlign:'left',padding:'6px 0',color:'#9aa0b4',fontWeight:600,fontSize:11,textTransform:'uppercase'}}>Description</th>
+<th style={{textAlign:'center',padding:'6px 8px',color:'#9aa0b4',fontWeight:600,fontSize:11,textTransform:'uppercase'}}>Qty</th>
+<th style={{textAlign:'right',padding:'6px 8px',color:'#9aa0b4',fontWeight:600,fontSize:11,textTransform:'uppercase'}}>Rate</th>
+<th style={{textAlign:'right',padding:'6px 0',color:'#9aa0b4',fontWeight:600,fontSize:11,textTransform:'uppercase'}}>Total</th>
 </tr>
 </thead>
 <tbody>
 {items.map((item,i)=>(
 <tr key={i} style={{borderBottom:'0.5px solid #f8fafc'}}>
-<td style={{padding:'8px 8px 8px 0',color:'#1a1d2e'}}>{item.desc||item.description||'-'}</td>
+<td style={{padding:'8px 0',color:'#1a1d2e'}}>{item.desc||item.description||'-'}</td>
 <td style={{padding:'8px',textAlign:'center',color:'#64748b'}}>{item.qty||1}</td>
 <td style={{padding:'8px',textAlign:'right',color:'#64748b',whiteSpace:'nowrap'}}>{Number(item.price||item.rate||0).toLocaleString()} Ks</td>
-<td style={{padding:'8px 0 8px 8px',textAlign:'right',fontWeight:500,color:'#1a1d2e',whiteSpace:'nowrap'}}>{Number((item.qty||1)*(item.price||item.rate||0)).toLocaleString()} Ks</td>
+<td style={{padding:'8px 0',textAlign:'right',fontWeight:500,color:'#1a1d2e',whiteSpace:'nowrap'}}>{Number((item.qty||1)*(item.price||item.rate||0)).toLocaleString()} Ks</td>
 </tr>
 ))}
 </tbody>
 </table>
 </div>
-</div>
 )}
 
-{/* Totals — invoice/quotation */}
 {docType!=='contract'&&(
 <div style={{padding:'16px 32px',borderBottom:'1px solid #f1f5f9'}}>
 <div style={{display:'flex',justifyContent:'space-between',padding:'6px 0',fontSize:13}}>
 <span style={{color:'#9aa0b4'}}>Subtotal</span>
-<span style={{whiteSpace:'nowrap'}}>{subtotal.toLocaleString()} Ks</span>
+<span>{subtotal.toLocaleString()} Ks</span>
 </div>
 {Number(invoice.discount||0)>0&&(
 <div style={{display:'flex',justifyContent:'space-between',padding:'6px 0',fontSize:13}}>
 <span style={{color:'#9aa0b4'}}>Discount</span>
-<span style={{color:'#dc2626',whiteSpace:'nowrap'}}>-{Number(invoice.discount).toLocaleString()} Ks</span>
+<span style={{color:'#dc2626'}}>-{Number(invoice.discount).toLocaleString()} Ks</span>
 </div>
 )}
 {Number(invoice.taxRate||0)>0&&(
 <div style={{display:'flex',justifyContent:'space-between',padding:'6px 0',fontSize:13}}>
 <span style={{color:'#9aa0b4'}}>Tax ({invoice.taxRate}%)</span>
-<span style={{whiteSpace:'nowrap'}}>+{Math.round(subtotal*invoice.taxRate/100).toLocaleString()} Ks</span>
+<span>+{Math.round(subtotal*invoice.taxRate/100).toLocaleString()} Ks</span>
 </div>
 )}
 <div style={{display:'flex',justifyContent:'space-between',padding:'10px 0 4px',fontSize:15,fontWeight:700,borderTop:'0.5px solid #e2e8f0',marginTop:6}}>
 <span style={{color:'#1a1d2e'}}>Total</span>
-<span style={{color:'#4F6EF7',whiteSpace:'nowrap'}}>{Number(invoice.totalAmount||0).toLocaleString()} Ks</span>
+<span style={{color:'#4F6EF7'}}>{Number(invoice.totalAmount||0).toLocaleString()} Ks</span>
 </div>
 </div>
 )}
 
-{/* Contract value */}
 {docType==='contract'&&invoice.value>0&&(
 <div style={{padding:'16px 32px',borderBottom:'1px solid #f1f5f9'}}>
 <div style={{display:'flex',justifyContent:'space-between',padding:'10px 0',fontSize:15,fontWeight:700}}>
 <span style={{color:'#1a1d2e'}}>Contract Value</span>
-<span style={{color:'#4F6EF7',whiteSpace:'nowrap'}}>{Number(invoice.value).toLocaleString()} Ks</span>
+<span style={{color:'#4F6EF7'}}>{Number(invoice.value).toLocaleString()} Ks</span>
 </div>
 </div>
 )}
 
-<div style={{padding:'16px 32px',background:'#f8fafc',textAlign:'center',fontSize:12,color:'#9aa0b4'}}>
-This document was verified by Ankora-X
+<div style={{padding:'20px 32px',background:'#f8fafc',textAlign:'center'}}>
+<button type="button" onClick={handleDownloadPDF} disabled={downloading} style={{
+background:'#4F6EF7',color:'white',border:'none',borderRadius:10,
+padding:'10px 24px',fontSize:13,fontWeight:600,cursor:'pointer',
+display:'inline-flex',alignItems:'center',gap:8,
+boxShadow:'0 4px 16px rgba(79,110,247,0.3)',marginBottom:12,
+}}>
+<Download size={15}/>{downloading?'Generating PDF...':'Download PDF'}
+</button>
+<div style={{fontSize:12,color:'#9aa0b4'}}>This document was verified by Ankora-X</div>
 </div>
 </div>
+
+{/* Hidden PDF area — contract format */}
+<div style={{position:'absolute',left:'-9999px',top:0}}>
+<div ref={printRef} style={{width:'210mm',background:'white',padding:'40px 50px',fontFamily:'Georgia,serif'}}>
+
+<div style={{textAlign:'center',marginBottom:32,borderBottom:'2px solid #1a1d2e',paddingBottom:24}}>
+{settings.logoUrl&&<img src={settings.logoUrl} style={{height:60,objectFit:'contain',marginBottom:12}}/>}
+<div style={{fontSize:22,fontWeight:700,color:'#1a1d2e',letterSpacing:1}}>{docType==='contract'?invoice.title:docTypeLabel[docType]}</div>
+<div style={{fontSize:13,color:'#64748b',marginTop:6}}>{docNumber}</div>
+</div>
+
+{docType==='contract'&&(
+<>
+<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:32,marginBottom:28,padding:'16px 0',borderBottom:'0.5px solid #e2e8f0'}}>
+<div>
+<div style={{fontSize:10,fontWeight:700,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:6}}>Party A (Service Provider)</div>
+<div style={{fontWeight:600,fontSize:15}}>{company?.name}</div>
+{settings.companyAddress&&<div style={{fontSize:12,color:'#64748b',marginTop:2}}>{settings.companyAddress}</div>}
+{settings.companyEmail&&<div style={{fontSize:12,color:'#64748b'}}>{settings.companyEmail}</div>}
+{settings.companyPhone&&<div style={{fontSize:12,color:'#64748b'}}>{settings.companyPhone}</div>}
+</div>
+<div>
+<div style={{fontSize:10,fontWeight:700,color:'#9aa0b4',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:6}}>Party B (Client)</div>
+<div style={{fontWeight:600,fontSize:15}}>{invoice.clientName}</div>
+{invoice.clientEmail&&<div style={{fontSize:12,color:'#64748b',marginTop:2}}>{invoice.clientEmail}</div>}
+{invoice.clientPhone&&<div style={{fontSize:12,color:'#64748b'}}>{invoice.clientPhone}</div>}
+</div>
+</div>
+
+<div style={{display:'flex',gap:24,marginBottom:28,fontSize:13,flexWrap:'wrap'}}>
+{invoice.startDate&&<div><span style={{color:'#9aa0b4'}}>Start Date: </span><strong>{invoice.startDate}</strong></div>}
+{invoice.endDate&&<div><span style={{color:'#9aa0b4'}}>End Date: </span><strong>{invoice.endDate}</strong></div>}
+{invoice.value>0&&<div><span style={{color:'#9aa0b4'}}>Contract Value: </span><strong>{Number(invoice.value).toLocaleString()} Ks</strong></div>}
+<div><span style={{color:'#9aa0b4'}}>Status: </span><strong style={{textTransform:'capitalize'}}>{invoice.status}</strong></div>
+</div>
+
+<div style={{marginBottom:40,lineHeight:1.8,fontSize:13}} dangerouslySetInnerHTML={{__html:invoice.content}}/>
+</>
+)}
+
+{docType!=='contract'&&(
+<>
+<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:24,marginBottom:24,padding:'16px 0',borderBottom:'0.5px solid #e2e8f0'}}>
+<div>
+<div style={{fontSize:10,fontWeight:700,color:'#9aa0b4',textTransform:'uppercase',marginBottom:6}}>Bill To</div>
+<div style={{fontWeight:600,fontSize:15}}>{invoice.clientName}</div>
+{invoice.clientEmail&&<div style={{fontSize:12,color:'#64748b'}}>{invoice.clientEmail}</div>}
+</div>
+<div>
+<div style={{fontSize:10,fontWeight:700,color:'#9aa0b4',textTransform:'uppercase',marginBottom:6}}>From</div>
+<div style={{fontWeight:600,fontSize:15}}>{company?.name}</div>
+{settings.companyEmail&&<div style={{fontSize:12,color:'#64748b'}}>{settings.companyEmail}</div>}
+</div>
+</div>
+
+<table style={{width:'100%',borderCollapse:'collapse',marginBottom:24}}>
+<thead>
+<tr style={{background:primaryColor}}>
+<th style={{padding:'10px 12px',textAlign:'left',color:'white',fontSize:11,fontWeight:600,textTransform:'uppercase'}}>#</th>
+<th style={{padding:'10px 12px',textAlign:'left',color:'white',fontSize:11,fontWeight:600,textTransform:'uppercase'}}>Description</th>
+<th style={{padding:'10px 12px',textAlign:'center',color:'white',fontSize:11,fontWeight:600,textTransform:'uppercase'}}>Qty</th>
+<th style={{padding:'10px 12px',textAlign:'right',color:'white',fontSize:11,fontWeight:600,textTransform:'uppercase'}}>Price</th>
+<th style={{padding:'10px 12px',textAlign:'right',color:'white',fontSize:11,fontWeight:600,textTransform:'uppercase'}}>Amount</th>
+</tr>
+</thead>
+<tbody>
+{items.map((item,i)=>(
+<tr key={i} style={{background:i%2===0?'white':'#f8fafc'}}>
+<td style={{padding:'10px 12px',fontSize:12,color:'#64748b'}}>{i+1}</td>
+<td style={{padding:'10px 12px',fontSize:13}}>{item.desc||item.description||'-'}</td>
+<td style={{padding:'10px 12px',textAlign:'center',fontSize:13}}>{item.qty||1}</td>
+<td style={{padding:'10px 12px',textAlign:'right',fontSize:13}}>{Number(item.price||item.rate||0).toLocaleString()} Ks</td>
+<td style={{padding:'10px 12px',textAlign:'right',fontSize:13,fontWeight:500}}>{Number((item.qty||1)*(item.price||item.rate||0)).toLocaleString()} Ks</td>
+</tr>
+))}
+</tbody>
+</table>
+
+<div style={{display:'flex',justifyContent:'flex-end',marginBottom:24}}>
+<div style={{width:240}}>
+<div style={{display:'flex',justifyContent:'space-between',padding:'4px 0',fontSize:13,color:'#64748b'}}>
+<span>Subtotal</span><span>{subtotal.toLocaleString()} Ks</span>
+</div>
+<div style={{display:'flex',justifyContent:'space-between',padding:'10px 12px',background:primaryColor,borderRadius:8,marginTop:8,color:'white',fontWeight:700,fontSize:15}}>
+<span>Total</span><span>{Number(invoice.totalAmount||0).toLocaleString()} Ks</span>
+</div>
+</div>
+</div>
+</>
+)}
+
+<div style={{marginTop:32,paddingTop:16,borderTop:'0.5px solid #e2e8f0',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+<div>
+<div style={{fontSize:10,color:'#9aa0b4',marginBottom:2}}>This document is system-generated and does not require a physical seal.</div>
+<div style={{fontSize:10,color:'#9aa0b4',marginBottom:2}}>Verify authenticity by scanning the QR code.</div>
+<div style={{fontSize:10,color:'#9aa0b4'}}>System developed by Ankora-X</div>
+</div>
+<div style={{textAlign:'center'}}>
+<QRCodeSVG value={`${window.location.origin}/verify/${companyId}/${code}`} size={64} fgColor="#1a1d2e"/>
+<div style={{fontSize:9,color:'#9aa0b4',marginTop:4}}>Scan to verify</div>
+</div>
+</div>
+
+</div>
+</div>
+
 </div>
 )
 }
