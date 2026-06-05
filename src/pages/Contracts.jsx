@@ -43,7 +43,6 @@ const[ownerName,setOwnerName]=useState('')
 const[staffSig,setStaffSig]=useState('')
 const[adminSig,setAdminSig]=useState('')
 const[ownerSig,setOwnerSig]=useState('')
-const[editorKey,setEditorKey]=useState(0)
 const[form,setForm]=useState({
 title:'Service Agreement',
 clientName:'',clientEmail:'',clientPhone:'',
@@ -62,7 +61,7 @@ const timer=setTimeout(()=>{
 if(editorRef.current){
 editorRef.current.innerHTML=form.content||DEFAULT_CONTENT
 }
-},100)
+},150)
 return()=>clearTimeout(timer)
 }
 },[view])
@@ -370,14 +369,22 @@ style={{padding:'4px 8px',borderRadius:6,border:'0.5px solid var(--border)',back
 </button>
 ))}
 </div>
-
-  <div
+<div
 ref={editorRef}
 contentEditable
 suppressContentEditableWarning
 onInput={e=>setForm(f=>({...f,content:e.currentTarget.innerHTML}))}
-style={{...}}
+style={{
+minHeight:400,padding:16,
+border:'0.5px solid var(--border)',
+borderRadius:'0 0 8px 8px',
+fontSize:14,lineHeight:1.8,
+outline:'none',
+background:'white',
+fontFamily:'inherit',
+}}
 />
+</div>
 
 <div className="card" style={{padding:20,marginBottom:16}}>
 <div style={{fontSize:12,fontWeight:600,color:'var(--text-2)',marginBottom:12,textTransform:'uppercase',letterSpacing:'0.05em'}}>Signatures</div>
