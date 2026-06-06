@@ -379,7 +379,7 @@ export default function JournalEntries() {
                                   <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 700, color: '#4F6EF7', fontSize: 12 }}>{lines.filter(l => l.type === 'debit').reduce((s, l) => s + Number(l.amount || 0), 0).toLocaleString()} Ks</td>
                                   <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 700, color: '#dc2626', fontSize: 12 }}>{lines.filter(l => l.type === 'credit').reduce((s, l) => s + Number(l.amount || 0), 0).toLocaleString()} Ks</td>
                                 </tr>
-                              </footer>
+                              </tfoot>
                             </table>
                           </div>
                         </td>
