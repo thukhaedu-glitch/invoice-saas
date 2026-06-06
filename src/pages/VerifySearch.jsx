@@ -86,6 +86,24 @@ canvas.width=video.videoWidth
 canvas.height=video.videoHeight
 const ctx=canvas.getContext('2d')
 ctx.drawImage(video,0,0,canvas.width,canvas.height)
+const imageData=ctx.getImageData(0,0,canvas.width,canvas.height)
+import('jsqr').then(({default:jsQR})=>{
+const code=jsQR(imageData.data,imageData.width,imageData.height,{
+inversionAttempts:'dontInvert',
+})
+if(code?.data){
+handleQRResult(code.data)
+}else{
+animRef.current=requestAnimationFrame(scanFrame)
+}
+}).catch(()=>{
+animRef.current=requestAnimationFrame(scanFrame)
+})
+},[handleQRResult])
+canvas.width=video.videoWidth
+canvas.height=video.videoHeight
+const ctx=canvas.getContext('2d')
+ctx.drawImage(video,0,0,canvas.width,canvas.height)
 
 // BarcodeDetector API (Chrome/Android မှာ support ရှိတယ်)
 if('BarcodeDetector' in window){
