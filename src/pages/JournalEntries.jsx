@@ -1,8 +1,9 @@
 import{useState,useEffect}from'react'
 import{db,auth}from'../firebase'
-import{collection,getDocs,query,where,addDoc,deleteDoc,doc,serverTimestamp,onSnapshot}from'firebase/firestore'
+
 import Layout from'../components/Layout'
 import{Plus,Trash2,X,Save,BookOpen,Search,ChevronDown,ChevronUp,AlertCircle,CheckCircle}from'lucide-react'
+import{collection,getDocs,query,where,addDoc,deleteDoc,doc,serverTimestamp,onSnapshot,updateDoc}from'firebase/firestore'
 
 const ACCOUNT_TYPES=[
 'Cash','Bank','Accounts Receivable','Accounts Payable',
@@ -72,14 +73,16 @@ const isBalanced=Math.abs(totalDebit-totalCredit)<0.01&&totalDebit>0
 
 const handleSave=async()=>{
 if(!form.description){alert('Description required');return}
-if(!isBalanced){alert(`Journal must balance — Debit: ${totalDebit.toLocaleString()}, Credit: ${totalCredit.toLocaleString()}`);return}
+if(!isBalanced){alert(`Not balanced — Debit: ${totalDebit.toLocaleString()}, Credit: ${totalCredit.toLocaleString()}`);return}
 if(form.lines.some(l=>!l.account||!l.amount)){alert('All lines must have account and amount');return}
 setSaving(true)
 try{
+// Journal entry save
+const ref=form.ref||'JE-'+Date.now().toString().slice(-6)
 await addDoc(collection(db,'companies',companyId,'journalEntries'),{
 date:form.date,
 description:form.description,
-ref:form.ref||'JE-'+Date.now().toString().slice(-6),
+ref,
 entries:form.lines.map(l=>({
 account:l.account,
 type:l.type,
@@ -90,6 +93,40 @@ source:'manual',
 createdAt:serverTimestamp(),
 createdBy:auth.currentUser.uid,
 })
+
+// COA balance update
+const acSnap=await getDocs(collection(db,'companies',companyId,'accounts'))
+const allAccounts=acSnap.docs.map(d=>({id:d.id,...d.data()}))
+
+// Normal balance rules
+const normalDebit=['Assets','Expenses'] // debit တက်
+const normalCredit=['Liabilities','Equity','Income'] // credit တက်
+
+for(const line of form.lines){
+// Account name match လုပ်ပြီး find
+const matched=allAccounts.find(a=>
+a.name.toLowerCase()===line.account.toLowerCase()||
+a.code===line.account
+)
+if(!matched)continue
+
+const currentBal=Number(matched.currentBalance||matched.openingBalance||0)
+let newBal=currentBal
+
+if(normalDebit.includes(matched.type)){
+// Assets/Expenses: debit တက်, credit ကျ
+newBal=line.type==='debit'?currentBal+Number(line.amount):currentBal-Number(line.amount)
+}else{
+// Liabilities/Equity/Income: credit တက်, debit ကျ
+newBal=line.type==='credit'?currentBal+Number(line.amount):currentBal-Number(line.amount)
+}
+
+await updateDoc(doc(db,'companies',companyId,'accounts',matched.id),{
+currentBalance:newBal,
+updatedAt:serverTimestamp(),
+})
+}
+
 setModal(false)
 }catch(e){alert(e.message)}
 setSaving(false)
