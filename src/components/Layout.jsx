@@ -2,7 +2,10 @@ import{useState,useEffect}from'react'
 import{auth,db}from'../firebase'
 import{signOut}from'firebase/auth'
 import{useLocation,useNavigate,useSearchParams}from'react-router-dom'
-import{FileText,FileCheck,ScrollText,Users,Wallet,Briefcase,BarChart2,User,Settings,LogOut,Menu,X,BookOpen,Landmark,LayoutDashboard,Receipt}from'lucide-react'
+
+
+
+import{FileText,FileCheck,ScrollText,Users,Wallet,Briefcase,BarChart2,User,Settings,LogOut,Menu,X,BookOpen,Landmark,LayoutDashboard,Receipt,GitCompare}from'lucide-react'
 import{getDocs,collection,query,where}from'firebase/firestore'
 import Notifications from'./Notifications'
 import{useNotifications}from'../hooks/useNotifications'
@@ -104,6 +107,9 @@ return(
 </div>
 <div className={`nav-item${location.pathname==='/reports'?' active':''}`} onClick={()=>{navigate('/reports');setOpen(false)}}>
 <BarChart2 size={17}/><span>Reports</span>
+</div>
+<div className={`nav-item${location.pathname.startsWith('/reconcile')?' active':''}`} onClick={()=>{navigate('/bank-accounts');setOpen(false)}}>
+<GitCompare size={17}/><span>Reconciliation</span>
 </div>
 </>
 )}
