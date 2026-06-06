@@ -82,7 +82,13 @@ const overdueBills=bills.filter(b=>
 (b.status==='unpaid'||b.status==='partial')&&b.dueDate&&b.dueDate<today
 )
 const overdueBillsTotal=overdueBills.reduce((s,b)=>s+Number(b.remainingAmount||b.amount||0),0)
+const overdueInvoices=invoices.filter(i=>
+i.status==='overdue'||
+((i.status==='pending'||i.status==='partial')&&i.dueDate&&i.dueDate<today)
+)
+const overdueInvoicesTotal=overdueInvoices.reduce((s,i)=>s+Number(i.remainingAmount||i.totalAmount||0),0)
 
+  
 const chartData=months.map((m,idx)=>{
 const mInvs=invoices.filter(i=>getInvDate(i)?.startsWith(`${filterYear}-${m}`))
 const revenue=mInvs.filter(i=>i.status==='paid'||i.status==='partial').reduce((s,i)=>s+Number(i.paidAmount||i.totalAmount||0),0)
@@ -152,7 +158,21 @@ View Bills
 </button>
 </div>
 )}
-
+{/* Overdue Invoices Banner */}
+{overdueInvoices.length>0&&(
+<div style={{background:'rgba(217,119,6,0.08)',border:'0.5px solid rgba(217,119,6,0.2)',borderRadius:12,padding:'12px 16px',marginBottom:16,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+<div style={{display:'flex',alignItems:'center',gap:8}}>
+<AlertCircle size={16} color="#d97706"/>
+<span style={{fontSize:13,fontWeight:500,color:'#d97706'}}>
+{overdueInvoices.length} overdue invoice{overdueInvoices.length>1?'s':''} — {overdueInvoicesTotal.toLocaleString()} Ks uncollected
+</span>
+</div>
+<button type="button" onClick={()=>navigate('/invoices')} className="btn btn-primary" style={{fontSize:12,padding:'5px 12px',background:'#d97706',boxShadow:'none'}}>
+View Invoices
+</button>
+</div>
+)}
+  
 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
 <h3 style={{fontSize:15,fontWeight:600,color:'var(--text-1)'}}>Overview — {filterYear}</h3>
 <select className="form-input" style={{width:'auto',fontSize:12,padding:'5px 8px'}} value={filterYear} onChange={e=>setFilterYear(e.target.value)}>
