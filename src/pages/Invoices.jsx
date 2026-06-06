@@ -2,11 +2,12 @@ import{useState,useEffect,useMemo}from'react'
 import{db,auth}from'../firebase'
 import{collection,onSnapshot,getDocs,query,where,doc,deleteDoc,updateDoc,addDoc,serverTimestamp,getDoc}from'firebase/firestore'
 import Layout from'../components/Layout'
-import{FileText,Plus,CheckCircle,Clock,AlertCircle,Edit,Trash2,RefreshCcw,Link,Printer,CheckSquare,CopyPlus,DollarSign,X,Search,Mail,ThumbsUp,ThumbsDown,Download,Square,CheckSquare2}from'lucide-react'
+import{FileText,Plus,CheckCircle,Clock,AlertCircle,Edit,Trash2,RefreshCcw,Link,Printer,CheckSquare,CopyPlus,DollarSign,X,Search,Mail,ThumbsUp,ThumbsDown,Download}from'lucide-react'
 import{useNavigate}from'react-router-dom'
 import{sendInvoiceReminder}from'../utils/emailService'
 import{useRole}from'../hooks/useRole'
 import ConfirmPassword from'../components/ConfirmPassword'
+import{logAction}from'../utils/auditLog'
 
 const months=['01','02','03','04','05','06','07','08','09','10','11','12']
 const monthNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
@@ -30,7 +31,6 @@ const[confirmAction,setConfirmAction]=useState(null)
 const[managedBy,setManagedBy]=useState({})
 const[bankAccounts,setBankAccounts]=useState([])
 const[paymentBankAccountId,setPaymentBankAccountId]=useState('')
-// Bulk selection
 const[selectedIds,setSelectedIds]=useState(new Set())
 const[bulkLoading,setBulkLoading]=useState(false)
 const navigate=useNavigate()
@@ -121,7 +121,6 @@ return<span className={`badge ${map[s]||'badge-warning'}`}>
 </span>
 }
 
-// Bulk selection handlers
 const toggleSelect=(id)=>{
 setSelectedIds(prev=>{
 const next=new Set(prev)
@@ -131,18 +130,15 @@ return next
 }
 
 const toggleSelectAll=()=>{
-if(selectedIds.size===filteredInvoices.length){
-setSelectedIds(new Set())
-}else{
-setSelectedIds(new Set(filteredInvoices.map(i=>i.id)))
-}
+if(selectedIds.size===filteredInvoices.length)setSelectedIds(new Set())
+else setSelectedIds(new Set(filteredInvoices.map(i=>i.id)))
 }
 
 const clearSelection=()=>setSelectedIds(new Set())
-
 const selectedInvoices=filteredInvoices.filter(i=>selectedIds.has(i.id))
+const allSelected=filteredInvoices.length>0&&selectedIds.size===filteredInvoices.length
+const someSelected=selectedIds.size>0
 
-// Bulk actions
 const handleBulkMarkPaid=async()=>{
 if(!selectedIds.size)return
 if(!confirm(`Mark ${selectedIds.size} invoice(s) as paid?`))return
@@ -153,12 +149,14 @@ for(const id of selectedIds){
 const inv=invoices.find(i=>i.id===id)
 if(!inv)continue
 await updateDoc(doc(db,'companies',companyId,'invoices',id),{
-status:'paid',
-paidAmount:Number(inv.totalAmount||0),
-remainingAmount:0,
-lastPaymentDate:today,
+status:'paid',paidAmount:Number(inv.totalAmount||0),remainingAmount:0,lastPaymentDate:today,
 })
 }
+await logAction(companyId,{
+action:'update',module:'invoices',
+description:`Bulk marked ${selectedIds.size} invoice(s) as paid`,
+metadata:{count:selectedIds.size},
+})
 clearSelection()
 }catch(e){alert(e.message)}
 setBulkLoading(false)
@@ -167,12 +165,17 @@ setBulkLoading(false)
 const handleBulkDelete=async()=>{
 if(!selectedIds.size)return
 if(!canDelete){alert('No permission to delete');return}
-if(!confirm(`Delete ${selectedIds.size} invoice(s)? This cannot be undone.`))return
+if(!confirm(`Delete ${selectedIds.size} invoice(s)?`))return
 setBulkLoading(true)
 try{
 for(const id of selectedIds){
 await deleteDoc(doc(db,'companies',companyId,'invoices',id))
 }
+await logAction(companyId,{
+action:'delete',module:'invoices',
+description:`Bulk deleted ${selectedIds.size} invoice(s)`,
+metadata:{count:selectedIds.size},
+})
 clearSelection()
 }catch(e){alert(e.message)}
 setBulkLoading(false)
@@ -194,6 +197,11 @@ companyPhone:companyInfo.phone,paymentMethods:companyInfo.paymentMethods,
 invoiceLink:`${window.location.origin}/verify/${companyId}/${item.securityCode||item.id}`,
 })
 }
+await logAction(companyId,{
+action:'send',module:'invoices',
+description:`Bulk sent reminders to ${withEmail.length} client(s)`,
+metadata:{count:withEmail.length},
+})
 alert(`Reminders sent to ${withEmail.length} client(s) ✓`)
 clearSelection()
 }catch(e){alert(e.message)}
@@ -222,7 +230,13 @@ URL.revokeObjectURL(url)
 }
 
 const handleDelete=async(id)=>{
+const inv=invoices.find(i=>i.id===id)
 await deleteDoc(doc(db,'companies',companyId,'invoices',id))
+await logAction(companyId,{
+action:'delete',module:'invoices',
+description:`Deleted invoice: ${inv?.invoiceNumber||id} — ${inv?.clientName||''}`,
+metadata:{invoiceId:id,invoiceNumber:inv?.invoiceNumber},
+})
 }
 
 const handleDeleteWithAuth=(id)=>{
@@ -238,18 +252,38 @@ setConfirmAction({action:()=>navigate(`/edit/${item.id}`),label:'edit this invoi
 
 const handleStatus=async(id,status)=>{
 await updateDoc(doc(db,'companies',companyId,'invoices',id),{status})
+await logAction(companyId,{
+action:'update',module:'invoices',
+description:`Status changed to ${status}: ${invoices.find(i=>i.id===id)?.invoiceNumber||id}`,
+metadata:{invoiceId:id,status},
+})
 }
 
 const handleApprove=async(id,item)=>{
 if(role==='admin'&&item.status==='pending_approval'){
 if(!canAdminApprove(item)){alert('You can only approve invoices from staff you manage.');return}
 await updateDoc(doc(db,'companies',companyId,'invoices',id),{status:'admin_approved',approvedBy:auth.currentUser.uid,approvedAt:new Date().toISOString()})
+await logAction(companyId,{
+action:'approve',module:'invoices',
+description:`Admin approved: ${item.invoiceNumber} — ${item.clientName}`,
+metadata:{invoiceId:id},
+})
 alert('Approved by admin ✓')
 }else if(role==='owner'&&item.status==='admin_approved'){
 await updateDoc(doc(db,'companies',companyId,'invoices',id),{status:'pending',ownerApprovedBy:auth.currentUser.uid,ownerApprovedAt:new Date().toISOString()})
+await logAction(companyId,{
+action:'approve',module:'invoices',
+description:`Owner final approved: ${item.invoiceNumber} — ${item.clientName}`,
+metadata:{invoiceId:id},
+})
 alert('Fully approved ✓')
 }else if(role==='owner'&&item.status==='pending_approval'){
 await updateDoc(doc(db,'companies',companyId,'invoices',id),{status:'pending',approvedBy:auth.currentUser.uid,approvedAt:new Date().toISOString(),ownerApprovedBy:auth.currentUser.uid,ownerApprovedAt:new Date().toISOString()})
+await logAction(companyId,{
+action:'approve',module:'invoices',
+description:`Owner approved: ${item.invoiceNumber} — ${item.clientName}`,
+metadata:{invoiceId:id},
+})
 alert('Approved ✓')
 }
 }
@@ -259,6 +293,11 @@ if(role==='admin'&&!canAdminApprove(item)){alert('You can only reject invoices f
 if(role!=='owner'&&role!=='admin'){alert('Only admin or owner can reject');return}
 if(!confirm('Reject this invoice?'))return
 await updateDoc(doc(db,'companies',companyId,'invoices',id),{status:'rejected',rejectedBy:auth.currentUser.uid,rejectedAt:new Date().toISOString()})
+await logAction(companyId,{
+action:'reject',module:'invoices',
+description:`Rejected: ${item.invoiceNumber} — ${item.clientName}`,
+metadata:{invoiceId:id},
+})
 }
 
 const handleShareLink=(item)=>{
@@ -278,6 +317,11 @@ status:'pending',
 securityCode:'SEC-'+Math.random().toString(36).substring(2,8).toUpperCase(),
 createdAt:serverTimestamp(),
 createdBy:auth.currentUser.uid,
+})
+await logAction(companyId,{
+action:'create',module:'invoices',
+description:`Duplicated invoice: ${item.invoiceNumber} — ${item.clientName}`,
+metadata:{originalId:item.id},
 })
 }catch(e){alert(e.message)}
 }
@@ -331,6 +375,11 @@ createdBy:auth.currentUser.uid,
 })
 }
 }
+await logAction(companyId,{
+action:'payment',module:'invoices',
+description:`Payment recorded: ${item.invoiceNumber} — ${item.clientName} — ${amount.toLocaleString()} Ks`,
+metadata:{invoiceId:item.id,amount,method:paymentForm.method,status:newStatus},
+})
 setPaymentModal(null)
 }catch(e){alert(e.message)}
 setSavingPayment(false)
@@ -348,14 +397,17 @@ status:item.status,companyName:companyInfo.name,companyEmail:companyInfo.email,
 companyPhone:companyInfo.phone,paymentMethods:companyInfo.paymentMethods,
 invoiceLink:`${window.location.origin}/verify/${companyId}/${item.securityCode||item.id}`,
 })
-if(result.success)alert(`Reminder sent ✓`)
-else alert('Failed: '+result.error)
+if(result.success){
+await logAction(companyId,{
+action:'send',module:'invoices',
+description:`Reminder sent: ${item.invoiceNumber} → ${item.clientEmail}`,
+metadata:{invoiceId:item.id,clientEmail:item.clientEmail},
+})
+alert(`Reminder sent ✓`)
+}else alert('Failed: '+result.error)
 }catch(e){alert(e.message)}
 setSendingReminder(null)
 }
-
-const allSelected=filteredInvoices.length>0&&selectedIds.size===filteredInvoices.length
-const someSelected=selectedIds.size>0
 
 if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh'}}>Loading...</div>
 
@@ -363,7 +415,6 @@ return(
 <Layout title="Invoices">
 {confirmAction&&<ConfirmPassword action={confirmAction.label} onConfirm={()=>{confirmAction.action();setConfirmAction(null)}} onCancel={()=>setConfirmAction(null)}/>}
 
-{/* Payment Modal */}
 {paymentModal&&(
 <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
 <div style={{background:'white',borderRadius:16,width:'100%',maxWidth:460,boxShadow:'0 20px 60px rgba(0,0,0,0.2)',maxHeight:'90vh',overflowY:'auto'}}>
@@ -434,7 +485,6 @@ To Account <span style={{color:'var(--primary)',fontSize:11}}>(Bank balance auto
 </div>
 )}
 
-{/* Approval banners */}
 {role==='admin'&&pendingApproval.length>0&&(
 <div style={{background:'rgba(22,163,74,0.08)',border:'0.5px solid rgba(22,163,74,0.2)',borderRadius:12,padding:'12px 16px',marginBottom:16,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
 <div style={{display:'flex',alignItems:'center',gap:8}}>
@@ -454,7 +504,6 @@ To Account <span style={{color:'var(--primary)',fontSize:11}}>(Bank balance auto
 </div>
 )}
 
-{/* Stats */}
 <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:16}}>
 {statsCards.map(({label,value,amount,color,bg})=>(
 <div key={label} className="card" style={{padding:16}}>
@@ -465,7 +514,6 @@ To Account <span style={{color:'var(--primary)',fontSize:11}}>(Bank balance auto
 ))}
 </div>
 
-{/* Filters */}
 <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center',marginBottom:16,justifyContent:'space-between'}}>
 <div style={{display:'flex',gap:8,flexWrap:'wrap',flex:1}}>
 <div style={{position:'relative'}}>
@@ -501,19 +549,11 @@ To Account <span style={{color:'var(--primary)',fontSize:11}}>(Bank balance auto
 </button>
 </div>
 
-{/* Bulk Action Bar */}
 {someSelected&&(
-<div style={{
-background:'linear-gradient(135deg,#1a1d2e,#2d3260)',
-borderRadius:12,padding:'12px 16px',
-marginBottom:16,
-display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'
-}}>
+<div style={{background:'linear-gradient(135deg,#1a1d2e,#2d3260)',borderRadius:12,padding:'12px 16px',marginBottom:16,display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
 <div style={{display:'flex',alignItems:'center',gap:8,flex:1}}>
 <span style={{fontSize:13,fontWeight:600,color:'white'}}>{selectedIds.size} invoice{selectedIds.size>1?'s':''} selected</span>
-<button type="button" onClick={clearSelection} style={{background:'rgba(255,255,255,0.1)',border:'none',cursor:'pointer',color:'white',padding:'2px 8px',borderRadius:6,fontSize:11}}>
-Clear
-</button>
+<button type="button" onClick={clearSelection} style={{background:'rgba(255,255,255,0.1)',border:'none',cursor:'pointer',color:'white',padding:'2px 8px',borderRadius:6,fontSize:11}}>Clear</button>
 </div>
 <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
 <button type="button" onClick={handleBulkMarkPaid} disabled={bulkLoading} className="btn" style={{background:'rgba(22,163,74,0.2)',color:'#4ade80',border:'0.5px solid rgba(22,163,74,0.3)',fontSize:12,padding:'6px 12px'}}>
@@ -535,7 +575,6 @@ Clear
 </div>
 )}
 
-{/* Table */}
 <div className="card" style={{overflow:'hidden'}}>
 {filteredInvoices.length===0?(
 <div style={{padding:64,textAlign:'center',color:'var(--text-3)'}}>
