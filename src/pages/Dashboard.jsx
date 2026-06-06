@@ -11,6 +11,7 @@ const monthNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','N
 const BAR_H=100
 
 export default function Dashboard(){
+const[dismissedBanners,setDismissedBanners]=useState(false)
 const[companyId,setCompanyId]=useState(null)
 const[invoices,setInvoices]=useState([])
 const[bills,setBills]=useState([])
@@ -144,32 +145,38 @@ return(
 </div>
 )}
 
-{/* Overdue Bills Banner */}
-{overdueBills.length>0&&(
-<div style={{background:'rgba(220,38,38,0.08)',border:'0.5px solid rgba(220,38,38,0.2)',borderRadius:12,padding:'12px 16px',marginBottom:16,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+{/* Overdue Summary Banner */}
+{!dismissedBanners&&(
+<div style={{
+background:overdueBills.length>0||overdueInvoices.length>0?'rgba(220,38,38,0.06)':'rgba(22,163,74,0.06)',
+border:`0.5px solid ${overdueBills.length>0||overdueInvoices.length>0?'rgba(220,38,38,0.2)':'rgba(22,163,74,0.2)'}`,
+borderRadius:12,padding:'12px 16px',marginBottom:16,
+}}>
+<div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:overdueBills.length>0||overdueInvoices.length>0?8:0}}>
 <div style={{display:'flex',alignItems:'center',gap:8}}>
-<AlertCircle size={16} color="#dc2626"/>
-<span style={{fontSize:13,fontWeight:500,color:'#dc2626'}}>
-{overdueBills.length} overdue bill{overdueBills.length>1?'s':''} — {overdueBillsTotal.toLocaleString()} Ks unpaid
+<AlertCircle size={16} color={overdueBills.length>0||overdueInvoices.length>0?'#dc2626':'#16a34a'}/>
+<span style={{fontSize:13,fontWeight:600,color:overdueBills.length>0||overdueInvoices.length>0?'#dc2626':'#16a34a'}}>
+{overdueBills.length===0&&overdueInvoices.length===0?'✓ No overdue bills or invoices':'Overdue Alert'}
 </span>
 </div>
-<button type="button" onClick={()=>navigate('/bills')} className="btn btn-primary" style={{fontSize:12,padding:'5px 12px',background:'#dc2626',boxShadow:'none'}}>
-View Bills
-</button>
+<button type="button" onClick={()=>setDismissedBanners(true)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-3)',fontSize:18,lineHeight:1,padding:'0 4px'}}>×</button>
+</div>
+{overdueBills.length>0&&(
+<div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'6px 0',borderTop:'0.5px solid rgba(220,38,38,0.1)'}}>
+<span style={{fontSize:12,color:'#dc2626'}}>
+🔴 {overdueBills.length} overdue bill{overdueBills.length>1?'s':''} — {overdueBillsTotal.toLocaleString()} Ks
+</span>
+<button type="button" onClick={()=>navigate('/bills')} style={{background:'#dc2626',color:'white',border:'none',borderRadius:6,padding:'3px 10px',fontSize:11,cursor:'pointer',fontWeight:500}}>View</button>
 </div>
 )}
-{/* Overdue Invoices Banner */}
 {overdueInvoices.length>0&&(
-<div style={{background:'rgba(217,119,6,0.08)',border:'0.5px solid rgba(217,119,6,0.2)',borderRadius:12,padding:'12px 16px',marginBottom:16,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-<div style={{display:'flex',alignItems:'center',gap:8}}>
-<AlertCircle size={16} color="#d97706"/>
-<span style={{fontSize:13,fontWeight:500,color:'#d97706'}}>
-{overdueInvoices.length} overdue invoice{overdueInvoices.length>1?'s':''} — {overdueInvoicesTotal.toLocaleString()} Ks uncollected
+<div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'6px 0',borderTop:'0.5px solid rgba(217,119,6,0.1)'}}>
+<span style={{fontSize:12,color:'#d97706'}}>
+🟡 {overdueInvoices.length} overdue invoice{overdueInvoices.length>1?'s':''} — {overdueInvoicesTotal.toLocaleString()} Ks
 </span>
+<button type="button" onClick={()=>navigate('/invoices')} style={{background:'#d97706',color:'white',border:'none',borderRadius:6,padding:'3px 10px',fontSize:11,cursor:'pointer',fontWeight:500}}>View</button>
 </div>
-<button type="button" onClick={()=>navigate('/invoices')} className="btn btn-primary" style={{fontSize:12,padding:'5px 12px',background:'#d97706',boxShadow:'none'}}>
-View Invoices
-</button>
+)}
 </div>
 )}
   
