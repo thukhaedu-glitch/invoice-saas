@@ -196,7 +196,13 @@ div[style*="fontSize:20"]{font-size:16px!important}
 html{scroll-behavior:auto!important}
 button{scroll-margin:0}
 
+
 @media(max-width:639px){
+   .form-grid-2{grid-template-columns:1fr!important}
+  .form-grid-2>div[style*="gridColumn"]{grid-column:1/-1!important}
+  .item-grid{grid-template-columns:1fr 56px 80px 28px!important}
+  .item-total{display:none!important}
+  .mobile-item-total{display:block!important}
 .desktop-table{display:none!important}
 .mobile-cards{display:block!important}
 .stats-grid-4{grid-template-columns:repeat(2,1fr)!important}
