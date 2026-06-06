@@ -30,6 +30,7 @@ import Bills from'./pages/Bills'
 import Reconcile from'./pages/Reconcile'
 import JournalEntries from'./pages/JournalEntries'
 import CustomDashboard from'./pages/CustomDashboard'
+import ReportBuilder from'./pages/ReportBuilder'
 
 
 
@@ -70,6 +71,7 @@ return(
 <Route path="/reconcile/:accountId" element={user?<Reconcile/>:<Navigate to="/login"/>}/>
 <Route path="/journal-entries" element={user?<JournalEntries/>:<Navigate to="/login"/>}/>
 <Route path="/custom-dashboard" element={<CustomDashboard/>}/>
+<Route path="/report-builder" element={<ReportBuilder/>}/>
 </Routes>
 </BrowserRouter>
 )
