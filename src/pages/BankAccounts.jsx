@@ -2,10 +2,12 @@ import{useState,useEffect}from'react'
 import{db,auth}from'../firebase'
 import{collection,getDocs,query,where,doc,addDoc,updateDoc,deleteDoc,serverTimestamp,onSnapshot,getDoc}from'firebase/firestore'
 import Layout from'../components/Layout'
-import{Plus,Edit,Trash2,Landmark,ArrowUpRight,ArrowDownLeft,Eye,ArrowLeft}from'lucide-react'
+import{Plus,Edit,Trash2,Landmark,ArrowUpRight,ArrowDownLeft,Eye,ArrowLeft,GitCompare}from'lucide-react'
+import{useNavigate}from'react-router-dom'
 
 const DEFAULT_CURRENCIES=['MMK','USD','THB']
 const ACCOUNT_TYPES=['Cash','Bank','Mobile Banking','Other']
+const navigate=useNavigate()
 
 export default function BankAccounts(){
 const[companyId,setCompanyId]=useState(null)
@@ -338,6 +340,9 @@ return(
 </div>
 <div style={{fontSize:11,color:'var(--text-3)'}}>Opening: {Number(a.openingBalance||0).toLocaleString()} {a.currency||'MMK'}</div>
 <div style={{display:'flex',gap:8,marginTop:16}} onClick={e=>e.stopPropagation()}>
+<button type="button" onClick={()=>navigate(`/reconcile/${a.id}`)} className="btn btn-ghost" style={{fontSize:11,padding:'4px 10px'}}>
+<GitCompare size={12}/>Reconcile
+</button>
 <button type="button" onClick={()=>openDetail(a)} style={{flex:1,padding:'6px 0',borderRadius:8,border:'0.5px solid var(--border)',background:'none',cursor:'pointer',fontSize:12,color:'var(--primary)',display:'flex',alignItems:'center',justifyContent:'center',gap:4}}>
 <Eye size={12}/>View
 </button>
