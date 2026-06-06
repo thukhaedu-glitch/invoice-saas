@@ -60,7 +60,10 @@ const totalRevenue=yearInvoices.filter(i=>i.status==='paid'||i.status==='partial
 const totalExpenses=yearExpenses.reduce((s,e)=>s+Number(e.amount||0),0)
 const netProfit=totalRevenue-totalExpenses
 const totalReceivable=invoices.filter(i=>i.status==='pending'||i.status==='partial').reduce((s,i)=>s+Number(i.remainingAmount||i.totalAmount||0),0)
-const totalBankBalance=bankAccounts.reduce((s,a)=>s+Number(a.currentBalance||a.openingBalance||0),0)
+const baseCurrency='MMK'
+const totalBankBalance=bankAccounts
+.filter(a=>(a.currency||'MMK')===baseCurrency)
+.reduce((s,a)=>s+Number(a.currentBalance||a.openingBalance||0),0)
 
 const pendingApproval=invoices.filter(i=>i.status==='pending_approval')
 const adminApproved=invoices.filter(i=>i.status==='admin_approved')
