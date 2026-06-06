@@ -31,6 +31,9 @@ import Reconcile from'./pages/Reconcile'
 import JournalEntries from'./pages/JournalEntries'
 import CustomDashboard from'./pages/CustomDashboard'
 import ReportBuilder from'./pages/ReportBuilder'
+import AuditLog from'./pages/AuditLog'
+
+
 
 
 
@@ -72,6 +75,7 @@ return(
 <Route path="/journal-entries" element={user?<JournalEntries/>:<Navigate to="/login"/>}/>
 <Route path="/custom-dashboard" element={<CustomDashboard/>}/>
 <Route path="/report-builder" element={<ReportBuilder/>}/>
+<Route path="/audit-log" element={<AuditLog/>}/>
 </Routes>
 </BrowserRouter>
 )
