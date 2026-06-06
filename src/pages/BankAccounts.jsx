@@ -7,9 +7,10 @@ import{useNavigate}from'react-router-dom'
 
 const DEFAULT_CURRENCIES=['MMK','USD','THB']
 const ACCOUNT_TYPES=['Cash','Bank','Mobile Banking','Other']
-const navigate=useNavigate()
+
 
 export default function BankAccounts(){
+const navigate=useNavigate() 
 const[companyId,setCompanyId]=useState(null)
 const[accounts,setAccounts]=useState([])
 const[transactions,setTransactions]=useState([])
