@@ -1,11 +1,11 @@
 import{useState,useEffect}from'react'
 import{db,auth,storage}from'../firebase'
-
 import{ref,uploadBytes,getDownloadURL}from'firebase/storage'
 import{useNavigate}from'react-router-dom'
 import Layout from'../components/Layout'
 import{Plus,Trash2,Save,ArrowLeft,Image,X,RefreshCcw}from'lucide-react'
 import{collection,addDoc,getDocs,query,where,serverTimestamp,getDoc,doc}from'firebase/firestore'
+import{logAction}from'../utils/auditLog'
 
 export default function CreateInvoice(){
 const navigate=useNavigate()
@@ -101,6 +101,13 @@ source:'manual',
 ...(form.recurring?{lastRecurringDate:form.date}:{}),
 })
 
+await logAction(companyId,{
+action:'create',
+module:'invoices',
+description:`Created invoice: ${form.invoiceNumber} — ${form.clientName} — ${total.toLocaleString()} Ks`,
+metadata:{invoiceId:docRef.id,invoiceNumber:form.invoiceNumber,amount:total,status},
+})
+  
 if(needsApproval){
 alert(`Invoice created! Amount ${total.toLocaleString()} Ks exceeds threshold — Owner approval required.`)
 }
