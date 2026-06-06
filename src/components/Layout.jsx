@@ -5,12 +5,13 @@ import{useLocation,useNavigate,useSearchParams}from'react-router-dom'
 
 
 
-import{FileText,FileCheck,ScrollText,Users,Wallet,Briefcase,BarChart2,User,Settings,LogOut,Menu,X,BookOpen,Landmark,LayoutDashboard,Receipt,GitCompare}from'lucide-react'
+import{FileText,FileCheck,ScrollText,Users,Wallet,Briefcase,BarChart2,User,Settings,LogOut,Menu,X,BookOpen,Landmark,LayoutDashboard,Receipt,GitCompare,BookMarked}from'lucide-react'
 import{getDocs,collection,query,where}from'firebase/firestore'
 import Notifications from'./Notifications'
 import{useNotifications}from'../hooks/useNotifications'
 import{useRecurring}from'../hooks/useRecurring'
 import{useRole}from'../hooks/useRole'
+
 
 const NAV_MAIN=[
 {path:'/',label:'Dashboard',icon:LayoutDashboard},
@@ -102,12 +103,16 @@ return(
 <div className={`nav-item${location.pathname==='/bank-accounts'?' active':''}`} onClick={()=>{navigate('/bank-accounts');setOpen(false)}}>
 <Landmark size={17}/><span>Bank Accounts</span>
 </div>
+<div className={`nav-item${location.pathname==='/journal-entries'?' active':''}`} onClick={()=>{navigate('/journal-entries');setOpen(false)}}>
+<BookMarked size={17}/><span>Journal Entries</span>
+</div>
 <div className={`nav-item${location.pathname==='/bills'?' active':''}`} onClick={()=>{navigate('/bills');setOpen(false)}}>
 <Receipt size={17}/><span>Bills & Payable</span>
 </div>
 <div className={`nav-item${location.pathname==='/reports'?' active':''}`} onClick={()=>{navigate('/reports');setOpen(false)}}>
 <BarChart2 size={17}/><span>Reports</span>
 </div>
+
 <div className={`nav-item${location.pathname.startsWith('/reconcile')?' active':''}`} onClick={()=>{navigate('/bank-accounts');setOpen(false)}}>
 <GitCompare size={17}/><span>Reconciliation</span>
 </div>
