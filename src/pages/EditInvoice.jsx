@@ -5,6 +5,7 @@ import{ref,uploadBytes,getDownloadURL}from'firebase/storage'
 import{useNavigate,useParams}from'react-router-dom'
 import Layout from'../components/Layout'
 import{Plus,Trash2,Save,ArrowLeft,Image,X}from'lucide-react'
+import{logAction}from'../utils/auditLog'
 
 export default function EditInvoice(){
 const{id}=useParams()
@@ -96,6 +97,13 @@ taxRate:Number(form.taxRate),
 totalAmount:total,
 updatedAt:serverTimestamp(),
 })
+await logAction(companyId,{
+action:'update',
+module:'invoices',
+description:`Updated invoice: ${form.invoiceNumber} — ${form.clientName} — ${total.toLocaleString()} Ks`,
+metadata:{invoiceId:id,invoiceNumber:form.invoiceNumber,amount:total},
+})
+  
 navigate('/')
 }catch(e){alert(e.message)}
 setSaving(false)
