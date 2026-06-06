@@ -1,6 +1,6 @@
 import{useState,useEffect,useMemo}from'react'
 import{db,auth}from'../firebase'
-import{collection,onSnapshot,getDocs,query,where,getDoc,doc}from'firebase/firestore'
+import{collection,onSnapshot,getDocs,query,where}from'firebase/firestore'
 import Layout from'../components/Layout'
 import{FileText,CheckCircle,Clock,AlertCircle,TrendingUp,TrendingDown,Wallet,Users,Briefcase,ArrowRight}from'lucide-react'
 import{useNavigate}from'react-router-dom'
@@ -13,6 +13,7 @@ const BAR_H=100
 export default function Dashboard(){
 const[companyId,setCompanyId]=useState(null)
 const[invoices,setInvoices]=useState([])
+const[bills,setBills]=useState([])
 const[expenses,setExpenses]=useState([])
 const[customers,setCustomers]=useState([])
 const[projects,setProjects]=useState([])
@@ -40,8 +41,12 @@ const u=onSnapshot(collection(db,'companies',cid,name),snap=>
 setter(snap.docs.map(d=>({id:d.id,...d.data()}))))
 unsubs.push(u)
 })
-const baSnap=await getDocs(collection(db,'companies',cid,'bankAccounts'))
+const[baSnap,billSnap]=await Promise.all([
+getDocs(collection(db,'companies',cid,'bankAccounts')),
+getDocs(collection(db,'companies',cid,'bills')),
+])
 setBankAccounts(baSnap.docs.map(d=>({id:d.id,...d.data()})).filter(a=>a.isActive!==false))
+setBills(billSnap.docs.map(d=>({id:d.id,...d.data()})))
 setLoading(false)
 return()=>unsubs.forEach(u=>u())
 }
@@ -60,6 +65,7 @@ const totalRevenue=yearInvoices.filter(i=>i.status==='paid'||i.status==='partial
 const totalExpenses=yearExpenses.reduce((s,e)=>s+Number(e.amount||0),0)
 const netProfit=totalRevenue-totalExpenses
 const totalReceivable=invoices.filter(i=>i.status==='pending'||i.status==='partial').reduce((s,i)=>s+Number(i.remainingAmount||i.totalAmount||0),0)
+
 const balanceByCurrency={}
 bankAccounts.forEach(a=>{
 const cur=a.currency||'MMK'
@@ -69,6 +75,13 @@ balanceByCurrency[cur]+=Number(a.currentBalance||a.openingBalance||0)
 
 const pendingApproval=invoices.filter(i=>i.status==='pending_approval')
 const adminApproved=invoices.filter(i=>i.status==='admin_approved')
+
+// Overdue bills
+const today=new Date().toISOString().split('T')[0]
+const overdueBills=bills.filter(b=>
+(b.status==='unpaid'||b.status==='partial')&&b.dueDate&&b.dueDate<today
+)
+const overdueBillsTotal=overdueBills.reduce((s,b)=>s+Number(b.remainingAmount||b.amount||0),0)
 
 const chartData=months.map((m,idx)=>{
 const mInvs=invoices.filter(i=>getInvDate(i)?.startsWith(`${filterYear}-${m}`))
@@ -100,17 +113,12 @@ return payments.sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,5)
 const uniqueYears=[...new Set(invoices.map(i=>getInvDate(i)?.slice(0,4)).filter(Boolean))].sort().reverse()
 if(!uniqueYears.includes(new Date().getFullYear().toString()))uniqueYears.unshift(new Date().getFullYear().toString())
 
-const projectStats=useMemo(()=>{
-const s={planning:0,active:0,'on-hold':0,completed:0,cancelled:0}
-projects.forEach(p=>s[p.status]=(s[p.status]||0)+1)
-return s
-},[projects])
-
 if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh'}}>Loading...</div>
 
 return(
 <Layout title="Dashboard">
 
+{/* Approval banners */}
 {role==='admin'&&pendingApproval.length>0&&(
 <div style={{background:'rgba(22,163,74,0.08)',border:'0.5px solid rgba(22,163,74,0.2)',borderRadius:12,padding:'12px 16px',marginBottom:16,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
 <div style={{display:'flex',alignItems:'center',gap:8}}>
@@ -127,6 +135,21 @@ return(
 <span style={{fontSize:13,fontWeight:500,color:'var(--primary)'}}>{adminApproved.length} invoice{adminApproved.length>1?'s':''} waiting for final approval</span>
 </div>
 <button type="button" onClick={()=>navigate('/invoices')} className="btn btn-primary" style={{fontSize:12,padding:'5px 12px'}}>Review Now</button>
+</div>
+)}
+
+{/* Overdue Bills Banner */}
+{overdueBills.length>0&&(
+<div style={{background:'rgba(220,38,38,0.08)',border:'0.5px solid rgba(220,38,38,0.2)',borderRadius:12,padding:'12px 16px',marginBottom:16,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+<div style={{display:'flex',alignItems:'center',gap:8}}>
+<AlertCircle size={16} color="#dc2626"/>
+<span style={{fontSize:13,fontWeight:500,color:'#dc2626'}}>
+{overdueBills.length} overdue bill{overdueBills.length>1?'s':''} — {overdueBillsTotal.toLocaleString()} Ks unpaid
+</span>
+</div>
+<button type="button" onClick={()=>navigate('/bills')} className="btn btn-primary" style={{fontSize:12,padding:'5px 12px',background:'#dc2626',boxShadow:'none'}}>
+View Bills
+</button>
 </div>
 )}
 
@@ -168,7 +191,6 @@ return(
 </div>
 </div>
 ))}
-{/* Currency ခွဲပြ total card */}
 <div className="card" style={{padding:16,background:'linear-gradient(135deg,#1a1d2e,#2d3260)',color:'white',cursor:'pointer'}} onClick={()=>navigate('/bank-accounts')}>
 <div style={{fontSize:11,opacity:0.7,marginBottom:8,textTransform:'uppercase',letterSpacing:'0.05em'}}>Total Balance</div>
 {Object.entries(balanceByCurrency).map(([cur,bal])=>(
