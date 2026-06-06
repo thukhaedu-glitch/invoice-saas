@@ -207,7 +207,11 @@ button{scroll-margin:0}
 .mobile-cards{display:block!important}
 .stats-grid-4{grid-template-columns:repeat(2,1fr)!important}
 .stats-grid-3{grid-template-columns:repeat(2,1fr)!important}
+.bank-grid{grid-template-columns:1fr 1fr!important}
+.recharts-responsive-container{height:160px!important}
 }
+
+
 @media(min-width:640px){
 .desktop-table{display:block!important}
 .mobile-cards{display:none!important}
