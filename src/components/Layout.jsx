@@ -2,7 +2,7 @@ import{useState,useEffect}from'react'
 import{auth,db}from'../firebase'
 import{signOut}from'firebase/auth'
 import{useLocation,useNavigate,useSearchParams}from'react-router-dom'
-import{FileText,FileCheck,ScrollText,Users,Wallet,Briefcase,BarChart2,User,Settings,LogOut,Menu,X,BookOpen,Landmark,LayoutDashboard,Receipt,GitCompare,BookMarked,PieChart}from'lucide-react'
+import{FileText,FileCheck,ScrollText,Users,Wallet,Briefcase,BarChart2,User,Settings,LogOut,Menu,X,BookOpen,Landmark,LayoutDashboard,Receipt,GitCompare,BookMarked,PieChart,Shield}from'lucide-react'
 import{getDocs,collection,query,where}from'firebase/firestore'
 import Notifications from'./Notifications'
 import{useNotifications}from'../hooks/useNotifications'
@@ -22,7 +22,7 @@ const NAV_MAIN=[
 ]
 
 const AnkoraLogo=()=>(
-<svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="https://raw.githubusercontent.com/thukhaedu-glitch/invoice-saas/refs/heads/main/public/ankora_x_logo_2.png">
 <rect width="34" height="34" rx="10" fill="url(#ankoraGrad)"/>
 <defs>
 <linearGradient id="ankoraGrad" x1="0" y1="0" x2="34" y2="34" gradientUnits="userSpaceOnUse">
@@ -127,6 +127,11 @@ return(
 {canSettings&&(
 <div className={`nav-item${location.pathname==='/settings'?' active':''}`} onClick={()=>{navigate('/settings');setOpen(false)}}>
 <Settings size={17}/><span>Settings</span>
+</div>
+)}
+{canSettings&&(
+<div className={`nav-item${location.pathname==='/audit-log'?' active':''}`} onClick={()=>{navigate('/audit-log');setOpen(false)}}>
+<Shield size={17}/><span>Audit Log</span>
 </div>
 )}
 </nav>
