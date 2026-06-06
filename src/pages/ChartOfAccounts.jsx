@@ -1,8 +1,8 @@
 import{useState,useEffect}from'react'
 import{db,auth}from'../firebase'
-import{collection,getDocs,query,where,doc,addDoc,updateDoc,deleteDoc,getDoc,serverTimestamp}from'firebase/firestore'
+import{collection,getDocs,query,where,doc,addDoc,updateDoc,deleteDoc,serverTimestamp}from'firebase/firestore'
 import Layout from'../components/Layout'
-import{Plus,Edit,Trash2,ChevronDown,ChevronRight,BookOpen,Building2}from'lucide-react'
+import{Plus,Edit,Trash2,ChevronDown,ChevronRight,BookOpen,Building2,RefreshCcw}from'lucide-react'
 
 const ACCOUNT_TYPES=[
 {type:'Assets',code:'1',color:'#16a34a',bg:'#eaf3de',sub:['Cash & Bank','Accounts Receivable','Inventory','Other Assets']},
@@ -26,10 +26,16 @@ const DEFAULT_ACCOUNTS=[
 {name:'Utilities Expense',type:'Expenses',subType:'Utilities',code:'5003',openingBalance:0,description:'Water, electricity, internet'},
 ]
 
+// Normal balance rules
+const NORMAL_DEBIT=['Assets','Expenses']
+const NORMAL_CREDIT=['Liabilities','Equity','Income']
+
 export default function ChartOfAccounts(){
 const[companyId,setCompanyId]=useState(null)
 const[accounts,setAccounts]=useState([])
+const[journalEntries,setJournalEntries]=useState([])
 const[loading,setLoading]=useState(true)
+const[recalculating,setRecalculating]=useState(false)
 const[view,setView]=useState('list')
 const[selected,setSelected]=useState(null)
 const[saving,setSaving]=useState(false)
@@ -43,29 +49,75 @@ const snap=await getDocs(query(collection(db,'companies'),where(`members.${auth.
 if(!snap.empty){
 const cid=snap.docs[0].id
 setCompanyId(cid)
-const acSnap=await getDocs(collection(db,'companies',cid,'accounts'))
-setAccounts(acSnap.docs.map(d=>({id:d.id,...d.data()})))
+const[acSnap,jeSnap]=await Promise.all([
+getDocs(collection(db,'companies',cid,'accounts')),
+getDocs(collection(db,'companies',cid,'journalEntries')),
+])
+const accs=acSnap.docs.map(d=>({id:d.id,...d.data()}))
+const jes=jeSnap.docs.map(d=>({id:d.id,...d.data()}))
+setJournalEntries(jes)
+setAccounts(calcBalances(accs,jes))
 }
 setLoading(false)
 }
 load()
 },[])
 
+// Journal entries ကနေ balance calculate
+const calcBalances=(accs,jes)=>{
+return accs.map(a=>{
+let balance=Number(a.openingBalance||0)
+jes.forEach(je=>{
+;(je.entries||[]).forEach(line=>{
+const matched=
+line.account?.toLowerCase()===a.name?.toLowerCase()||
+line.account===a.code||
+line.accountId===a.id
+if(!matched)return
+const amt=Number(line.amount||0)
+if(NORMAL_DEBIT.includes(a.type)){
+balance+=line.type==='debit'?amt:-amt
+}else{
+balance+=line.type==='credit'?amt:-amt
+}
+})
+})
+return{...a,currentBalance:balance}
+})
+}
+
+const loadAccounts=async(cid)=>{
+const[acSnap,jeSnap]=await Promise.all([
+getDocs(collection(db,'companies',cid||companyId,'accounts')),
+getDocs(collection(db,'companies',cid||companyId,'journalEntries')),
+])
+const accs=acSnap.docs.map(d=>({id:d.id,...d.data()}))
+const jes=jeSnap.docs.map(d=>({id:d.id,...d.data()}))
+setJournalEntries(jes)
+setAccounts(calcBalances(accs,jes))
+}
+
+const handleRecalculate=async()=>{
+setRecalculating(true)
+await loadAccounts()
+setRecalculating(false)
+}
+
 const handleInitDefaults=async()=>{
 if(!confirm('Create default chart of accounts?'))return
 setInitializing(true)
 try{
-const batch=DEFAULT_ACCOUNTS.map(a=>
+await Promise.all(DEFAULT_ACCOUNTS.map(a=>
 addDoc(collection(db,'companies',companyId,'accounts'),{
 ...a,
+openingBalance:Number(a.openingBalance),
+currentBalance:Number(a.openingBalance),
 createdAt:serverTimestamp(),
 createdBy:auth.currentUser.uid,
 isDefault:true,
 })
-)
-await Promise.all(batch)
-const acSnap=await getDocs(collection(db,'companies',companyId,'accounts'))
-setAccounts(acSnap.docs.map(d=>({id:d.id,...d.data()})))
+))
+await loadAccounts()
 }catch(e){alert(e.message)}
 setInitializing(false)
 }
@@ -78,6 +130,7 @@ if(!selected){
 await addDoc(collection(db,'companies',companyId,'accounts'),{
 ...form,
 openingBalance:Number(form.openingBalance),
+currentBalance:Number(form.openingBalance),
 createdAt:serverTimestamp(),
 createdBy:auth.currentUser.uid,
 })
@@ -88,8 +141,7 @@ openingBalance:Number(form.openingBalance),
 updatedAt:serverTimestamp(),
 })
 }
-const acSnap=await getDocs(collection(db,'companies',companyId,'accounts'))
-setAccounts(acSnap.docs.map(d=>({id:d.id,...d.data()})))
+await loadAccounts()
 setView('list')
 }catch(e){alert(e.message)}
 setSaving(false)
@@ -114,10 +166,8 @@ setView('form')
 }
 
 const toggleExpand=(type)=>setExpanded(e=>({...e,[type]:!e[type]}))
-
 const getSubTypes=()=>ACCOUNT_TYPES.find(t=>t.type===form.type)?.sub||[]
-
-const totalByType=(type)=>accounts.filter(a=>a.type===type).reduce((s,a)=>s+Number(a.openingBalance||0),0)
+const totalByType=(type)=>accounts.filter(a=>a.type===type).reduce((s,a)=>s+Number(a.currentBalance||a.openingBalance||0),0)
 
 if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh'}}>Loading...</div>
 
@@ -179,6 +229,9 @@ return(
 <h2 style={{fontSize:18,fontWeight:600}}>Chart of Accounts</h2>
 </div>
 <div style={{display:'flex',gap:8}}>
+<button type="button" onClick={handleRecalculate} disabled={recalculating} className="btn btn-ghost" style={{fontSize:12}}>
+<RefreshCcw size={13} style={{animation:recalculating?'spin 1s linear infinite':undefined}}/>{recalculating?'Recalculating...':'Recalculate'}
+</button>
 {accounts.length===0&&(
 <button type="button" onClick={handleInitDefaults} disabled={initializing} className="btn btn-ghost" style={{fontSize:13}}>
 <Building2 size={14}/>{initializing?'Creating...':'Initialize Defaults'}
@@ -193,13 +246,54 @@ return(
 {/* Summary Cards */}
 <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginBottom:20}}>
 {ACCOUNT_TYPES.map(t=>(
-<div key={t.type} className="card" style={{padding:16}}>
+<div key={t.type} className="card" style={{padding:16,borderTop:`3px solid ${t.color}`}}>
 <div style={{fontSize:11,fontWeight:600,color:t.color,textTransform:'uppercase',marginBottom:6}}>{t.type}</div>
-<div style={{fontSize:20,fontWeight:700,color:'var(--text-1)'}}>{accounts.filter(a=>a.type===t.type).length}</div>
-<div style={{fontSize:11,color:'var(--text-3)',marginTop:2}}>{totalByType(t.type).toLocaleString()} Ks</div>
+<div style={{fontSize:20,fontWeight:700,color:'var(--text-1)',marginBottom:2}}>{accounts.filter(a=>a.type===t.type).length}</div>
+<div style={{fontSize:12,fontWeight:600,color:t.color}}>{totalByType(t.type).toLocaleString()} Ks</div>
+<div style={{fontSize:10,color:'var(--text-3)',marginTop:2}}>Current Balance</div>
 </div>
 ))}
 </div>
+
+{/* Accounting Equation */}
+{accounts.length>0&&(()=>{
+const assets=totalByType('Assets')
+const liabilities=totalByType('Liabilities')
+const equity=totalByType('Equity')
+const income=totalByType('Income')
+const expenses=totalByType('Expenses')
+const netProfit=income-expenses
+const balanced=Math.abs(assets-(liabilities+equity+netProfit))<1
+return(
+<div className="card" style={{padding:16,marginBottom:16,background:'rgba(79,110,247,0.04)',border:`0.5px solid ${balanced?'rgba(79,110,247,0.2)':'rgba(220,38,38,0.3)'}`}}>
+<div style={{fontSize:12,fontWeight:600,color:'var(--text-2)',marginBottom:10}}>Accounting Equation</div>
+<div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
+<div style={{textAlign:'center'}}>
+<div style={{fontSize:11,color:'var(--text-3)'}}>Assets</div>
+<div style={{fontSize:16,fontWeight:700,color:'#16a34a'}}>{assets.toLocaleString()} Ks</div>
+</div>
+<div style={{fontSize:16,color:'var(--text-3)'}}>=</div>
+<div style={{textAlign:'center'}}>
+<div style={{fontSize:11,color:'var(--text-3)'}}>Liabilities</div>
+<div style={{fontSize:16,fontWeight:700,color:'#dc2626'}}>{liabilities.toLocaleString()} Ks</div>
+</div>
+<div style={{fontSize:16,color:'var(--text-3)'}}>+</div>
+<div style={{textAlign:'center'}}>
+<div style={{fontSize:11,color:'var(--text-3)'}}>Equity</div>
+<div style={{fontSize:16,fontWeight:700,color:'#6366f1'}}>{equity.toLocaleString()} Ks</div>
+</div>
+<div style={{fontSize:16,color:'var(--text-3)'}}>+</div>
+<div style={{textAlign:'center'}}>
+<div style={{fontSize:11,color:'var(--text-3)'}}>Net Profit</div>
+<div style={{fontSize:16,fontWeight:700,color:netProfit>=0?'#4F6EF7':'#dc2626'}}>{netProfit.toLocaleString()} Ks</div>
+</div>
+<div style={{marginLeft:'auto',fontSize:12,fontWeight:600,color:balanced?'#16a34a':'#dc2626'}}>
+{balanced?'✓ Balanced':'✗ Not Balanced'}
+</div>
+</div>
+</div>
+)
+})()}
 
 {accounts.length===0?(
 <div className="card" style={{padding:64,textAlign:'center',color:'var(--text-3)'}}>
@@ -215,15 +309,14 @@ return(
 {ACCOUNT_TYPES.map(t=>{
 const typeAccounts=accounts.filter(a=>a.type===t.type)
 if(typeAccounts.length===0)return null
+const typeTotal=totalByType(t.type)
 return(
 <div key={t.type} className="card" style={{overflow:'hidden'}}>
-<div
-onClick={()=>toggleExpand(t.type)}
-style={{padding:'12px 20px',display:'flex',alignItems:'center',gap:10,cursor:'pointer',background:t.bg,borderBottom:expanded[t.type]?`1px solid ${t.color}20`:'none'}}>
+<div onClick={()=>toggleExpand(t.type)} style={{padding:'12px 20px',display:'flex',alignItems:'center',gap:10,cursor:'pointer',background:t.bg,borderBottom:expanded[t.type]?`1px solid ${t.color}20`:'none'}}>
 {expanded[t.type]?<ChevronDown size={16} style={{color:t.color}}/>:<ChevronRight size={16} style={{color:t.color}}/>}
 <span style={{fontWeight:700,color:t.color,fontSize:14}}>{t.type}</span>
 <span style={{fontSize:12,color:t.color,opacity:0.7}}>({typeAccounts.length} accounts)</span>
-<span style={{marginLeft:'auto',fontWeight:600,color:t.color,fontSize:13}}>{totalByType(t.type).toLocaleString()} Ks</span>
+<span style={{marginLeft:'auto',fontWeight:700,color:t.color,fontSize:14}}>{typeTotal.toLocaleString()} Ks</span>
 </div>
 {expanded[t.type]&&(
 <table>
@@ -233,18 +326,28 @@ style={{padding:'12px 20px',display:'flex',alignItems:'center',gap:10,cursor:'po
 <th>Account Name</th>
 <th>Sub Type</th>
 <th>Description</th>
-<th style={{textAlign:'right'}}>Opening Balance</th>
+<th style={{textAlign:'right'}}>Opening Bal</th>
+<th style={{textAlign:'right'}}>Current Bal</th>
 <th style={{textAlign:'center'}}>Actions</th>
 </tr>
 </thead>
 <tbody>
-{typeAccounts.sort((a,b)=>a.code?.localeCompare(b.code)).map(a=>(
+{typeAccounts.sort((a,b)=>(a.code||'').localeCompare(b.code||'')).map(a=>{
+const diff=Number(a.currentBalance||a.openingBalance||0)-Number(a.openingBalance||0)
+return(
 <tr key={a.id}>
 <td style={{fontFamily:'monospace',fontSize:12,color:'var(--text-3)'}}>{a.code}</td>
-<td style={{fontWeight:500}}>{a.name}{a.isDefault&&<span style={{fontSize:10,background:'#f1f5f9',color:'var(--text-3)',padding:'1px 6px',borderRadius:10,marginLeft:6}}>default</span>}</td>
+<td style={{fontWeight:500}}>
+{a.name}
+{a.isDefault&&<span style={{fontSize:10,background:'#f1f5f9',color:'var(--text-3)',padding:'1px 6px',borderRadius:10,marginLeft:6}}>default</span>}
+</td>
 <td style={{fontSize:12,color:'var(--text-2)'}}>{a.subType}</td>
 <td style={{fontSize:12,color:'var(--text-3)'}}>{a.description||'-'}</td>
-<td style={{textAlign:'right',fontWeight:500,color:t.color}}>{Number(a.openingBalance||0).toLocaleString()} Ks</td>
+<td style={{textAlign:'right',fontSize:12,color:'var(--text-3)'}}>{Number(a.openingBalance||0).toLocaleString()} Ks</td>
+<td style={{textAlign:'right',fontWeight:600,color:t.color}}>
+{Number(a.currentBalance||a.openingBalance||0).toLocaleString()} Ks
+{diff!==0&&<div style={{fontSize:10,color:diff>0?'#16a34a':'#dc2626'}}>{diff>0?'+':''}{diff.toLocaleString()}</div>}
+</td>
 <td style={{textAlign:'center'}}>
 <div style={{display:'flex',gap:4,justifyContent:'center'}}>
 <button type="button" onClick={()=>openEdit(a)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Edit size={14}/></button>
@@ -252,7 +355,8 @@ style={{padding:'12px 20px',display:'flex',alignItems:'center',gap:10,cursor:'po
 </div>
 </td>
 </tr>
-))}
+)
+})}
 </tbody>
 </table>
 )}
