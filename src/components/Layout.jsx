@@ -113,9 +113,7 @@ return(
 <BarChart2 size={17}/><span>Reports</span>
 </div>
 
-<div className={`nav-item${location.pathname.startsWith('/reconcile')?' active':''}`} onClick={()=>{navigate('/bank-accounts');setOpen(false)}}>
-<GitCompare size={17}/><span>Reconciliation</span>
-</div>
+
 </>
 )}
 <div style={{fontSize:10,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.07em',padding:'12px 8px 4px',marginTop:8}}>Account</div>
