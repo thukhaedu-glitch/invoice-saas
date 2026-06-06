@@ -27,6 +27,8 @@ import Invoices from'./pages/Invoices'
 import Quotations from'./pages/Quotations'
 import CustomerDetail from'./pages/CustomerDetail'
 import Bills from'./pages/Bills'
+import Reconcile from'./pages/Reconcile'
+
 
 
 export default function App(){
@@ -63,6 +65,7 @@ return(
 <Route path="/quotations" element={user?<Quotations/>:<Navigate to="/login"/>}/>
 <Route path="/customer/:id" element={user?<CustomerDetail/>:<Navigate to="/login"/>}/>
 <Route path="/bills" element={user?<Bills/>:<Navigate to="/login"/>}/>
+<Route path="/reconcile/:accountId" element={user?<Reconcile/>:<Navigate to="/login"/>}/>
 
 </Routes>
 </BrowserRouter>
