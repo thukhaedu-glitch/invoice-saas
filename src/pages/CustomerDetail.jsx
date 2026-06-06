@@ -374,7 +374,7 @@ return(
 {invoices.flatMap(inv=>(inv.payments||[]).map((p,i)=>({...p,invoiceNumber:inv.invoiceNumber,_key:inv.id+i}))).sort((a,b)=>a.date?.localeCompare(b.date||'')).map(p=>(
 <tr key={p._key} style={{borderBottom:'0.5px solid #f1f5f9'}}>
 <td style={{padding:'7px 10px',fontFamily:'monospace',color:primaryColor,fontSize:11}}>{p.invoiceNumber}</td>
-<td style={{padding:'7px 10px',color:'#64748b'}}>{p.date||'-'}</td>
+<td style={{padding:'7px 10px',color:'#64748b'}}>{p.date?p.date.includes('T')?new Date(p.date).toLocaleDateString('en-GB'):p.date:'-'}</td>
 <td style={{padding:'7px 10px',color:'#64748b'}}>{p.method||'-'}</td>
 <td style={{padding:'7px 10px',textAlign:'right',fontWeight:600,color:'#16a34a'}}>{Number(p.amount||0).toLocaleString()} Ks</td>
 </tr>
