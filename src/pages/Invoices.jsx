@@ -2,7 +2,7 @@ import{useState,useEffect,useMemo}from'react'
 import{db,auth}from'../firebase'
 import{collection,onSnapshot,getDocs,query,where,doc,deleteDoc,updateDoc,addDoc,serverTimestamp,getDoc}from'firebase/firestore'
 import Layout from'../components/Layout'
-import{FileText,Plus,CheckCircle,Clock,AlertCircle,Edit,Trash2,RefreshCcw,Link,Printer,CheckSquare,CopyPlus,DollarSign,X,Search,Mail,ThumbsUp,ThumbsDown}from'lucide-react'
+import{FileText,Plus,CheckCircle,Clock,AlertCircle,Edit,Trash2,RefreshCcw,Link,Printer,CheckSquare,CopyPlus,DollarSign,X,Search,Mail,ThumbsUp,ThumbsDown,Download,Square,CheckSquare2}from'lucide-react'
 import{useNavigate}from'react-router-dom'
 import{sendInvoiceReminder}from'../utils/emailService'
 import{useRole}from'../hooks/useRole'
@@ -30,6 +30,9 @@ const[confirmAction,setConfirmAction]=useState(null)
 const[managedBy,setManagedBy]=useState({})
 const[bankAccounts,setBankAccounts]=useState([])
 const[paymentBankAccountId,setPaymentBankAccountId]=useState('')
+// Bulk selection
+const[selectedIds,setSelectedIds]=useState(new Set())
+const[bulkLoading,setBulkLoading]=useState(false)
 const navigate=useNavigate()
 const{role,canEdit,canDelete,loading:roleLoading}=useRole()
 
@@ -118,6 +121,106 @@ return<span className={`badge ${map[s]||'badge-warning'}`}>
 </span>
 }
 
+// Bulk selection handlers
+const toggleSelect=(id)=>{
+setSelectedIds(prev=>{
+const next=new Set(prev)
+next.has(id)?next.delete(id):next.add(id)
+return next
+})
+}
+
+const toggleSelectAll=()=>{
+if(selectedIds.size===filteredInvoices.length){
+setSelectedIds(new Set())
+}else{
+setSelectedIds(new Set(filteredInvoices.map(i=>i.id)))
+}
+}
+
+const clearSelection=()=>setSelectedIds(new Set())
+
+const selectedInvoices=filteredInvoices.filter(i=>selectedIds.has(i.id))
+
+// Bulk actions
+const handleBulkMarkPaid=async()=>{
+if(!selectedIds.size)return
+if(!confirm(`Mark ${selectedIds.size} invoice(s) as paid?`))return
+setBulkLoading(true)
+try{
+const today=new Date().toISOString().split('T')[0]
+for(const id of selectedIds){
+const inv=invoices.find(i=>i.id===id)
+if(!inv)continue
+await updateDoc(doc(db,'companies',companyId,'invoices',id),{
+status:'paid',
+paidAmount:Number(inv.totalAmount||0),
+remainingAmount:0,
+lastPaymentDate:today,
+})
+}
+clearSelection()
+}catch(e){alert(e.message)}
+setBulkLoading(false)
+}
+
+const handleBulkDelete=async()=>{
+if(!selectedIds.size)return
+if(!canDelete){alert('No permission to delete');return}
+if(!confirm(`Delete ${selectedIds.size} invoice(s)? This cannot be undone.`))return
+setBulkLoading(true)
+try{
+for(const id of selectedIds){
+await deleteDoc(doc(db,'companies',companyId,'invoices',id))
+}
+clearSelection()
+}catch(e){alert(e.message)}
+setBulkLoading(false)
+}
+
+const handleBulkReminder=async()=>{
+if(!selectedIds.size)return
+const withEmail=selectedInvoices.filter(i=>i.clientEmail)
+if(!withEmail.length){alert('No selected invoices have client email');return}
+if(!confirm(`Send reminders to ${withEmail.length} client(s)?`))return
+setBulkLoading(true)
+try{
+for(const item of withEmail){
+await sendInvoiceReminder({
+clientName:item.clientName,clientEmail:item.clientEmail,
+invoiceNumber:item.invoiceNumber,amount:item.remainingAmount||item.totalAmount||0,
+status:item.status,companyName:companyInfo.name,companyEmail:companyInfo.email,
+companyPhone:companyInfo.phone,paymentMethods:companyInfo.paymentMethods,
+invoiceLink:`${window.location.origin}/verify/${companyId}/${item.securityCode||item.id}`,
+})
+}
+alert(`Reminders sent to ${withEmail.length} client(s) ✓`)
+clearSelection()
+}catch(e){alert(e.message)}
+setBulkLoading(false)
+}
+
+const handleBulkExportCSV=()=>{
+if(!selectedIds.size)return
+const data=selectedInvoices.map(i=>({
+'Invoice Number':i.invoiceNumber||'-',
+'Client':i.clientName||'-',
+'Total Amount':Number(i.totalAmount||0),
+'Paid Amount':Number(i.paidAmount||0),
+'Remaining':Number(i.remainingAmount||0),
+'Status':i.status||'-',
+'Date':getInvDate(i)||'-',
+'Last Payment':i.lastPaymentDate||'-',
+}))
+const headers=Object.keys(data[0]).join(',')
+const rows=data.map(r=>Object.values(r).map(v=>`"${v}"`).join(',')).join('\n')
+const blob=new Blob([headers+'\n'+rows],{type:'text/csv'})
+const url=URL.createObjectURL(blob)
+const a=document.createElement('a')
+a.href=url;a.download=`invoices_export_${new Date().toISOString().split('T')[0]}.csv`;a.click()
+URL.revokeObjectURL(url)
+}
+
 const handleDelete=async(id)=>{
 await deleteDoc(doc(db,'companies',companyId,'invoices',id))
 }
@@ -203,7 +306,6 @@ payments,paidAmount:totalPaid,
 remainingAmount:remaining<0?0:remaining,
 status:newStatus,lastPaymentDate:paymentForm.date,
 })
-// Bank account balance တက် + journal entry
 if(paymentBankAccountId){
 const acRef=doc(db,'companies',companyId,'bankAccounts',paymentBankAccountId)
 const acSnap=await getDoc(acRef)
@@ -252,6 +354,9 @@ else alert('Failed: '+result.error)
 setSendingReminder(null)
 }
 
+const allSelected=filteredInvoices.length>0&&selectedIds.size===filteredInvoices.length
+const someSelected=selectedIds.size>0
+
 if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh'}}>Loading...</div>
 
 return(
@@ -292,7 +397,6 @@ return(
 {paymentMethodOptions.map(m=><option key={m} value={m}>{m}</option>)}
 </select>
 </div>
-{/* To Account — Bank */}
 <div style={{marginBottom:12}}>
 <label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>
 To Account <span style={{color:'var(--primary)',fontSize:11}}>(Bank balance auto တက်မည်)</span>
@@ -300,9 +404,7 @@ To Account <span style={{color:'var(--primary)',fontSize:11}}>(Bank balance auto
 <select className="form-input" value={paymentBankAccountId} onChange={e=>setPaymentBankAccountId(e.target.value)}>
 <option value="">— Not linked —</option>
 {bankAccounts.map(a=>(
-<option key={a.id} value={a.id}>
-{a.name} {a.bankName?`(${a.bankName})`:''} — {Number(a.currentBalance||a.openingBalance||0).toLocaleString()} {a.currency||'MMK'}
-</option>
+<option key={a.id} value={a.id}>{a.name} {a.bankName?`(${a.bankName})`:''} — {Number(a.currentBalance||a.openingBalance||0).toLocaleString()} {a.currency||'MMK'}</option>
 ))}
 </select>
 </div>
@@ -399,6 +501,40 @@ To Account <span style={{color:'var(--primary)',fontSize:11}}>(Bank balance auto
 </button>
 </div>
 
+{/* Bulk Action Bar */}
+{someSelected&&(
+<div style={{
+background:'linear-gradient(135deg,#1a1d2e,#2d3260)',
+borderRadius:12,padding:'12px 16px',
+marginBottom:16,
+display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'
+}}>
+<div style={{display:'flex',alignItems:'center',gap:8,flex:1}}>
+<span style={{fontSize:13,fontWeight:600,color:'white'}}>{selectedIds.size} invoice{selectedIds.size>1?'s':''} selected</span>
+<button type="button" onClick={clearSelection} style={{background:'rgba(255,255,255,0.1)',border:'none',cursor:'pointer',color:'white',padding:'2px 8px',borderRadius:6,fontSize:11}}>
+Clear
+</button>
+</div>
+<div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+<button type="button" onClick={handleBulkMarkPaid} disabled={bulkLoading} className="btn" style={{background:'rgba(22,163,74,0.2)',color:'#4ade80',border:'0.5px solid rgba(22,163,74,0.3)',fontSize:12,padding:'6px 12px'}}>
+<CheckCircle size={13}/>Mark Paid
+</button>
+<button type="button" onClick={handleBulkReminder} disabled={bulkLoading} className="btn" style={{background:'rgba(79,110,247,0.2)',color:'#818cf8',border:'0.5px solid rgba(79,110,247,0.3)',fontSize:12,padding:'6px 12px'}}>
+<Mail size={13}/>Send Reminder
+</button>
+<button type="button" onClick={handleBulkExportCSV} disabled={bulkLoading} className="btn" style={{background:'rgba(217,119,6,0.2)',color:'#fbbf24',border:'0.5px solid rgba(217,119,6,0.3)',fontSize:12,padding:'6px 12px'}}>
+<Download size={13}/>Export CSV
+</button>
+{canDelete&&(
+<button type="button" onClick={handleBulkDelete} disabled={bulkLoading} className="btn" style={{background:'rgba(220,38,38,0.2)',color:'#f87171',border:'0.5px solid rgba(220,38,38,0.3)',fontSize:12,padding:'6px 12px'}}>
+<Trash2 size={13}/>Delete
+</button>
+)}
+</div>
+{bulkLoading&&<span style={{fontSize:11,color:'rgba(255,255,255,0.6)'}}>Processing...</span>}
+</div>
+)}
+
 {/* Table */}
 <div className="card" style={{overflow:'hidden'}}>
 {filteredInvoices.length===0?(
@@ -411,12 +547,28 @@ To Account <span style={{color:'var(--primary)',fontSize:11}}>(Bank balance auto
 <table style={{width:'100%'}}>
 <thead>
 <tr>
+<th style={{width:40,textAlign:'center',padding:'10px 8px'}}>
+<button type="button" onClick={toggleSelectAll} style={{background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto'}}>
+<div style={{width:16,height:16,borderRadius:4,border:`2px solid ${allSelected?'var(--primary)':'#d1d5db'}`,background:allSelected?'var(--primary)':'white',display:'flex',alignItems:'center',justifyContent:'center',transition:'all 0.15s'}}>
+{allSelected&&<span style={{color:'white',fontSize:10,fontWeight:700,lineHeight:1}}>✓</span>}
+</div>
+</button>
+</th>
 <th>Number</th><th>Client</th><th style={{textAlign:'right'}}>Amount</th><th style={{textAlign:'right'}}>Paid</th><th style={{textAlign:'center'}}>Status</th><th>Date</th><th style={{textAlign:'center'}}>Actions</th>
 </tr>
 </thead>
 <tbody>
-{filteredInvoices.map(item=>(
-<tr key={item.id} style={{background:item.status==='pending_approval'?'rgba(79,110,247,0.03)':item.status==='admin_approved'?'rgba(22,163,74,0.03)':''}}>
+{filteredInvoices.map(item=>{
+const isSelected=selectedIds.has(item.id)
+return(
+<tr key={item.id} style={{background:isSelected?'rgba(79,110,247,0.06)':item.status==='pending_approval'?'rgba(79,110,247,0.03)':item.status==='admin_approved'?'rgba(22,163,74,0.03)':''}}>
+<td style={{textAlign:'center',padding:'10px 8px'}}>
+<button type="button" onClick={()=>toggleSelect(item.id)} style={{background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto'}}>
+<div style={{width:16,height:16,borderRadius:4,border:`2px solid ${isSelected?'var(--primary)':'#d1d5db'}`,background:isSelected?'var(--primary)':'white',display:'flex',alignItems:'center',justifyContent:'center',transition:'all 0.15s'}}>
+{isSelected&&<span style={{color:'white',fontSize:10,fontWeight:700,lineHeight:1}}>✓</span>}
+</div>
+</button>
+</td>
 <td style={{color:'var(--primary)',fontFamily:'monospace',fontWeight:500,fontSize:12}}>{item.invoiceNumber}</td>
 <td style={{fontWeight:500}}>{item.clientName}</td>
 <td style={{textAlign:'right',fontWeight:500}}>{Number(item.totalAmount||0).toLocaleString()} Ks</td>
@@ -453,7 +605,8 @@ To Account <span style={{color:'var(--primary)',fontSize:11}}>(Bank balance auto
 </div>
 </td>
 </tr>
-))}
+)
+})}
 </tbody>
 </table>
 </div>
