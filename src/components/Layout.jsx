@@ -18,6 +18,7 @@ const NAV_MAIN=[
 {path:'/expenses',label:'Expenses',icon:Wallet},
 {path:'/projects',label:'Projects',icon:Briefcase},
 {path:'/custom-dashboard',label:'My Dashboard',icon:PieChart},
+{path:'/report-builder',label:'Report Builder',icon:BarChart2},
 ]
 
 const AnkoraLogo=()=>(
