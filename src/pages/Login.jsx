@@ -1,8 +1,10 @@
 import{useState}from'react'
-import{auth}from'../firebase'
+import{auth,db}from'../firebase'
 import{signInWithEmailAndPassword,GoogleAuthProvider,signInWithPopup,sendPasswordResetEmail}from'firebase/auth'
+import{collection,getDocs,query,where}from'firebase/firestore'
 import{useNavigate,Link}from'react-router-dom'
 import{Mail,Lock,Eye,EyeOff,AlertCircle,LogIn}from'lucide-react'
+import{logAction}from'../utils/auditLog'
 
 export default function Login(){
 const[email,setEmail]=useState('')
@@ -14,11 +16,27 @@ const[resetMode,setResetMode]=useState(false)
 const[resetSent,setResetSent]=useState(false)
 const navigate=useNavigate()
 
+const getCompanyId=async(uid)=>{
+try{
+const snap=await getDocs(query(collection(db,'companies'),where(`members.${uid}`,'!=',null)))
+if(!snap.empty)return snap.docs[0].id
+}catch(e){}
+return null
+}
+
 const login=async e=>{
 e.preventDefault()
 setError('');setLoading(true)
 try{
-await signInWithEmailAndPassword(auth,email,pass)
+const cred=await signInWithEmailAndPassword(auth,email,pass)
+const cid=await getCompanyId(cred.user.uid)
+if(cid){
+await logAction(cid,{
+action:'login',module:'auth',
+description:`User logged in: ${cred.user.email}`,
+metadata:{method:'email'},
+})
+}
 navigate('/')
 }catch(e){setError(e.message)}
 setLoading(false)
@@ -27,7 +45,15 @@ setLoading(false)
 const googleLogin=async()=>{
 setError('');setLoading(true)
 try{
-await signInWithPopup(auth,new GoogleAuthProvider())
+const cred=await signInWithPopup(auth,new GoogleAuthProvider())
+const cid=await getCompanyId(cred.user.uid)
+if(cid){
+await logAction(cid,{
+action:'login',module:'auth',
+description:`User logged in: ${cred.user.email}`,
+metadata:{method:'google'},
+})
+}
 navigate('/')
 }catch(e){setError(e.message)}
 setLoading(false)
@@ -79,7 +105,7 @@ boxShadow:'0 4px 16px rgba(79,110,247,0.3)',
 {resetMode?'Reset Password':'Welcome Back'}
 </div>
 <div style={{fontSize:13,color:'var(--text-3)',marginTop:4}}>
-{resetMode?'Enter your email to reset':'Sign in to Invoice SaaS'}
+{resetMode?'Enter your email to reset':'Sign in to AnkoraX'}
 </div>
 </div>
 
