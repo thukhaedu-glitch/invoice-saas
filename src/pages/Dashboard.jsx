@@ -60,10 +60,12 @@ const totalRevenue=yearInvoices.filter(i=>i.status==='paid'||i.status==='partial
 const totalExpenses=yearExpenses.reduce((s,e)=>s+Number(e.amount||0),0)
 const netProfit=totalRevenue-totalExpenses
 const totalReceivable=invoices.filter(i=>i.status==='pending'||i.status==='partial').reduce((s,i)=>s+Number(i.remainingAmount||i.totalAmount||0),0)
-const baseCurrency='MMK'
-const totalBankBalance=bankAccounts
-.filter(a=>(a.currency||'MMK')===baseCurrency)
-.reduce((s,a)=>s+Number(a.currentBalance||a.openingBalance||0),0)
+const balanceByCurrency={}
+bankAccounts.forEach(a=>{
+const cur=a.currency||'MMK'
+if(!balanceByCurrency[cur])balanceByCurrency[cur]=0
+balanceByCurrency[cur]+=Number(a.currentBalance||a.openingBalance||0)
+})
 
 const pendingApproval=invoices.filter(i=>i.status==='pending_approval')
 const adminApproved=invoices.filter(i=>i.status==='admin_approved')
@@ -155,17 +157,26 @@ return(
 </div>
 
 {bankAccounts.length>0&&(
-<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:12,marginBottom:16}}>
+<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))',gap:12,marginBottom:16}}>
 {bankAccounts.map(a=>(
 <div key={a.id} className="card" style={{padding:16,cursor:'pointer'}} onClick={()=>navigate('/bank-accounts')}>
 <div style={{fontSize:11,color:'var(--text-3)',marginBottom:4}}>{a.bankName||a.type}</div>
-<div style={{fontWeight:600,fontSize:14,marginBottom:4}}>{a.name}</div>
-<div style={{fontSize:18,fontWeight:700,color:'var(--primary)'}}>{Number(a.currentBalance||a.openingBalance||0).toLocaleString()} <span style={{fontSize:11,color:'var(--text-3)'}}>{a.currency||'MMK'}</span></div>
+<div style={{fontWeight:600,fontSize:13,marginBottom:6}}>{a.name}</div>
+<div style={{fontSize:17,fontWeight:700,color:'var(--primary)'}}>
+{Number(a.currentBalance||a.openingBalance||0).toLocaleString()}
+<span style={{fontSize:11,color:'var(--text-3)',marginLeft:4}}>{a.currency||'MMK'}</span>
+</div>
 </div>
 ))}
-<div className="card" style={{padding:16,background:'linear-gradient(135deg,#1a1d2e,#2d3260)',color:'white'}}>
-<div style={{fontSize:11,opacity:0.7,marginBottom:4}}>Total Balance</div>
-<div style={{fontSize:18,fontWeight:700}}>{totalBankBalance.toLocaleString()} MMK</div>
+{/* Currency ခွဲပြ total card */}
+<div className="card" style={{padding:16,background:'linear-gradient(135deg,#1a1d2e,#2d3260)',color:'white',cursor:'pointer'}} onClick={()=>navigate('/bank-accounts')}>
+<div style={{fontSize:11,opacity:0.7,marginBottom:8,textTransform:'uppercase',letterSpacing:'0.05em'}}>Total Balance</div>
+{Object.entries(balanceByCurrency).map(([cur,bal])=>(
+<div key={cur} style={{marginBottom:4}}>
+<div style={{fontSize:11,opacity:0.6}}>{cur}</div>
+<div style={{fontSize:16,fontWeight:700}}>{bal.toLocaleString()} <span style={{fontSize:11,opacity:0.7}}>{cur}</span></div>
+</div>
+))}
 </div>
 </div>
 )}
