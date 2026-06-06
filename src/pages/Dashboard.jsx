@@ -232,12 +232,40 @@ borderRadius:12,padding:'12px 16px',marginBottom:16,
 
 <div className="card" style={{padding:20,marginBottom:16}}>
 <div style={{fontWeight:600,fontSize:14,marginBottom:16,color:'var(--text-1)'}}>Revenue vs Expenses — {filterYear}</div>
-<div style={{display:'flex',alignItems:'flex-end',gap:6,height:BAR_H+24,overflowX:'auto',paddingBottom:4}}>
+<div style={{display:'flex',alignItems:'flex-end',gap:6,height:BAR_H+24+20,overflowX:'auto',paddingBottom:4}}>
 {chartData.map((m,i)=>(
 <div key={i} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3,minWidth:40,flex:1}}>
-<div style={{display:'flex',alignItems:'flex-end',gap:2,height:BAR_H}}>
-<div title={`Revenue: ${m.revenue.toLocaleString()} Ks`} style={{width:14,borderRadius:'3px 3px 0 0',background:'#4F6EF7',height:`${Math.round(m.revenue/chartMax*BAR_H)}px`,minHeight:m.revenue>0?3:0,transition:'height 0.3s'}}/>
-<div title={`Expense: ${m.expense.toLocaleString()} Ks`} style={{width:14,borderRadius:'3px 3px 0 0',background:'#ef4444',height:`${Math.round(m.expense/chartMax*BAR_H)}px`,minHeight:m.expense>0?3:0,transition:'height 0.3s'}}/>
+<div style={{display:'flex',alignItems:'flex-end',gap:2,height:BAR_H+20}}>
+{/* Revenue bar */}
+<div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-end',height:'100%'}}>
+{m.revenue>0&&(
+<div style={{fontSize:8,color:'#4F6EF7',fontWeight:600,marginBottom:2,textAlign:'center',lineHeight:1}}>
+{m.revenue>=1000000?`${(m.revenue/1000000).toFixed(1)}M`:m.revenue>=1000?`${(m.revenue/1000).toFixed(0)}K`:m.revenue.toLocaleString()}
+</div>
+)}
+<div
+title={`Revenue: ${m.revenue.toLocaleString()} Ks`}
+style={{
+width:14,borderRadius:'3px 3px 0 0',background:'#4F6EF7',
+height:`${Math.round(m.revenue/chartMax*BAR_H)}px`,
+minHeight:m.revenue>0?3:0,transition:'height 0.3s'
+}}/>
+</div>
+{/* Expense bar */}
+<div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-end',height:'100%'}}>
+{m.expense>0&&(
+<div style={{fontSize:8,color:'#ef4444',fontWeight:600,marginBottom:2,textAlign:'center',lineHeight:1}}>
+{m.expense>=1000000?`${(m.expense/1000000).toFixed(1)}M`:m.expense>=1000?`${(m.expense/1000).toFixed(0)}K`:m.expense.toLocaleString()}
+</div>
+)}
+<div
+title={`Expense: ${m.expense.toLocaleString()} Ks`}
+style={{
+width:14,borderRadius:'3px 3px 0 0',background:'#ef4444',
+height:`${Math.round(m.expense/chartMax*BAR_H)}px`,
+minHeight:m.expense>0?3:0,transition:'height 0.3s'
+}}/>
+</div>
 </div>
 <div style={{fontSize:9,color:'var(--text-3)',textAlign:'center'}}>{m.month}</div>
 </div>
