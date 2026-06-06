@@ -2,6 +2,7 @@ import{useState,useEffect,useMemo}from'react'
 import{db,auth}from'../firebase'
 import{collection,onSnapshot,getDocs,query,where}from'firebase/firestore'
 import Layout from'../components/Layout'
+import{LineChart,Line,XAxis,YAxis,CartesianGrid,Tooltip,Legend,ResponsiveContainer}from'recharts'
 import{FileText,CheckCircle,Clock,AlertCircle,TrendingUp,TrendingDown,Wallet,Users,Briefcase,ArrowRight}from'lucide-react'
 import{useNavigate}from'react-router-dom'
 import{useRole}from'../hooks/useRole'
@@ -90,13 +91,27 @@ i.status==='overdue'||
 const overdueInvoicesTotal=overdueInvoices.reduce((s,i)=>s+Number(i.remainingAmount||i.totalAmount||0),0)
 
   
+const[compareYear,setCompareYear]=useState('')
+
 const chartData=months.map((m,idx)=>{
 const mInvs=invoices.filter(i=>getInvDate(i)?.startsWith(`${filterYear}-${m}`))
 const revenue=mInvs.filter(i=>i.status==='paid'||i.status==='partial').reduce((s,i)=>s+Number(i.paidAmount||i.totalAmount||0),0)
 const expense=expenses.filter(e=>e.date?.startsWith(`${filterYear}-${m}`)).reduce((s,e)=>s+Number(e.amount||0),0)
-return{month:monthNames[idx],revenue,expense}
+
+// Compare year data
+const cInvs=compareYear?invoices.filter(i=>getInvDate(i)?.startsWith(`${compareYear}-${m}`)):[]
+const cRevenue=cInvs.filter(i=>i.status==='paid'||i.status==='partial').reduce((s,i)=>s+Number(i.paidAmount||i.totalAmount||0),0)
+const cExpense=compareYear?expenses.filter(e=>e.date?.startsWith(`${compareYear}-${m}`)).reduce((s,e)=>s+Number(e.amount||0),0):0
+
+return{
+month:monthNames[idx],
+revenue,expense,
+...(compareYear?{cRevenue,cExpense}:{})
+}
 })
-const chartMax=Math.max(...chartData.map(m=>Math.max(m.revenue,m.expense)),1)
+
+// formatK function
+const fmtK=v=>v>=1000000?`${(v/1000000).toFixed(1)}M`:v>=1000?`${(v/1000).toFixed(0)}K`:v.toLocaleString()
 
 const top5Clients=useMemo(()=>{
 const map={}
@@ -231,54 +246,33 @@ borderRadius:12,padding:'12px 16px',marginBottom:16,
 )}
 
 <div className="card" style={{padding:20,marginBottom:16}}>
-<div style={{fontWeight:600,fontSize:14,marginBottom:16,color:'var(--text-1)'}}>Revenue vs Expenses — {filterYear}</div>
-<div style={{display:'flex',alignItems:'flex-end',gap:6,height:BAR_H+24+20,overflowX:'auto',paddingBottom:4}}>
-{chartData.map((m,i)=>(
-<div key={i} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3,minWidth:40,flex:1}}>
-<div style={{display:'flex',alignItems:'flex-end',gap:2,height:BAR_H+20}}>
-{/* Revenue bar */}
-<div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-end',height:'100%'}}>
-{m.revenue>0&&(
-<div style={{fontSize:8,color:'#4F6EF7',fontWeight:600,marginBottom:2,textAlign:'center',lineHeight:1}}>
-{m.revenue>=1000000?`${(m.revenue/1000000).toFixed(1)}M`:m.revenue>=1000?`${(m.revenue/1000).toFixed(0)}K`:m.revenue.toLocaleString()}
-</div>
-)}
-<div
-title={`Revenue: ${m.revenue.toLocaleString()} Ks`}
-style={{
-width:14,borderRadius:'3px 3px 0 0',background:'#4F6EF7',
-height:`${Math.round(m.revenue/chartMax*BAR_H)}px`,
-minHeight:m.revenue>0?3:0,transition:'height 0.3s'
-}}/>
-</div>
-{/* Expense bar */}
-<div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-end',height:'100%'}}>
-{m.expense>0&&(
-<div style={{fontSize:8,color:'#ef4444',fontWeight:600,marginBottom:2,textAlign:'center',lineHeight:1}}>
-{m.expense>=1000000?`${(m.expense/1000000).toFixed(1)}M`:m.expense>=1000?`${(m.expense/1000).toFixed(0)}K`:m.expense.toLocaleString()}
-</div>
-)}
-<div
-title={`Expense: ${m.expense.toLocaleString()} Ks`}
-style={{
-width:14,borderRadius:'3px 3px 0 0',background:'#ef4444',
-height:`${Math.round(m.expense/chartMax*BAR_H)}px`,
-minHeight:m.expense>0?3:0,transition:'height 0.3s'
-}}/>
+<div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16,flexWrap:'wrap',gap:8}}>
+<div style={{fontWeight:600,fontSize:14,color:'var(--text-1)'}}>Income vs Expense — {filterYear}{compareYear?` vs ${compareYear}`:''}</div>
+<div style={{display:'flex',gap:8,alignItems:'center'}}>
+<span style={{fontSize:12,color:'var(--text-3)'}}>Compare with:</span>
+<select className="form-input" style={{width:'auto',fontSize:12,padding:'4px 8px'}} value={compareYear} onChange={e=>setCompareYear(e.target.value)}>
+<option value="">None</option>
+{uniqueYears.filter(y=>y!==filterYear).map(y=><option key={y} value={y}>{y}</option>)}
+</select>
 </div>
 </div>
-<div style={{fontSize:9,color:'var(--text-3)',textAlign:'center'}}>{m.month}</div>
-</div>
-))}
-</div>
-<div style={{display:'flex',gap:16,marginTop:8,justifyContent:'center'}}>
-<div style={{display:'flex',alignItems:'center',gap:5,fontSize:11,color:'var(--text-2)'}}>
-<div style={{width:10,height:10,borderRadius:2,background:'#4F6EF7'}}/>Revenue
-</div>
-<div style={{display:'flex',alignItems:'center',gap:5,fontSize:11,color:'var(--text-2)'}}>
-<div style={{width:10,height:10,borderRadius:2,background:'#ef4444'}}/>Expenses
-</div>
-</div>
+<ResponsiveContainer width="100%" height={220}>
+<LineChart data={chartData} margin={{top:8,right:16,left:0,bottom:0}}>
+<CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
+<XAxis dataKey="month" tick={{fontSize:11,fill:'#9aa0b4'}} axisLine={false} tickLine={false}/>
+<YAxis tickFormatter={fmtK} tick={{fontSize:10,fill:'#9aa0b4'}} axisLine={false} tickLine={false} width={45}/>
+<Tooltip
+formatter={(value,name)=>[`${value.toLocaleString()} Ks`,name]}
+labelStyle={{fontWeight:600,color:'#1a1d2e'}}
+contentStyle={{borderRadius:10,border:'0.5px solid #e2e8f0',fontSize:12}}
+/>
+<Legend wrapperStyle={{fontSize:12}}/>
+<Line type="monotone" dataKey="revenue" name={`Income ${filterYear}`} stroke="#4F6EF7" strokeWidth={2.5} dot={{r:3,fill:'#4F6EF7'}} activeDot={{r:5}}/>
+<Line type="monotone" dataKey="expense" name={`Expense ${filterYear}`} stroke="#ef4444" strokeWidth={2.5} dot={{r:3,fill:'#ef4444'}} activeDot={{r:5}}/>
+{compareYear&&<Line type="monotone" dataKey="cRevenue" name={`Income ${compareYear}`} stroke="#4F6EF7" strokeWidth={2} strokeDasharray="5 5" dot={{r:2}} activeDot={{r:4}}/>}
+{compareYear&&<Line type="monotone" dataKey="cExpense" name={`Expense ${compareYear}`} stroke="#ef4444" strokeWidth={2} strokeDasharray="5 5" dot={{r:2}} activeDot={{r:4}}/>}
+</LineChart>
+</ResponsiveContainer>
 </div>
 
 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}>
