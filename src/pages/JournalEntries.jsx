@@ -2,7 +2,7 @@ import{useState,useEffect}from'react'
 import{db,auth}from'../firebase'
 import{collection,getDocs,query,where,addDoc,deleteDoc,doc,serverTimestamp,onSnapshot}from'firebase/firestore'
 import Layout from'../components/Layout'
-import{Plus,Trash2,X,Save,BookOpen,Search,ChevronDown,ChevronUp,AlertCircle}from'lucide-react'
+import{Plus,Trash2,X,Save,BookOpen,Search,ChevronDown,ChevronUp,AlertCircle,CheckCircle}from'lucide-react'
 
 const ACCOUNT_TYPES=[
 'Cash','Bank','Accounts Receivable','Accounts Payable',
