@@ -2,7 +2,8 @@ import{useState,useEffect}from'react'
 import{db,auth}from'../firebase'
 import{collection,getDocs,query,where,doc,addDoc,updateDoc,deleteDoc,serverTimestamp,getDoc}from'firebase/firestore'
 import Layout from'../components/Layout'
-import{Plus,Trash2,Edit,X,Save,Receipt,Search,CheckCircle,Clock,AlertCircle,ArrowLeft}from'lucide-react'
+import{Plus,Trash2,Edit,X,Save,Receipt,Search,CheckCircle,Clock,AlertCircle}from'lucide-react'
+import{logAction}from'../utils/auditLog'
 
 const STATUS=['unpaid','partial','paid','cancelled']
 const statusColor={unpaid:'#d97706',partial:'#4F6EF7',paid:'#16a34a',cancelled:'#64748b'}
@@ -66,15 +67,26 @@ setSaving(true)
 try{
 const data={...form,amount:Number(form.amount),updatedAt:serverTimestamp()}
 if(!selected){
+const billNumber='BILL-'+Date.now().toString().slice(-6)
 await addDoc(collection(db,'companies',companyId,'bills'),{
 ...data,
 paidAmount:0,
-billNumber:'BILL-'+Date.now().toString().slice(-6),
+billNumber,
 createdAt:serverTimestamp(),
 createdBy:auth.currentUser.uid,
 })
+await logAction(companyId,{
+action:'create',module:'bills',
+description:`Created bill: ${form.title} — ${Number(form.amount).toLocaleString()} Ks (${form.vendor||'No vendor'})`,
+metadata:{amount:Number(form.amount),vendor:form.vendor,category:form.category,billNumber},
+})
 }else{
 await updateDoc(doc(db,'companies',companyId,'bills',selected.id),data)
+await logAction(companyId,{
+action:'update',module:'bills',
+description:`Updated bill: ${form.title} — ${Number(form.amount).toLocaleString()} Ks`,
+metadata:{billId:selected.id,amount:Number(form.amount),vendor:form.vendor},
+})
 }
 const billSnap=await getDocs(collection(db,'companies',companyId,'bills'))
 setBills(billSnap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0)))
@@ -85,7 +97,13 @@ setSaving(false)
 
 const handleDelete=async(id)=>{
 if(!confirm('Delete this bill?'))return
+const bill=bills.find(b=>b.id===id)
 await deleteDoc(doc(db,'companies',companyId,'bills',id))
+await logAction(companyId,{
+action:'delete',module:'bills',
+description:`Deleted bill: ${bill?.title||id} — ${Number(bill?.amount||0).toLocaleString()} Ks`,
+metadata:{billId:id,amount:bill?.amount,vendor:bill?.vendor},
+})
 setBills(b=>b.filter(x=>x.id!==id))
 }
 
@@ -117,7 +135,6 @@ status:newStatus,
 updatedAt:serverTimestamp(),
 })
 
-// Bank balance ကျ + journal entry
 const acRef=doc(db,'companies',companyId,'bankAccounts',payForm.bankAccountId)
 const acSnap=await getDoc(acRef)
 if(acSnap.exists()){
@@ -142,6 +159,12 @@ createdBy:auth.currentUser.uid,
 })
 }
 
+await logAction(companyId,{
+action:'payment',module:'bills',
+description:`Paid bill: ${bill.title} — ${amount.toLocaleString()} Ks (${newStatus})`,
+metadata:{billId:bill.id,billNumber:bill.billNumber,amount,status:newStatus},
+})
+
 const billSnap=await getDocs(collection(db,'companies',companyId,'bills'))
 setBills(billSnap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0)))
 setPayModal(null)
@@ -164,7 +187,6 @@ if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:
 return(
 <Layout title="Bills & Payable">
 
-{/* Add/Edit Modal */}
 {modal&&(
 <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
 <div style={{background:'white',borderRadius:16,width:'100%',maxWidth:480,boxShadow:'0 20px 60px rgba(0,0,0,0.2)',maxHeight:'90vh',overflowY:'auto'}}>
@@ -216,7 +238,6 @@ return(
 </div>
 )}
 
-{/* Pay Modal */}
 {payModal&&(
 <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
 <div style={{background:'white',borderRadius:16,width:'100%',maxWidth:440,boxShadow:'0 20px 60px rgba(0,0,0,0.2)'}}>
@@ -254,7 +275,6 @@ From Bank Account <span style={{color:'var(--primary)',fontSize:11}}>(Bank balan
 <label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Note</label>
 <input className="form-input" value={payForm.note} onChange={e=>setPayForm(f=>({...f,note:e.target.value}))} placeholder="Optional..."/>
 </div>
-
 {payModal.payments?.length>0&&(
 <div style={{marginBottom:16,padding:12,background:'#f8fafc',borderRadius:8}}>
 <div style={{fontSize:11,fontWeight:600,color:'var(--text-3)',marginBottom:8,textTransform:'uppercase'}}>Payment History</div>
@@ -266,7 +286,6 @@ From Bank Account <span style={{color:'var(--primary)',fontSize:11}}>(Bank balan
 ))}
 </div>
 )}
-
 <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
 <button type="button" onClick={()=>setPayModal(null)} className="btn btn-ghost">Cancel</button>
 <button type="button" onClick={handlePay} disabled={savingPay} className="btn btn-primary">
@@ -278,7 +297,6 @@ From Bank Account <span style={{color:'var(--primary)',fontSize:11}}>(Bank balan
 </div>
 )}
 
-{/* Overdue Banner */}
 {overdue.length>0&&(
 <div style={{background:'rgba(220,38,38,0.08)',border:'0.5px solid rgba(220,38,38,0.2)',borderRadius:12,padding:'12px 16px',marginBottom:16,display:'flex',alignItems:'center',gap:8}}>
 <AlertCircle size={16} color="#dc2626"/>
@@ -286,7 +304,6 @@ From Bank Account <span style={{color:'var(--primary)',fontSize:11}}>(Bank balan
 </div>
 )}
 
-{/* Stats */}
 <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:16}}>
 {[
 {label:'Total Bills',value:bills.length,color:'#4F6EF7',icon:Receipt},
@@ -304,7 +321,6 @@ From Bank Account <span style={{color:'var(--primary)',fontSize:11}}>(Bank balan
 ))}
 </div>
 
-{/* Filters */}
 <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center',marginBottom:16,justifyContent:'space-between'}}>
 <div style={{display:'flex',gap:8,flex:1}}>
 <div style={{position:'relative'}}>
@@ -319,7 +335,6 @@ From Bank Account <span style={{color:'var(--primary)',fontSize:11}}>(Bank balan
 <button type="button" onClick={openAdd} className="btn btn-primary"><Plus size={15}/>New Bill</button>
 </div>
 
-{/* Table */}
 <div className="card" style={{overflow:'hidden'}}>
 {filtered.length===0?(
 <div style={{padding:64,textAlign:'center',color:'var(--text-3)'}}>
