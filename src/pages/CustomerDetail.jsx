@@ -67,15 +67,27 @@ setExportingPDF(true)
 try{
 const el=statementRef.current
 el.style.display='block'
-await new Promise(r=>setTimeout(r,100))
+await new Promise(r=>setTimeout(r,200))
 const canvas=await html2canvas(el,{scale:2,useCORS:true,backgroundColor:'#ffffff'})
+el.style.display='none'
+
 const imgData=canvas.toDataURL('image/png')
 const pdf=new jsPDF('p','mm','a4')
-const pdfWidth=pdf.internal.pageSize.getWidth()
-const pdfHeight=(canvas.height*pdfWidth)/canvas.width
-pdf.addImage(imgData,'PNG',0,0,pdfWidth,pdfHeight)
+const pageWidth=pdf.internal.pageSize.getWidth()
+const pageHeight=pdf.internal.pageSize.getHeight()
+const imgWidth=pageWidth
+const imgHeight=(canvas.height*imgWidth)/canvas.width
+const totalPages=Math.ceil(imgHeight/pageHeight)
+
+for(let i=0;i<totalPages;i++){
+if(i>0)pdf.addPage()
+pdf.addImage(
+imgData,'PNG',
+0,-(i*pageHeight),
+imgWidth,imgHeight
+)
+}
 pdf.save(`Statement_${customer?.name||'customer'}_${new Date().toISOString().split('T')[0]}.pdf`)
-el.style.display='none'
 }catch(e){alert(e.message)}
 setExportingPDF(false)
 }
