@@ -75,16 +75,19 @@ const imgData=canvas.toDataURL('image/png')
 const pdf=new jsPDF('p','mm','a4')
 const pageWidth=pdf.internal.pageSize.getWidth()
 const pageHeight=pdf.internal.pageSize.getHeight()
-const imgWidth=pageWidth
-const imgHeight=(canvas.height*imgWidth)/canvas.width
-const totalPages=Math.ceil(imgHeight/pageHeight)
+const margin=10
+const usableWidth=pageWidth-(margin*2)
+const usableHeight=pageHeight-(margin*2)
+const imgHeight=(canvas.height*usableWidth)/canvas.width
+const totalPages=Math.ceil(imgHeight/usableHeight)
 
 for(let i=0;i<totalPages;i++){
 if(i>0)pdf.addPage()
 pdf.addImage(
 imgData,'PNG',
-0,-(i*pageHeight),
-imgWidth,imgHeight
+margin,
+margin-(i*usableHeight),
+usableWidth,imgHeight
 )
 }
 pdf.save(`Statement_${customer?.name||'customer'}_${new Date().toISOString().split('T')[0]}.pdf`)
