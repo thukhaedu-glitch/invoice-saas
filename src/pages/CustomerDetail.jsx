@@ -62,6 +62,12 @@ const totalBilled=invoices.reduce((s,i)=>s+Number(i.totalAmount||0),0)
 const totalPaid=invoices.reduce((s,i)=>s+Number(i.paidAmount||0),0)
 const outstanding=totalBilled-totalPaid
 
+const formatDate=(d)=>{
+if(!d)return'-'
+if(d.includes('T'))return new Date(d).toLocaleDateString('en-GB')
+return d
+}
+
 const handleExportPDF=async()=>{
 setExportingPDF(true)
 try{
@@ -70,25 +76,17 @@ el.style.display='block'
 await new Promise(r=>setTimeout(r,200))
 const canvas=await html2canvas(el,{scale:2,useCORS:true,backgroundColor:'#ffffff'})
 el.style.display='none'
-
 const imgData=canvas.toDataURL('image/png')
 const pdf=new jsPDF('p','mm','a4')
 const pageWidth=pdf.internal.pageSize.getWidth()
 const pageHeight=pdf.internal.pageSize.getHeight()
-const margin=10
-const usableWidth=pageWidth-(margin*2)
-const usableHeight=pageHeight-(margin*2)
-const imgHeight=(canvas.height*usableWidth)/canvas.width
-const totalPages=Math.ceil(imgHeight/usableHeight)
-
+const imgHeight=(canvas.height*pageWidth)/canvas.width
+const totalPages=Math.ceil(imgHeight/pageHeight)
 for(let i=0;i<totalPages;i++){
 if(i>0)pdf.addPage()
-pdf.addImage(
-imgData,'PNG',
-margin,
-margin-(i*usableHeight),
-usableWidth,imgHeight
-)
+pdf.addImage(imgData,'PNG',0,-(i*pageHeight),pageWidth,imgHeight,'','FAST')
+pdf.setFillColor(255,255,255)
+pdf.rect(0,pageHeight,pageWidth,10,'F')
 }
 pdf.save(`Statement_${customer?.name||'customer'}_${new Date().toISOString().split('T')[0]}.pdf`)
 }catch(e){alert(e.message)}
@@ -105,16 +103,14 @@ return(
 <Layout title={customer.name}>
 <div style={{maxWidth:900,margin:'0 auto'}}>
 
-{/* Header */}
 <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:20}}>
 <button type="button" onClick={()=>navigate('/customers')} className="btn btn-ghost" style={{padding:'8px 12px'}}><ArrowLeft size={16}/></button>
 <h2 style={{fontSize:18,fontWeight:600,flex:1}}>{customer.name}</h2>
-<button type="button" onClick={handleExportPDF} disabled={exportingPDF} className="btn btn-primary" style={{gap:6}}>
+<button type="button" onClick={handleExportPDF} disabled={exportingPDF} className="btn btn-primary">
 <Download size={14}/>{exportingPDF?'Generating...':'Export Statement PDF'}
 </button>
 </div>
 
-{/* Customer Info Card */}
 <div className="card" style={{padding:24,marginBottom:16}}>
 <div style={{display:'flex',alignItems:'flex-start',gap:20}}>
 <div style={{width:56,height:56,borderRadius:16,background:'var(--primary-light)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
@@ -132,7 +128,6 @@ return(
 </div>
 </div>
 
-{/* Stats */}
 <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:16}}>
 {[
 {label:'Total Invoices',value:invoices.length,icon:FileText,color:'#4F6EF7'},
@@ -150,7 +145,6 @@ return(
 ))}
 </div>
 
-{/* Tabs */}
 <div style={{display:'flex',gap:4,background:'rgba(255,255,255,0.7)',border:'0.5px solid var(--border)',borderRadius:12,padding:4,marginBottom:16,width:'fit-content'}}>
 {[
 {id:'invoices',label:'Invoices',icon:FileText,count:invoices.length},
@@ -173,7 +167,6 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600,
 ))}
 </div>
 
-{/* Invoices Tab */}
 {activeTab==='invoices'&&(
 <div className="card" style={{overflow:'hidden'}}>
 {invoices.length===0?(
@@ -183,11 +176,9 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600,
 </div>
 ):(
 <table>
-<thead>
-<tr>
+<thead><tr>
 <th>Number</th><th>Amount</th><th>Paid</th><th style={{textAlign:'center'}}>Status</th><th>Date</th><th style={{textAlign:'center'}}>Action</th>
-</tr>
-</thead>
+</tr></thead>
 <tbody>
 {invoices.map(i=>(
 <tr key={i.id} style={{cursor:'pointer'}} onClick={()=>navigate(`/invoice/${i.id}`)}>
@@ -205,7 +196,6 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600,
 </div>
 )}
 
-{/* Quotations Tab */}
 {activeTab==='quotations'&&(
 <div className="card" style={{overflow:'hidden'}}>
 {quotations.length===0?(
@@ -215,11 +205,9 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600,
 </div>
 ):(
 <table>
-<thead>
-<tr>
+<thead><tr>
 <th>Number</th><th>Amount</th><th>Date</th><th style={{textAlign:'center'}}>Action</th>
-</tr>
-</thead>
+</tr></thead>
 <tbody>
 {quotations.map(q=>(
 <tr key={q.id} style={{cursor:'pointer'}} onClick={()=>navigate(`/quotation/${q.id}`)}>
@@ -235,7 +223,6 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600,
 </div>
 )}
 
-{/* Contracts Tab */}
 {activeTab==='contracts'&&(
 <div className="card" style={{overflow:'hidden'}}>
 {contracts.length===0?(
@@ -245,11 +232,9 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600,
 </div>
 ):(
 <table>
-<thead>
-<tr>
+<thead><tr>
 <th>Number</th><th>Title</th><th>Value</th><th style={{textAlign:'center'}}>Status</th><th>Date</th><th style={{textAlign:'center'}}>Action</th>
-</tr>
-</thead>
+</tr></thead>
 <tbody>
 {contracts.map(c=>(
 <tr key={c.id}>
@@ -270,9 +255,9 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600,
 
 {/* Hidden PDF Statement */}
 <div ref={statementRef} style={{display:'none',position:'fixed',left:-9999,top:0,zIndex:-1}}>
-<div style={{width:'210mm',background:'white',fontFamily:'Georgia,serif',padding:0}}>
+<div style={{width:'794px',background:'white',fontFamily:'Georgia,serif'}}>
 
-{/* Statement Header */}
+{/* Header */}
 <div style={{background:primaryColor,padding:'28px 40px',color:'white'}}>
 <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
 <div>
@@ -299,7 +284,7 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600,
 {customer.address&&<div style={{fontSize:12,color:'#64748b'}}>📍 {customer.address}</div>}
 </div>
 
-{/* Summary Cards */}
+{/* Summary */}
 <div style={{padding:'16px 40px',display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:16,borderBottom:'1px solid #e2e8f0'}}>
 {[
 {label:'Total Billed',value:totalBilled,color:primaryColor},
@@ -319,26 +304,22 @@ borderRadius:99,padding:'1px 7px',fontSize:11,fontWeight:600,
 <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
 <thead>
 <tr style={{background:primaryColor,color:'white'}}>
-<th style={{padding:'8px 10px',textAlign:'left',fontSize:10,fontWeight:600,textTransform:'uppercase'}}>Invoice #</th>
-<th style={{padding:'8px 10px',textAlign:'left',fontSize:10,fontWeight:600,textTransform:'uppercase'}}>Date</th>
-<th style={{padding:'8px 10px',textAlign:'right',fontSize:10,fontWeight:600,textTransform:'uppercase'}}>Amount</th>
-<th style={{padding:'8px 10px',textAlign:'right',fontSize:10,fontWeight:600,textTransform:'uppercase'}}>Paid</th>
-<th style={{padding:'8px 10px',textAlign:'right',fontSize:10,fontWeight:600,textTransform:'uppercase'}}>Balance</th>
-<th style={{padding:'8px 10px',textAlign:'center',fontSize:10,fontWeight:600,textTransform:'uppercase'}}>Status</th>
+{['Invoice #','Date','Amount','Paid','Balance','Status'].map(h=>(
+<th key={h} style={{padding:'8px 10px',textAlign:['Amount','Paid','Balance'].includes(h)?'right':'left',fontSize:10,fontWeight:600,textTransform:'uppercase'}}>{h}</th>
+))}
 </tr>
 </thead>
 <tbody>
 {invoices.map((inv,idx)=>{
-const bal=Number(inv.remainingAmount||inv.totalAmount||0)-Number(inv.paidAmount||0)
 const statusColors={paid:'#16a34a',pending:'#d97706',overdue:'#dc2626',partial:'#4F6EF7'}
 return(
 <tr key={inv.id} style={{background:idx%2===0?'white':'#f8fafc',borderBottom:'0.5px solid #e2e8f0'}}>
 <td style={{padding:'8px 10px',fontFamily:'monospace',color:primaryColor,fontWeight:500}}>{inv.invoiceNumber}</td>
-<td style={{padding:'8px 10px',color:'#64748b'}}>{inv.date||'-'}</td>
+<td style={{padding:'8px 10px',color:'#64748b'}}>{formatDate(inv.date)}</td>
 <td style={{padding:'8px 10px',textAlign:'right',fontWeight:500}}>{Number(inv.totalAmount||0).toLocaleString()} Ks</td>
 <td style={{padding:'8px 10px',textAlign:'right',color:'#16a34a'}}>{Number(inv.paidAmount||0).toLocaleString()} Ks</td>
 <td style={{padding:'8px 10px',textAlign:'right',fontWeight:600,color:Number(inv.remainingAmount||0)>0?'#dc2626':'#16a34a'}}>{Number(inv.remainingAmount||0).toLocaleString()} Ks</td>
-<td style={{padding:'8px 10px',textAlign:'center'}}>
+<td style={{padding:'8px 10px'}}>
 <span style={{background:inv.status==='paid'?'#eaf3de':inv.status==='overdue'?'#fcebeb':'#faeeda',color:statusColors[inv.status]||'#64748b',padding:'2px 8px',borderRadius:20,fontSize:10,fontWeight:600,textTransform:'capitalize'}}>{inv.status}</span>
 </td>
 </tr>
@@ -364,17 +345,16 @@ return(
 <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
 <thead>
 <tr style={{background:'#f1f5f9'}}>
-<th style={{padding:'7px 10px',textAlign:'left',fontSize:10,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase'}}>Invoice #</th>
-<th style={{padding:'7px 10px',textAlign:'left',fontSize:10,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase'}}>Payment Date</th>
-<th style={{padding:'7px 10px',textAlign:'left',fontSize:10,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase'}}>Method</th>
-<th style={{padding:'7px 10px',textAlign:'right',fontSize:10,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase'}}>Amount</th>
+{['Invoice #','Payment Date','Method','Amount'].map(h=>(
+<th key={h} style={{padding:'7px 10px',textAlign:h==='Amount'?'right':'left',fontSize:10,fontWeight:600,color:'#9aa0b4',textTransform:'uppercase'}}>{h}</th>
+))}
 </tr>
 </thead>
 <tbody>
-{invoices.flatMap(inv=>(inv.payments||[]).map((p,i)=>({...p,invoiceNumber:inv.invoiceNumber,_key:inv.id+i}))).sort((a,b)=>a.date?.localeCompare(b.date||'')).map(p=>(
+{invoices.flatMap(inv=>(inv.payments||[]).map((p,i)=>({...p,invoiceNumber:inv.invoiceNumber,_key:inv.id+i}))).sort((a,b)=>(a.date||'').localeCompare(b.date||'')).map(p=>(
 <tr key={p._key} style={{borderBottom:'0.5px solid #f1f5f9'}}>
 <td style={{padding:'7px 10px',fontFamily:'monospace',color:primaryColor,fontSize:11}}>{p.invoiceNumber}</td>
-<td style={{padding:'7px 10px',color:'#64748b'}}>{p.date?p.date.includes('T')?new Date(p.date).toLocaleDateString('en-GB'):p.date:'-'}</td>
+<td style={{padding:'7px 10px',color:'#64748b'}}>{formatDate(p.date)}</td>
 <td style={{padding:'7px 10px',color:'#64748b'}}>{p.method||'-'}</td>
 <td style={{padding:'7px 10px',textAlign:'right',fontWeight:600,color:'#16a34a'}}>{Number(p.amount||0).toLocaleString()} Ks</td>
 </tr>
