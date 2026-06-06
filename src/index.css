@@ -181,14 +181,6 @@ padding:20px!important;
 }
 }
 
-@media(min-width:640px){
-.desktop-table{display:block!important}
-.mobile-cards{display:none!important}
-}
-@media(max-width:639px){
-.desktop-table{display:none!important}
-.mobile-cards{display:block!important}
-}
 
 /* Extra small */
 @media(max-width:480px){
@@ -203,3 +195,14 @@ div[style*="fontSize:20"]{font-size:16px!important}
 
 html{scroll-behavior:auto!important}
 button{scroll-margin:0}
+
+@media(max-width:639px){
+.desktop-table{display:none!important}
+.mobile-cards{display:block!important}
+.stats-grid-4{grid-template-columns:repeat(2,1fr)!important}
+.stats-grid-3{grid-template-columns:repeat(2,1fr)!important}
+}
+@media(min-width:640px){
+.desktop-table{display:block!important}
+.mobile-cards{display:none!important}
+}
