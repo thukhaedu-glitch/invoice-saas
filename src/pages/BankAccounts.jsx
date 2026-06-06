@@ -8,9 +8,8 @@ import{useNavigate}from'react-router-dom'
 const DEFAULT_CURRENCIES=['MMK','USD','THB']
 const ACCOUNT_TYPES=['Cash','Bank','Mobile Banking','Other']
 
-
 export default function BankAccounts(){
-const navigate=useNavigate() 
+const navigate=useNavigate()
 const[companyId,setCompanyId]=useState(null)
 const[accounts,setAccounts]=useState([])
 const[transactions,setTransactions]=useState([])
@@ -37,7 +36,6 @@ const snap=await getDocs(query(collection(db,'companies'),where(`members.${auth.
 if(!snap.empty){
 const cid=snap.docs[0].id
 setCompanyId(cid)
-// Load currencies from settings
 const sSnap=await getDoc(doc(db,'companies',cid,'_config','invoiceSettings'))
 if(sSnap.exists()&&sSnap.data().currencies){
 const currList=sSnap.data().currencies.filter(c=>c.code).map(c=>c.code)
@@ -117,8 +115,7 @@ try{
 const amount=Number(txForm.amount)
 const balanceChange=txForm.type==='in'?amount:-amount
 await addDoc(collection(db,'companies',companyId,'bankAccounts',selected.id,'transactions'),{
-...txForm,
-amount,
+...txForm,amount,
 createdAt:serverTimestamp(),
 createdBy:auth.currentUser.uid,
 })
@@ -136,7 +133,13 @@ setShowTxForm(false)
 setSavingTx(false)
 }
 
-const totalBalance=accounts.filter(a=>a.isActive!==false).reduce((s,a)=>s+Number(a.currentBalance||a.openingBalance||0),0)
+// Currency group ဖြင့် balance calculate
+const balanceByCurrency={}
+accounts.filter(a=>a.isActive!==false).forEach(a=>{
+const cur=a.currency||'MMK'
+if(!balanceByCurrency[cur])balanceByCurrency[cur]=0
+balanceByCurrency[cur]+=Number(a.currentBalance||a.openingBalance||0)
+})
 
 if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh'}}>Loading...</div>
 
@@ -304,10 +307,23 @@ Transaction History
 
 return(
 <Layout title="Bank Accounts">
+
+{/* Total Balance — currency ခွဲပြ */}
 <div className="card" style={{padding:24,marginBottom:20,background:'linear-gradient(135deg,#1a1d2e,#2d3260)',color:'white'}}>
-<div style={{fontSize:12,opacity:0.7,marginBottom:8,textTransform:'uppercase',letterSpacing:'0.05em'}}>Total Balance — All Accounts</div>
-<div style={{fontSize:36,fontWeight:700}}>{totalBalance.toLocaleString()} MMK</div>
-<div style={{fontSize:12,opacity:0.6,marginTop:8}}>{accounts.filter(a=>a.isActive!==false).length} active accounts</div>
+<div style={{fontSize:12,opacity:0.7,marginBottom:12,textTransform:'uppercase',letterSpacing:'0.05em'}}>Total Balance — All Accounts</div>
+{Object.entries(balanceByCurrency).length===0?(
+<div style={{fontSize:32,fontWeight:700}}>0 MMK</div>
+):(
+<div style={{display:'flex',gap:32,flexWrap:'wrap'}}>
+{Object.entries(balanceByCurrency).map(([cur,bal])=>(
+<div key={cur}>
+<div style={{fontSize:11,opacity:0.6,marginBottom:4}}>{cur}</div>
+<div style={{fontSize:28,fontWeight:700}}>{bal.toLocaleString()} <span style={{fontSize:14,opacity:0.7}}>{cur}</span></div>
+</div>
+))}
+</div>
+)}
+<div style={{fontSize:12,opacity:0.6,marginTop:12}}>{accounts.filter(a=>a.isActive!==false).length} active accounts</div>
 </div>
 
 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
