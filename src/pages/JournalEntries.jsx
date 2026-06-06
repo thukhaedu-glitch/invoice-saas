@@ -1,19 +1,15 @@
 import{useState,useEffect}from'react'
 import{db,auth}from'../firebase'
-
 import Layout from'../components/Layout'
 import{Plus,Trash2,X,Save,BookOpen,Search,ChevronDown,ChevronUp,AlertCircle,CheckCircle}from'lucide-react'
 import{collection,getDocs,query,where,addDoc,deleteDoc,doc,serverTimestamp,onSnapshot,updateDoc}from'firebase/firestore'
 
-const ACCOUNT_TYPES=[
-'Cash','Bank','Accounts Receivable','Accounts Payable',
-'Revenue','Expense','Equity','Inventory','Fixed Assets','Other'
-]
+const NORMAL_DEBIT=['Assets','Expenses']
 
 export default function JournalEntries(){
 const[companyId,setCompanyId]=useState(null)
 const[entries,setEntries]=useState([])
-const[bankAccounts,setBankAccounts]=useState([])
+const[coaAccounts,setCoaAccounts]=useState([])
 const[loading,setLoading]=useState(true)
 const[search,setSearch]=useState('')
 const[filterMonth,setFilterMonth]=useState('')
@@ -22,11 +18,10 @@ const[saving,setSaving]=useState(false)
 const[expandedId,setExpandedId]=useState(null)
 const[form,setForm]=useState({
 date:new Date().toISOString().split('T')[0],
-description:'',
-ref:'',
+description:'',ref:'',
 lines:[
-{account:'',type:'debit',amount:''},
-{account:'',type:'credit',amount:''},
+{accountId:'',accountName:'',accountType:'',type:'debit',amount:''},
+{accountId:'',accountName:'',accountType:'',type:'credit',amount:''},
 ]
 })
 
@@ -36,8 +31,10 @@ const snap=await getDocs(query(collection(db,'companies'),where(`members.${auth.
 if(!snap.empty){
 const cid=snap.docs[0].id
 setCompanyId(cid)
-const baSnap=await getDocs(collection(db,'companies',cid,'bankAccounts'))
-setBankAccounts(baSnap.docs.map(d=>({id:d.id,...d.data()})))
+const[acSnap]=await Promise.all([
+getDocs(collection(db,'companies',cid,'accounts')),
+])
+setCoaAccounts(acSnap.docs.map(d=>({id:d.id,...d.data()})))
 const u=onSnapshot(collection(db,'companies',cid,'journalEntries'),snap=>{
 setEntries(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.date||'').localeCompare(a.date||'')))
 setLoading(false)
@@ -54,17 +51,25 @@ setForm({
 date:new Date().toISOString().split('T')[0],
 description:'',ref:'',
 lines:[
-{account:'',type:'debit',amount:''},
-{account:'',type:'credit',amount:''},
+{accountId:'',accountName:'',accountType:'',type:'debit',amount:''},
+{accountId:'',accountName:'',accountType:'',type:'credit',amount:''},
 ]
 })
 setModal(true)
 }
 
-const addLine=()=>setForm(f=>({...f,lines:[...f.lines,{account:'',type:'debit',amount:''}]}))
+const addLine=()=>setForm(f=>({...f,lines:[...f.lines,{accountId:'',accountName:'',accountType:'',type:'debit',amount:''}]}))
 const removeLine=(i)=>setForm(f=>({...f,lines:f.lines.filter((_,idx)=>idx!==i)}))
+
 const updateLine=(i,field,value)=>setForm(f=>({
-...f,lines:f.lines.map((l,idx)=>idx===i?{...l,[field]:value}:l)
+...f,lines:f.lines.map((l,idx)=>{
+if(idx!==i)return l
+if(field==='accountId'){
+const acc=coaAccounts.find(a=>a.id===value)
+return{...l,accountId:value,accountName:acc?.name||'',accountType:acc?.type||''}
+}
+return{...l,[field]:value}
+})
 }))
 
 const totalDebit=form.lines.filter(l=>l.type==='debit').reduce((s,l)=>s+Number(l.amount||0),0)
@@ -74,17 +79,18 @@ const isBalanced=Math.abs(totalDebit-totalCredit)<0.01&&totalDebit>0
 const handleSave=async()=>{
 if(!form.description){alert('Description required');return}
 if(!isBalanced){alert(`Not balanced — Debit: ${totalDebit.toLocaleString()}, Credit: ${totalCredit.toLocaleString()}`);return}
-if(form.lines.some(l=>!l.account||!l.amount)){alert('All lines must have account and amount');return}
+if(form.lines.some(l=>!l.accountId||!l.amount)){alert('All lines must have account and amount');return}
 setSaving(true)
 try{
-// Journal entry save
 const ref=form.ref||'JE-'+Date.now().toString().slice(-6)
 await addDoc(collection(db,'companies',companyId,'journalEntries'),{
 date:form.date,
 description:form.description,
 ref,
 entries:form.lines.map(l=>({
-account:l.account,
+account:l.accountName,
+accountId:l.accountId,
+accountType:l.accountType,
 type:l.type,
 amount:Number(l.amount),
 })),
@@ -94,39 +100,25 @@ createdAt:serverTimestamp(),
 createdBy:auth.currentUser.uid,
 })
 
-// COA balance update
-const acSnap=await getDocs(collection(db,'companies',companyId,'accounts'))
-const allAccounts=acSnap.docs.map(d=>({id:d.id,...d.data()}))
-
-// Normal balance rules
-const normalDebit=['Assets','Expenses'] // debit တက်
-const normalCredit=['Liabilities','Equity','Income'] // credit တက်
-
+// COA balance update — accountId ဖြင့် exact match
 for(const line of form.lines){
-// Account name match လုပ်ပြီး find
-const matched=allAccounts.find(a=>
-a.name.toLowerCase()===line.account.toLowerCase()||
-a.code===line.account
-)
-if(!matched)continue
-
-const currentBal=Number(matched.currentBalance||matched.openingBalance||0)
+if(!line.accountId)continue
+const acc=coaAccounts.find(a=>a.id===line.accountId)
+if(!acc)continue
+const currentBal=Number(acc.currentBalance||acc.openingBalance||0)
 let newBal=currentBal
-
-if(normalDebit.includes(matched.type)){
-// Assets/Expenses: debit တက်, credit ကျ
+if(NORMAL_DEBIT.includes(acc.type)){
 newBal=line.type==='debit'?currentBal+Number(line.amount):currentBal-Number(line.amount)
 }else{
-// Liabilities/Equity/Income: credit တက်, debit ကျ
 newBal=line.type==='credit'?currentBal+Number(line.amount):currentBal-Number(line.amount)
 }
-
-await updateDoc(doc(db,'companies',companyId,'accounts',matched.id),{
+await updateDoc(doc(db,'companies',companyId,'accounts',acc.id),{
 currentBalance:newBal,
 updatedAt:serverTimestamp(),
 })
+// local state update
+setCoaAccounts(prev=>prev.map(a=>a.id===acc.id?{...a,currentBalance:newBal}:a))
 }
-
 setModal(false)
 }catch(e){alert(e.message)}
 setSaving(false)
@@ -138,17 +130,19 @@ await deleteDoc(doc(db,'companies',companyId,'journalEntries',id))
 }
 
 const months=[...new Set(entries.map(e=>e.date?.slice(0,7)).filter(Boolean))].sort().reverse()
-
 const filtered=entries.filter(e=>{
 const matchSearch=e.description?.toLowerCase().includes(search.toLowerCase())||e.ref?.toLowerCase().includes(search.toLowerCase())
 const matchMonth=filterMonth?e.date?.startsWith(filterMonth):true
 return matchSearch&&matchMonth
 })
+const totalDebits=filtered.reduce((s,e)=>s+(e.entries||[]).filter(l=>l.type==='debit').reduce((ss,l)=>ss+Number(l.amount||0),0),0)
 
-const totalDebits=filtered.reduce((s,e)=>{
-const d=e.entries||[]
-return s+d.filter(l=>l.type==='debit').reduce((ss,l)=>ss+Number(l.amount||0),0)
-},0)
+// Group COA by type for select
+const coaByType={}
+coaAccounts.forEach(a=>{
+if(!coaByType[a.type])coaByType[a.type]=[]
+coaByType[a.type].push(a)
+})
 
 if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh'}}>Loading...</div>
 
@@ -157,7 +151,7 @@ return(
 
 {modal&&(
 <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
-<div style={{background:'white',borderRadius:16,width:'100%',maxWidth:600,maxHeight:'90vh',overflowY:'auto',boxShadow:'0 20px 60px rgba(0,0,0,0.2)'}}>
+<div style={{background:'white',borderRadius:16,width:'100%',maxWidth:620,maxHeight:'90vh',overflowY:'auto',boxShadow:'0 20px 60px rgba(0,0,0,0.2)'}}>
 <div style={{padding:'20px 24px',borderBottom:'0.5px solid #f1f5f9',display:'flex',justifyContent:'space-between',alignItems:'center',position:'sticky',top:0,background:'white',zIndex:1}}>
 <div style={{fontWeight:600,fontSize:15}}>New Journal Entry</div>
 <button type="button" onClick={()=>setModal(false)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-3)'}}><X size={18}/></button>
@@ -178,28 +172,34 @@ return(
 </div>
 </div>
 
-{/* Lines */}
+{coaAccounts.length===0&&(
+<div style={{padding:12,background:'#faeeda',borderRadius:8,marginBottom:12,fontSize:12,color:'#d97706'}}>
+⚠️ Chart of Accounts မရှိသေး — COA page မှာ Initialize Defaults လုပ်ပါ
+</div>
+)}
+
 <div style={{marginBottom:12}}>
 <div style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr auto',gap:8,marginBottom:8}}>
 <div style={{fontSize:11,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase'}}>Account</div>
 <div style={{fontSize:11,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase'}}>Type</div>
-<div style={{fontSize:11,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase',textAlign:'right'}}>Amount</div>
+<div style={{fontSize:11,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase',textAlign:'right'}}>Amount (Ks)</div>
 <div/>
 </div>
 {form.lines.map((line,i)=>(
 <div key={i} style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr auto',gap:8,marginBottom:8,alignItems:'center'}}>
-<select className="form-input" value={line.account} onChange={e=>updateLine(i,'account',e.target.value)} style={{fontSize:12}}>
+<select className="form-input" value={line.accountId} onChange={e=>updateLine(i,'accountId',e.target.value)} style={{fontSize:12}}>
 <option value="">— Select Account —</option>
-<optgroup label="Bank Accounts">
-{bankAccounts.map(a=><option key={a.id} value={a.name}>{a.name}{a.bankName?` (${a.bankName})`:''}</option>)}
+{Object.entries(coaByType).map(([type,accs])=>(
+<optgroup key={type} label={type}>
+{accs.sort((a,b)=>(a.code||'').localeCompare(b.code||'')).map(a=>(
+<option key={a.id} value={a.id}>{a.code} — {a.name}</option>
+))}
 </optgroup>
-<optgroup label="Standard Accounts">
-{ACCOUNT_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
-</optgroup>
+))}
 </select>
 <select className="form-input" value={line.type} onChange={e=>updateLine(i,'type',e.target.value)} style={{fontSize:12}}>
-<option value="debit">Debit</option>
-<option value="credit">Credit</option>
+<option value="debit">Debit (Dr)</option>
+<option value="credit">Credit (Cr)</option>
 </select>
 <input className="form-input" type="number" value={line.amount} onChange={e=>updateLine(i,'amount',e.target.value)} placeholder="0" style={{textAlign:'right',fontSize:12}}/>
 <button type="button" onClick={()=>removeLine(i)} disabled={form.lines.length<=2} style={{background:'none',border:'none',cursor:form.lines.length<=2?'not-allowed':'pointer',color:'#dc2626',padding:4,borderRadius:4,opacity:form.lines.length<=2?0.3:1}}>
@@ -212,12 +212,7 @@ return(
 </button>
 </div>
 
-{/* Balance Check */}
-<div style={{
-padding:12,borderRadius:8,marginBottom:16,
-background:isBalanced?'rgba(22,163,74,0.08)':'rgba(220,38,38,0.08)',
-border:`0.5px solid ${isBalanced?'rgba(22,163,74,0.2)':'rgba(220,38,38,0.2)'}`
-}}>
+<div style={{padding:12,borderRadius:8,marginBottom:16,background:isBalanced?'rgba(22,163,74,0.08)':'rgba(220,38,38,0.08)',border:`0.5px solid ${isBalanced?'rgba(22,163,74,0.2)':'rgba(220,38,38,0.2)'}`}}>
 <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
 <span style={{fontSize:12,color:'var(--text-2)'}}>Total Debit</span>
 <span style={{fontSize:12,fontWeight:600,color:'#4F6EF7'}}>{totalDebit.toLocaleString()} Ks</span>
@@ -229,7 +224,7 @@ border:`0.5px solid ${isBalanced?'rgba(22,163,74,0.2)':'rgba(220,38,38,0.2)'}`
 <div style={{display:'flex',alignItems:'center',gap:6}}>
 {isBalanced
 ?<><CheckCircle size={14} color="#16a34a"/><span style={{fontSize:12,color:'#16a34a',fontWeight:500}}>Balanced ✓</span></>
-:<><AlertCircle size={14} color="#dc2626"/><span style={{fontSize:12,color:'#dc2626',fontWeight:500}}>Not balanced — difference: {Math.abs(totalDebit-totalCredit).toLocaleString()} Ks</span></>}
+:<><AlertCircle size={14} color="#dc2626"/><span style={{fontSize:12,color:'#dc2626',fontWeight:500}}>Difference: {Math.abs(totalDebit-totalCredit).toLocaleString()} Ks</span></>}
 </div>
 </div>
 
@@ -244,7 +239,6 @@ border:`0.5px solid ${isBalanced?'rgba(22,163,74,0.2)':'rgba(220,38,38,0.2)'}`
 </div>
 )}
 
-{/* Header */}
 <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center',marginBottom:16,justifyContent:'space-between'}}>
 <div style={{display:'flex',gap:8,flex:1}}>
 <div style={{position:'relative'}}>
@@ -259,7 +253,6 @@ border:`0.5px solid ${isBalanced?'rgba(22,163,74,0.2)':'rgba(220,38,38,0.2)'}`
 <button type="button" onClick={openAdd} className="btn btn-primary"><Plus size={15}/>New Entry</button>
 </div>
 
-{/* Stats */}
 <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginBottom:16}}>
 {[
 {label:'Total Entries',value:filtered.length,color:'#4F6EF7'},
@@ -273,7 +266,6 @@ border:`0.5px solid ${isBalanced?'rgba(22,163,74,0.2)':'rgba(220,38,38,0.2)'}`
 ))}
 </div>
 
-{/* Entries List */}
 <div className="card" style={{overflow:'hidden'}}>
 {filtered.length===0?(
 <div style={{padding:64,textAlign:'center',color:'var(--text-3)'}}>
@@ -302,11 +294,9 @@ return(
 <td style={{padding:'10px 14px',fontSize:12,fontFamily:'monospace',color:'var(--primary)'}}>{e.ref||'-'}</td>
 <td style={{padding:'10px 14px',fontSize:13,fontWeight:500}}>{e.description}</td>
 <td style={{padding:'10px 14px',textAlign:'center'}}>
-<span style={{
-background:e.source==='manual'?'rgba(139,92,246,0.1)':e.source==='INV'?'rgba(79,110,247,0.1)':e.source==='EXP'?'rgba(220,38,38,0.1)':'rgba(217,119,6,0.1)',
-color:e.source==='manual'?'#8b5cf6':e.source==='INV'?'#4F6EF7':e.source==='EXP'?'#dc2626':'#d97706',
-padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:500
-}}>{e.source==='manual'?'Manual':e.source||'Auto'}</span>
+<span style={{background:e.source==='manual'?'rgba(139,92,246,0.1)':e.source==='INV'?'rgba(79,110,247,0.1)':e.source==='EXP'?'rgba(220,38,38,0.1)':'rgba(217,119,6,0.1)',color:e.source==='manual'?'#8b5cf6':e.source==='INV'?'#4F6EF7':e.source==='EXP'?'#dc2626':'#d97706',padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:500}}>
+{e.source==='manual'?'Manual':e.source||'Auto'}
+</span>
 </td>
 <td style={{padding:'10px 14px',textAlign:'right',fontWeight:500,fontSize:13}}>{totalDr.toLocaleString()} Ks</td>
 <td style={{padding:'10px 14px',textAlign:'center'}}>
@@ -329,7 +319,8 @@ padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:500
 <table style={{width:'100%',borderCollapse:'collapse',background:'white',borderRadius:8,overflow:'hidden'}}>
 <thead><tr style={{background:'rgba(79,110,247,0.06)'}}>
 <th style={{padding:'7px 12px',textAlign:'left',fontSize:11,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase'}}>Account</th>
-<th style={{padding:'7px 12px',textAlign:'center',fontSize:11,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase'}}>Type</th>
+<th style={{padding:'7px 12px',textAlign:'left',fontSize:11,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase'}}>Type</th>
+<th style={{padding:'7px 12px',textAlign:'center',fontSize:11,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase'}}>Dr/Cr</th>
 <th style={{padding:'7px 12px',textAlign:'right',fontSize:11,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase'}}>Debit</th>
 <th style={{padding:'7px 12px',textAlign:'right',fontSize:11,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase'}}>Credit</th>
 </tr></thead>
@@ -337,6 +328,7 @@ padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:500
 {lines.map((l,i)=>(
 <tr key={i}>
 <td style={{padding:'7px 12px',fontSize:13,fontWeight:500}}>{l.account||l.accountName||'-'}</td>
+<td style={{padding:'7px 12px',fontSize:12,color:'var(--text-3)'}}>{l.accountType||'-'}</td>
 <td style={{padding:'7px 12px',textAlign:'center'}}>
 <span style={{background:l.type==='debit'?'rgba(79,110,247,0.1)':'rgba(220,38,38,0.1)',color:l.type==='debit'?'#4F6EF7':'#dc2626',padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:500,textTransform:'capitalize'}}>{l.type}</span>
 </td>
@@ -346,7 +338,7 @@ padding:'2px 8px',borderRadius:20,fontSize:11,fontWeight:500
 ))}
 </tbody>
 <tfoot><tr style={{background:'rgba(79,110,247,0.04)'}}>
-<td colSpan={2} style={{padding:'7px 12px',fontWeight:700,fontSize:12}}>Total</td>
+<td colSpan={3} style={{padding:'7px 12px',fontWeight:700,fontSize:12}}>Total</td>
 <td style={{padding:'7px 12px',textAlign:'right',fontWeight:700,color:'#4F6EF7',fontSize:12}}>{lines.filter(l=>l.type==='debit').reduce((s,l)=>s+Number(l.amount||0),0).toLocaleString()} Ks</td>
 <td style={{padding:'7px 12px',textAlign:'right',fontWeight:700,color:'#dc2626',fontSize:12}}>{lines.filter(l=>l.type==='credit').reduce((s,l)=>s+Number(l.amount||0),0).toLocaleString()} Ks</td>
 </tr></tfoot>
