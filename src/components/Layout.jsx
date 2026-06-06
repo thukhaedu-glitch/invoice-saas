@@ -2,16 +2,12 @@ import{useState,useEffect}from'react'
 import{auth,db}from'../firebase'
 import{signOut}from'firebase/auth'
 import{useLocation,useNavigate,useSearchParams}from'react-router-dom'
-
-
-
-import{FileText,FileCheck,ScrollText,Users,Wallet,Briefcase,BarChart2,User,Settings,LogOut,Menu,X,BookOpen,Landmark,LayoutDashboard,Receipt,GitCompare,BookMarked}from'lucide-react'
+import{FileText,FileCheck,ScrollText,Users,Wallet,Briefcase,BarChart2,User,Settings,LogOut,Menu,X,BookOpen,Landmark,LayoutDashboard,Receipt,GitCompare,BookMarked,PieChart}from'lucide-react'
 import{getDocs,collection,query,where}from'firebase/firestore'
 import Notifications from'./Notifications'
 import{useNotifications}from'../hooks/useNotifications'
 import{useRecurring}from'../hooks/useRecurring'
 import{useRole}from'../hooks/useRole'
-
 
 const NAV_MAIN=[
 {path:'/',label:'Dashboard',icon:LayoutDashboard},
@@ -21,6 +17,7 @@ const NAV_MAIN=[
 {path:'/customers',label:'Customers',icon:Users},
 {path:'/expenses',label:'Expenses',icon:Wallet},
 {path:'/projects',label:'Projects',icon:Briefcase},
+{path:'/custom-dashboard',label:'My Dashboard',icon:PieChart},
 ]
 
 const AnkoraLogo=()=>(
@@ -58,6 +55,7 @@ useNotifications(companyId)
 useRecurring(companyId)
 
 const isActive=(item)=>{
+if(!item.path)return false
 if(item.path==='/'&&!item.tab){
 return location.pathname==='/'&&!searchParams.get('tab')
 }
@@ -65,10 +63,11 @@ if(item.tab){
 const currentTab=searchParams.get('tab')||''
 return location.pathname==='/'&&currentTab===item.tab
 }
-return location.pathname===item.path
+return location.pathname===item.path||location.pathname.startsWith(item.path+'/')
 }
 
 const handleNav=(item)=>{
+if(!item.path)return
 if(item.tab)navigate(`/?tab=${item.tab}`)
 else navigate(item.path)
 setOpen(false)
@@ -88,12 +87,14 @@ return(
 </div>
 </div>
 <nav style={{flex:1,padding:'12px 10px',overflowY:'auto'}}>
+
 <div style={{fontSize:10,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.07em',padding:'8px 8px 4px'}}>Main</div>
 {NAV_MAIN.map((item)=>(
-<div key={item.path+item.label} className={`nav-item${isActive(item)?' active':''}`} onClick={()=>handleNav(item)}>
+<div key={item.path} className={`nav-item${isActive(item)?' active':''}`} onClick={()=>handleNav(item)}>
 <item.icon size={17}/><span>{item.label}</span>
 </div>
 ))}
+
 {canReports&&(
 <>
 <div style={{fontSize:10,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.07em',padding:'12px 8px 4px',marginTop:8}}>Finance</div>
@@ -112,10 +113,12 @@ return(
 <div className={`nav-item${location.pathname==='/reports'?' active':''}`} onClick={()=>{navigate('/reports');setOpen(false)}}>
 <BarChart2 size={17}/><span>Reports</span>
 </div>
-
-
+<div className={`nav-item${location.pathname.startsWith('/reconcile')?' active':''}`} onClick={()=>{navigate('/bank-accounts');setOpen(false)}}>
+<GitCompare size={17}/><span>Reconciliation</span>
+</div>
 </>
 )}
+
 <div style={{fontSize:10,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.07em',padding:'12px 8px 4px',marginTop:8}}>Account</div>
 <div className={`nav-item${location.pathname==='/profile'?' active':''}`} onClick={()=>{navigate('/profile');setOpen(false)}}>
 <User size={17}/><span>Profile</span>
@@ -126,6 +129,7 @@ return(
 </div>
 )}
 </nav>
+
 <div style={{padding:10,borderTop:'0.5px solid var(--border)'}}>
 <div style={{padding:'6px 8px',marginBottom:6,fontSize:11,color:'var(--text-3)',textAlign:'center'}}>
 Powered by <span style={{fontWeight:700,color:'var(--primary)'}}>AnkoraX</span>
@@ -135,6 +139,7 @@ Powered by <span style={{fontWeight:700,color:'var(--primary)'}}>AnkoraX</span>
 </div>
 </div>
 </aside>
+
 <div className="main-area">
 <div className="topbar">
 <button id="hamburger" onClick={()=>setOpen(v=>!v)} className="btn btn-ghost" style={{padding:'6px 8px'}}>
