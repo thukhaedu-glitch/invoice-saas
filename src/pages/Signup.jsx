@@ -24,14 +24,22 @@ try{
 const cred=await createUserWithEmailAndPassword(auth,email,pass)
 const uid=cred.user.uid
 const companyRef=await addDoc(collection(db,'companies'),{
-name:companyName,plan:'free',
+name:companyName,companyName,plan:'free',
 members:{[uid]:'owner'},ownerId:uid,
+ownerEmail:cred.user.email,
 inviteCode:'INV-'+Math.random().toString(36).substring(2,8).toUpperCase(),
 createdAt:serverTimestamp(),
 })
 await setDoc(doc(db,'users',uid),{
 displayName:name,email,role:'owner',
 companyId:companyRef.id,createdAt:serverTimestamp(),
+})
+// Save memberProfile
+await setDoc(doc(db,'companies',companyRef.id,'memberProfiles',uid),{
+uid,email:cred.user.email,
+role:'owner',displayName:name,
+joinedAt:new Date().toISOString(),
+lastLogin:new Date().toISOString(),
 })
 navigate('/')
 }catch(e){setError(e.message)}
@@ -56,8 +64,9 @@ setError('');setLoading(true)
 try{
 const uid=auth.currentUser.uid
 const companyRef=await addDoc(collection(db,'companies'),{
-name:companyName,plan:'free',
+name:companyName,companyName,plan:'free',
 members:{[uid]:'owner'},ownerId:uid,
+ownerEmail:auth.currentUser.email,
 inviteCode:'INV-'+Math.random().toString(36).substring(2,8).toUpperCase(),
 createdAt:serverTimestamp(),
 })
@@ -66,53 +75,35 @@ displayName:name||auth.currentUser.displayName,
 email:auth.currentUser.email,role:'owner',
 companyId:companyRef.id,createdAt:serverTimestamp(),
 })
+// Save memberProfile
+await setDoc(doc(db,'companies',companyRef.id,'memberProfiles',uid),{
+uid,email:auth.currentUser.email,
+role:'owner',displayName:name||auth.currentUser.displayName||'',
+joinedAt:new Date().toISOString(),
+lastLogin:new Date().toISOString(),
+})
 navigate('/')
 }catch(e){setError(e.message)}
 setLoading(false)
 }
 
 return(
-<div style={{
-minHeight:'100vh',
-background:'linear-gradient(135deg,#e8f0fe 0%,#f0f4ff 50%,#e8f8f0 100%)',
-display:'flex',alignItems:'center',justifyContent:'center',
-padding:20,position:'relative',overflow:'hidden'
-}}>
+<div style={{minHeight:'100vh',background:'linear-gradient(135deg,#e8f0fe 0%,#f0f4ff 50%,#e8f8f0 100%)',display:'flex',alignItems:'center',justifyContent:'center',padding:20,position:'relative',overflow:'hidden'}}>
 <div style={{position:'absolute',top:'-10%',right:'-5%',width:400,height:400,borderRadius:'50%',background:'radial-gradient(circle,rgba(139,92,246,0.10),transparent 70%)',filter:'blur(40px)',pointerEvents:'none'}}/>
 <div style={{position:'absolute',bottom:'-10%',left:'-5%',width:500,height:500,borderRadius:'50%',background:'radial-gradient(circle,rgba(79,110,247,0.08),transparent 70%)',filter:'blur(40px)',pointerEvents:'none'}}/>
-
-<div style={{
-width:'100%',maxWidth:400,
-background:'rgba(255,255,255,0.72)',
-backdropFilter:'blur(20px) saturate(1.5)',
-WebkitBackdropFilter:'blur(20px) saturate(1.5)',
-border:'0.5px solid rgba(255,255,255,0.9)',
-borderRadius:20,
-boxShadow:'0 8px 32px rgba(79,110,247,0.10)',
-padding:'40px 36px',
-}}>
-
+<div style={{width:'100%',maxWidth:400,background:'rgba(255,255,255,0.72)',backdropFilter:'blur(20px) saturate(1.5)',WebkitBackdropFilter:'blur(20px) saturate(1.5)',border:'0.5px solid rgba(255,255,255,0.9)',borderRadius:20,boxShadow:'0 8px 32px rgba(79,110,247,0.10)',padding:'40px 36px'}}>
 <div style={{textAlign:'center',marginBottom:32}}>
-<div style={{
-width:52,height:52,
-background:'linear-gradient(135deg,#8b5cf6,#4F6EF7)',
-borderRadius:14,
-display:'flex',alignItems:'center',justifyContent:'center',
-margin:'0 auto 14px',
-boxShadow:'0 4px 16px rgba(139,92,246,0.3)',
-}}>
+<div style={{width:52,height:52,background:'linear-gradient(135deg,#8b5cf6,#4F6EF7)',borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 14px',boxShadow:'0 4px 16px rgba(139,92,246,0.3)'}}>
 <UserPlus size={24} color="white"/>
 </div>
 <div style={{fontSize:20,fontWeight:700,color:'var(--text-1)'}}>Create Account</div>
-<div style={{fontSize:13,color:'var(--text-3)',marginTop:4}}>Set up your company on Invoice SaaS</div>
+<div style={{fontSize:13,color:'var(--text-3)',marginTop:4}}>Set up your company on AnkoraX</div>
 </div>
-
 {error&&(
 <div style={{background:'#fcebeb',border:'0.5px solid #fca5a5',color:'#dc2626',padding:'10px 14px',borderRadius:10,fontSize:13,marginBottom:16,display:'flex',alignItems:'center',gap:8}}>
 <AlertCircle size={15}/>{error}
 </div>
 )}
-
 <form onSubmit={step===1?handleSignup:handleGoogleComplete}>
 {step===1&&<>
 <div style={{marginBottom:12}}>
@@ -140,7 +131,6 @@ boxShadow:'0 4px 16px rgba(139,92,246,0.3)',
 </div>
 </div>
 </>}
-
 <div style={{marginBottom:20}}>
 <label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:5}}>Company Name</label>
 <div style={{position:'relative'}}>
@@ -148,12 +138,10 @@ boxShadow:'0 4px 16px rgba(139,92,246,0.3)',
 <input value={companyName} onChange={e=>setCompanyName(e.target.value)} required placeholder="Your company name" className="form-input" style={{paddingLeft:34}}/>
 </div>
 </div>
-
 <button type="submit" disabled={loading} className="btn btn-primary" style={{width:'100%',padding:'11px',fontSize:14,marginBottom:12,justifyContent:'center'}}>
 {loading?'Creating...':'Create Account'}
 </button>
 </form>
-
 {step===1&&(
 <>
 <div style={{display:'flex',alignItems:'center',gap:12,margin:'4px 0 12px'}}>
@@ -161,20 +149,12 @@ boxShadow:'0 4px 16px rgba(139,92,246,0.3)',
 <span style={{fontSize:12,color:'var(--text-3)'}}>or</span>
 <div style={{flex:1,height:'0.5px',background:'var(--border)'}}/>
 </div>
-<button type="button" onClick={handleGoogle} disabled={loading} style={{
-width:'100%',padding:'10px',
-background:'white',border:'0.5px solid var(--border)',
-borderRadius:10,color:'var(--text-1)',fontSize:13,cursor:'pointer',
-display:'flex',alignItems:'center',justifyContent:'center',gap:10,
-marginBottom:20,fontWeight:500,
-boxShadow:'0 1px 4px rgba(0,0,0,0.06)',
-}}>
+<button type="button" onClick={handleGoogle} disabled={loading} style={{width:'100%',padding:'10px',background:'white',border:'0.5px solid var(--border)',borderRadius:10,color:'var(--text-1)',fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:10,marginBottom:20,fontWeight:500,boxShadow:'0 1px 4px rgba(0,0,0,0.06)'}}>
 <svg width="16" height="16" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
 Sign up with Google
 </button>
 </>
 )}
-
 <div style={{textAlign:'center',fontSize:13,color:'var(--text-3)'}}>
 Already have an account?{' '}
 <Link to="/login" style={{color:'var(--primary)',fontWeight:500,textDecoration:'none'}}>Sign in</Link>
