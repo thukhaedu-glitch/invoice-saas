@@ -6,10 +6,13 @@ import Layout from '../components/Layout'
 import { Plus, Trash2, Save, ArrowLeft, Image, X, RefreshCcw } from 'lucide-react'
 import { collection, addDoc, getDocs, query, where, serverTimestamp, getDoc, doc } from 'firebase/firestore'
 import { logAction } from '../utils/auditLog'
+import { canAdd, getLimit, planLabel, normalizePlan } from '../config/planLimits'
 
 export default function CreateInvoice() {
   const navigate = useNavigate()
   const [companyId, setCompanyId] = useState(null)
+  const [plan, setPlan] = useState('free')
+  const [docCount, setDocCount] = useState(0)
   const [customers, setCustomers] = useState([])
   const [projects, setProjects] = useState([])
   const [saving, setSaving] = useState(false)
@@ -28,13 +31,28 @@ export default function CreateInvoice() {
       const snap = await getDocs(query(collection(db, 'companies'), where(`members.${auth.currentUser.uid}`, '!=', null)))
       if (!snap.empty) {
         const cid = snap.docs[0].id
+        const cdata = snap.docs[0].data()
         setCompanyId(cid)
-        const [cSnap, pSnap] = await Promise.all([
+        setPlan(cdata.plan || 'free')
+        const [cSnap, pSnap, invSnap, quoSnap] = await Promise.all([
           getDocs(collection(db, 'companies', cid, 'customers')),
           getDocs(collection(db, 'companies', cid, 'projects')),
+          getDocs(collection(db, 'companies', cid, 'invoices')),
+          getDocs(collection(db, 'companies', cid, 'quotations')),
         ])
         setCustomers(cSnap.docs.map(d => ({ id: d.id, ...d.data() })))
         setProjects(pSnap.docs.map(d => ({ id: d.id, ...d.data() })))
+        // ဒီလ (current month) document count = invoice + quote
+        const now = new Date()
+        const ym = now.getFullYear() + '-' + now.getMonth()
+        const inThisMonth = (d) => {
+          const t = d.createdAt?.seconds ? new Date(d.createdAt.seconds * 1000) : (d.date ? new Date(d.date) : null)
+          if (!t) return false
+          return (t.getFullYear() + '-' + t.getMonth()) === ym
+        }
+        const cnt = invSnap.docs.filter(d => inThisMonth(d.data())).length
+          + quoSnap.docs.filter(d => inThisMonth(d.data())).length
+        setDocCount(cnt)
       }
     }
     load()
@@ -77,6 +95,13 @@ export default function CreateInvoice() {
 
   const save = async () => {
     if (!form.clientName || items.some(i => !i.desc)) { alert('Please fill required fields'); return }
+    // Plan limit check (documents = invoice + quote per month)
+    if (!canAdd(plan, 'documents', docCount)) {
+      const lim = getLimit(plan, 'documents')
+      alert(`Document limit reached (${lim}/month) on the ${planLabel(plan)} plan. Please upgrade to create more invoices.`)
+      navigate('/upgrade')
+      return
+    }
     setSaving(true)
     try {
       const sSnap = await getDoc(doc(db, 'companies', companyId, '_config', 'invoiceSettings'))
