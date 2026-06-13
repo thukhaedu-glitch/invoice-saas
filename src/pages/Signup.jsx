@@ -3,7 +3,7 @@ import{auth,db}from'../firebase'
 import{createUserWithEmailAndPassword,GoogleAuthProvider,signInWithPopup}from'firebase/auth'
 import{doc,setDoc,addDoc,collection,serverTimestamp}from'firebase/firestore'
 import{useNavigate,Link}from'react-router-dom'
-import{Mail,Lock,Eye,EyeOff,User,Building2,AlertCircle,UserPlus}from'lucide-react'
+import{Mail,Lock,Eye,EyeOff,User,Building2,AlertCircle,UserPlus,Phone}from'lucide-react'
 
 export default function Signup(){
 const[step,setStep]=useState(1)
@@ -11,6 +11,7 @@ const[email,setEmail]=useState('')
 const[pass,setPass]=useState('')
 const[showPass,setShowPass]=useState(false)
 const[name,setName]=useState('')
+const[phone,setPhone]=useState('')
 const[companyName,setCompanyName]=useState('')
 const[error,setError]=useState('')
 const[loading,setLoading]=useState(false)
@@ -19,6 +20,7 @@ const navigate=useNavigate()
 const handleSignup=async e=>{
 e.preventDefault()
 if(!name||!companyName){setError('Please fill all fields');return}
+if(!phone.trim()){setError('Phone number required');return}
 setError('');setLoading(true)
 try{
 const cred=await createUserWithEmailAndPassword(auth,email,pass)
@@ -26,17 +28,16 @@ const uid=cred.user.uid
 const companyRef=await addDoc(collection(db,'companies'),{
 name:companyName,companyName,plan:'free',
 members:{[uid]:'owner'},ownerId:uid,
-ownerEmail:cred.user.email,
+ownerEmail:cred.user.email,ownerPhone:phone,
 inviteCode:'INV-'+Math.random().toString(36).substring(2,8).toUpperCase(),
 createdAt:serverTimestamp(),
 })
 await setDoc(doc(db,'users',uid),{
-displayName:name,email,role:'owner',
+displayName:name,email,phone,role:'owner',
 companyId:companyRef.id,createdAt:serverTimestamp(),
 })
-// Save memberProfile
 await setDoc(doc(db,'companies',companyRef.id,'memberProfiles',uid),{
-uid,email:cred.user.email,
+uid,email:cred.user.email,phone,
 role:'owner',displayName:name,
 joinedAt:new Date().toISOString(),
 lastLogin:new Date().toISOString(),
@@ -60,24 +61,24 @@ setLoading(false)
 const handleGoogleComplete=async e=>{
 e.preventDefault()
 if(!companyName){setError('Company name required');return}
+if(!phone.trim()){setError('Phone number required');return}
 setError('');setLoading(true)
 try{
 const uid=auth.currentUser.uid
 const companyRef=await addDoc(collection(db,'companies'),{
 name:companyName,companyName,plan:'free',
 members:{[uid]:'owner'},ownerId:uid,
-ownerEmail:auth.currentUser.email,
+ownerEmail:auth.currentUser.email,ownerPhone:phone,
 inviteCode:'INV-'+Math.random().toString(36).substring(2,8).toUpperCase(),
 createdAt:serverTimestamp(),
 })
 await setDoc(doc(db,'users',uid),{
 displayName:name||auth.currentUser.displayName,
-email:auth.currentUser.email,role:'owner',
+email:auth.currentUser.email,phone,role:'owner',
 companyId:companyRef.id,createdAt:serverTimestamp(),
 })
-// Save memberProfile
 await setDoc(doc(db,'companies',companyRef.id,'memberProfiles',uid),{
-uid,email:auth.currentUser.email,
+uid,email:auth.currentUser.email,phone,
 role:'owner',displayName:name||auth.currentUser.displayName||'',
 joinedAt:new Date().toISOString(),
 lastLogin:new Date().toISOString(),
@@ -131,6 +132,13 @@ return(
 </div>
 </div>
 </>}
+<div style={{marginBottom:12}}>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:5}}>Phone Number</label>
+<div style={{position:'relative'}}>
+<Phone size={14} style={{position:'absolute',left:11,top:'50%',transform:'translateY(-50%)',color:'var(--text-3)'}}/>
+<input value={phone} onChange={e=>setPhone(e.target.value)} type="tel" required placeholder="e.g. 09xxxxxxxxx" className="form-input" style={{paddingLeft:34}}/>
+</div>
+</div>
 <div style={{marginBottom:20}}>
 <label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:5}}>Company Name</label>
 <div style={{position:'relative'}}>
