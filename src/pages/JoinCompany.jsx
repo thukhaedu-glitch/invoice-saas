@@ -21,9 +21,7 @@ e.preventDefault()
 if(mode==='new'&&!phone.trim()){setError('Phone number required');return}
 setError('');setLoading(true)
 try{
-const snap=await getDocs(query(collection(db,'companies'),where('inviteCode','==',inviteCode.toUpperCase().trim())))
-if(snap.empty){setError('Invalid invite code');setLoading(false);return}
-const companyId=snap.docs[0].id
+// Auth အရင် (login/signup) — ပြီးမှ companies query (rules: auth!=null)
 let uid
 if(mode==='new'){
 const cred=await createUserWithEmailAndPassword(auth,email,pass)
@@ -32,6 +30,9 @@ uid=cred.user.uid
 const cred=await signInWithEmailAndPassword(auth,email,pass)
 uid=cred.user.uid
 }
+const snap=await getDocs(query(collection(db,'companies'),where('inviteCode','==',inviteCode.toUpperCase().trim())))
+if(snap.empty){setError('Invalid invite code');setLoading(false);return}
+const companyId=snap.docs[0].id
 await updateDoc(doc(db,'companies',companyId),{[`members.${uid}`]:'staff'})
 await setDoc(doc(db,'users',uid),{
 displayName:name||email,email,phone,role:'staff',
