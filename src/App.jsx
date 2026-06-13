@@ -33,6 +33,7 @@ import JournalEntries from'./pages/JournalEntries'
 import CustomDashboard from'./pages/CustomDashboard'
 import ReportBuilder from'./pages/ReportBuilder'
 import AuditLog from'./pages/AuditLog'
+import Upgrade from'./pages/Upgrade'
 
 function BlockedScreen(){
 return(
@@ -124,6 +125,7 @@ return(
 <Route path="/custom-dashboard" element={<PrivateRoute><CustomDashboard/></PrivateRoute>}/>
 <Route path="/report-builder" element={<PrivateRoute><ReportBuilder/></PrivateRoute>}/>
 <Route path="/audit-log" element={<PrivateRoute><AuditLog/></PrivateRoute>}/>
+<Route path="/upgrade" element={<PrivateRoute><Upgrade/></PrivateRoute>}/>
 <Route path="*" element={<Navigate to="/"/>}/>
 </Routes>
 </BrowserRouter>
