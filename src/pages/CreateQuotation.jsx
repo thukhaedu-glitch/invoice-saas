@@ -5,10 +5,13 @@ import{ref,uploadBytes,getDownloadURL}from'firebase/storage'
 import{useNavigate}from'react-router-dom'
 import Layout from'../components/Layout'
 import{Plus,Trash2,Save,ArrowLeft,Image,X}from'lucide-react'
+import{canAdd,getLimit,planLabel}from'../config/planLimits'
 
 export default function CreateQuotation(){
 const navigate=useNavigate()
 const[companyId,setCompanyId]=useState(null)
+const[plan,setPlan]=useState('free')
+const[docCount,setDocCount]=useState(0)
 const[customers,setCustomers]=useState([])
 const[saving,setSaving]=useState(false)
 const[uploadingIdx,setUploadingIdx]=useState(null)
@@ -26,9 +29,24 @@ const load=async()=>{
 const snap=await getDocs(query(collection(db,'companies'),where(`members.${auth.currentUser.uid}`,'!=',null)))
 if(!snap.empty){
 const cid=snap.docs[0].id
+const cdata=snap.docs[0].data()
 setCompanyId(cid)
-const cSnap=await getDocs(collection(db,'companies',cid,'customers'))
+setPlan(cdata.plan||'free')
+const[cSnap,invSnap,quoSnap]=await Promise.all([
+getDocs(collection(db,'companies',cid,'customers')),
+getDocs(collection(db,'companies',cid,'invoices')),
+getDocs(collection(db,'companies',cid,'quotations')),
+])
 setCustomers(cSnap.docs.map(d=>({id:d.id,...d.data()})))
+const now=new Date()
+const ym=now.getFullYear()+'-'+now.getMonth()
+const inThisMonth=(d)=>{
+const t=d.createdAt?.seconds?new Date(d.createdAt.seconds*1000):(d.date?new Date(d.date):null)
+if(!t)return false
+return(t.getFullYear()+'-'+t.getMonth())===ym
+}
+const cnt=invSnap.docs.filter(d=>inThisMonth(d.data())).length+quoSnap.docs.filter(d=>inThisMonth(d.data())).length
+setDocCount(cnt)
 }
 }
 load()
@@ -71,6 +89,12 @@ setItems(arr)
 
 const save=async()=>{
 if(!form.clientName||items.some(i=>!i.desc)){alert('Please fill required fields');return}
+if(!canAdd(plan,'documents',docCount)){
+const lim=getLimit(plan,'documents')
+alert(`Document limit reached (${lim}/month) on the ${planLabel(plan)} plan. Please upgrade to create more.`)
+navigate('/upgrade')
+return
+}
 setSaving(true)
 try{
 await addDoc(collection(db,'companies',companyId,'quotations'),{
