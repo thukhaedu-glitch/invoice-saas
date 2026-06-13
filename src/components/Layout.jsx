@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { auth, db } from '../firebase'
 import { signOut } from 'firebase/auth'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { FileText, FileCheck, ScrollText, Users, Wallet, Briefcase, BarChart2, User, Settings, LogOut, Menu, X, BookOpen, Landmark, LayoutDashboard, Receipt, GitCompare, BookMarked, PieChart, Shield } from 'lucide-react'
+import { FileText, FileCheck, ScrollText, Users, Wallet, Briefcase, BarChart2, User, Settings, LogOut, Menu, X, BookOpen, Landmark, LayoutDashboard, Receipt, GitCompare, BookMarked, PieChart, Shield, Crown } from 'lucide-react'
 import Notifications from './Notifications'
 import { useNotifications } from '../hooks/useNotifications'
 import { useRecurring } from '../hooks/useRecurring'
@@ -140,6 +140,9 @@ export default function Layout({ children, title }) {
           )}
 
           <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em', padding: '12px 8px 4px', marginTop: 8 }}>Account</div>
+          <div className={`nav-item${location.pathname === '/upgrade' ? ' active' : ''}`} onClick={() => { navigate('/upgrade'); setOpen(false) }} style={{ color: location.pathname === '/upgrade' ? undefined : '#8b5cf6' }}>
+            <Crown size={17} /><span>Upgrade Plan</span>
+          </div>
           <div className={`nav-item${location.pathname === '/profile' ? ' active' : ''}`} onClick={() => { navigate('/profile'); setOpen(false) }}>
             <User size={17} /><span>Profile</span>
           </div>
