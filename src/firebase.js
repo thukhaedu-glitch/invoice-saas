@@ -1,18 +1,18 @@
-import{initializeApp}from'firebase/app'
-import{getAuth}from'firebase/auth'
-import{getFirestore}from'firebase/firestore'
-import{getStorage}from'firebase/storage'
+import { initializeApp } from 'firebase/app'
+import { getAuth } from 'firebase/auth'
+import { getFirestore } from 'firebase/firestore'
+import { getStorage } from 'firebase/storage'
 
-const firebaseConfig={
-apiKey:"AIzaSyBz5Cm-qsKe9pshGLaBkzw0WTOg9OLDwHk",
-authDomain:"invoice-99bdb.firebaseapp.com",
-projectId:"invoice-99bdb",
-storageBucket:"invoice-99bdb.firebasestorage.app",
-messagingSenderId:"1055209115726",
-appId:"1:1055209115726:web:926791697e6ad783e5b31f"
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 }
 
-const app=initializeApp(firebaseConfig)
-export const auth=getAuth(app)
-export const db=getFirestore(app)
-export const storage=getStorage(app)
+const app = initializeApp(firebaseConfig)
+export const auth = getAuth(app)
+export const db = getFirestore(app)
+export const storage = getStorage(app)
