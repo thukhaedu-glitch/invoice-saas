@@ -23,16 +23,16 @@ const NAV_MAIN = [
 ]
 
 const AnkoraLogo = () => (
-  <svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="https://raw.githubusercontent.com/thukhaedu-glitch/invoice-saas/refs/heads/main/public/ankora_x_logo_2.png">
-    <rect width="34" height="34" rx="10" fill="url(#ankoraGrad)" />
-    <defs>
-      <linearGradient id="ankoraGrad" x1="0" y1="0" x2="34" y2="34" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stopColor="#4F6EF7" />
-        <stop offset="100%" stopColor="#7C3AED" />
-      </linearGradient>
-    </defs>
-    <text x="5" y="24" fontSize="18" fontWeight="800" fill="white" fontFamily="Georgia,serif">X</text>
-  </svg>
+  <img 
+    src="https://raw.githubusercontent.com/thukhaedu-glitch/invoice-saas/main/public/ankora_x_logo_2.png" 
+    alt="AnkoraX Logo"
+    style={{ 
+      width: 34, 
+      height: 34, 
+      borderRadius: 10,
+      objectFit: 'cover' 
+    }} 
+  />
 )
 
 export default function Layout({ children, title }) {
@@ -82,7 +82,7 @@ export default function Layout({ children, title }) {
   const handleLogout = async () => {
     try {
       if (companyId) {
-        // Ensure logAction is imported or defined
+        // Ensure logAction is imported or available in scope
         await logAction(companyId, {
           action: 'logout',
           module: 'auth',
