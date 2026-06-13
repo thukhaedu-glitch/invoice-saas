@@ -3,12 +3,13 @@ import{auth,db}from'../firebase'
 import{createUserWithEmailAndPassword,signInWithEmailAndPassword}from'firebase/auth'
 import{collection,getDocs,query,where,doc,setDoc,updateDoc,serverTimestamp}from'firebase/firestore'
 import{useNavigate,Link}from'react-router-dom'
-import{Mail,Lock,User,Hash,AlertCircle,Users}from'lucide-react'
+import{Mail,Lock,User,Hash,AlertCircle,Users,Phone}from'lucide-react'
 
 export default function JoinCompany(){
 const[email,setEmail]=useState('')
 const[pass,setPass]=useState('')
 const[name,setName]=useState('')
+const[phone,setPhone]=useState('')
 const[inviteCode,setInviteCode]=useState('')
 const[error,setError]=useState('')
 const[loading,setLoading]=useState(false)
@@ -17,6 +18,7 @@ const navigate=useNavigate()
 
 const handleJoin=async e=>{
 e.preventDefault()
+if(mode==='new'&&!phone.trim()){setError('Phone number required');return}
 setError('');setLoading(true)
 try{
 const snap=await getDocs(query(collection(db,'companies'),where('inviteCode','==',inviteCode.toUpperCase().trim())))
@@ -32,12 +34,12 @@ uid=cred.user.uid
 }
 await updateDoc(doc(db,'companies',companyId),{[`members.${uid}`]:'staff'})
 await setDoc(doc(db,'users',uid),{
-displayName:name||email,email,role:'staff',
+displayName:name||email,email,phone,role:'staff',
 companyId,createdAt:serverTimestamp(),
 },{merge:true})
 // Save memberProfile
 await setDoc(doc(db,'companies',companyId,'memberProfiles',uid),{
-uid,email,
+uid,email,phone,
 role:'staff',
 displayName:name||email,
 joinedAt:new Date().toISOString(),
@@ -84,6 +86,15 @@ return(
 <div style={{position:'relative'}}>
 <User size={14} style={{position:'absolute',left:11,top:'50%',transform:'translateY(-50%)',color:'var(--text-3)'}}/>
 <input value={name} onChange={e=>setName(e.target.value)} required placeholder="Full name" className="form-input" style={{paddingLeft:34}}/>
+</div>
+</div>
+)}
+{mode==='new'&&(
+<div style={{marginBottom:12}}>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:5}}>Phone Number</label>
+<div style={{position:'relative'}}>
+<Phone size={14} style={{position:'absolute',left:11,top:'50%',transform:'translateY(-50%)',color:'var(--text-3)'}}/>
+<input value={phone} onChange={e=>setPhone(e.target.value)} type="tel" required placeholder="e.g. 09xxxxxxxxx" className="form-input" style={{paddingLeft:34}}/>
 </div>
 </div>
 )}
