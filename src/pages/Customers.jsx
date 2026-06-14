@@ -6,9 +6,12 @@ import { Plus, Trash2, Edit, X, Save, Users, Search, Eye, Phone, Mail, MapPin } 
 import { useNavigate } from 'react-router-dom'
 // Audit Log Function ကို Import ထည့်သွင်းထားခြင်း
 import { logAction } from '../utils/auditLog'
+import { usePlans } from '../hooks/usePlans'
 
 export default function Customers() {
+  const { canAdd, getLimit, planLabel } = usePlans()
   const [companyId, setCompanyId] = useState(null)
+  const [plan, setPlan] = useState('free')
   const [customers, setCustomers] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -26,6 +29,7 @@ export default function Customers() {
       if (!snap.empty) {
         const cid = snap.docs[0].id
         setCompanyId(cid)
+        setPlan(snap.docs[0].data().plan || 'free')
         onSnapshot(collection(db, 'companies', cid, 'customers'), snap => {
           setCustomers(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => a.name?.localeCompare(b.name)))
           setLoading(false)
@@ -38,6 +42,12 @@ export default function Customers() {
   }, [])
 
   const openAdd = () => {
+    if (!canAdd(plan, 'customers', customers.length)) {
+      const lim = getLimit(plan, 'customers')
+      alert(`Customer limit ပြည့်ပါပြီ (${lim} ယောက်) — ${planLabel(plan)} plan။\n\nနောက်ထပ် customer ထည့်ဖို့ plan upgrade လုပ်ပါ။`)
+      navigate('/upgrade')
+      return
+    }
     setForm({ name: '', phone: '', email: '', address: '', note: '' })
     setSelected(null)
     setModal('add')
@@ -177,9 +187,15 @@ export default function Customers() {
           <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-3)' }} />
           <input className="form-input" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search customers..." style={{ paddingLeft: 32 }} />
         </div>
-        <button type="button" onClick={openAdd} className="btn btn-primary">
-          <Plus size={15} />Add Customer
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {(() => {
+            const lim = getLimit(plan, 'customers')
+            return <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{customers.length}{lim === -1 ? '' : '/' + lim}</span>
+          })()}
+          <button type="button" onClick={openAdd} className="btn btn-primary">
+            <Plus size={15} />Add Customer
+          </button>
+        </div>
       </div>
 
       {/* Stats Cards Section */}
