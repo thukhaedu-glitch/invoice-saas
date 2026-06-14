@@ -3,12 +3,14 @@ import { auth, db } from '../firebase'
 import { signOut } from 'firebase/auth'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { FileText, FileCheck, ScrollText, Users, Wallet, Briefcase, BarChart2, User, Settings, LogOut, Menu, X, BookOpen, Landmark, LayoutDashboard, Receipt, GitCompare, BookMarked, PieChart, Shield, Crown } from 'lucide-react'
+import { getDocs, collection, query, where } from 'firebase/firestore'
+import { usePlans } from '../hooks/usePlans'
 import Notifications from './Notifications'
 import { useNotifications } from '../hooks/useNotifications'
 import { useRecurring } from '../hooks/useRecurring'
 import { useRole } from '../hooks/useRole'
-import { getDocs, collection, query, where } from 'firebase/firestore'
-import { planLabel } from '../config/planLimits'
+// မှတ်ချက် - logAction function ဘယ်ကလာသလဲပေါ်မူတည်ပြီး အောက်ကလမ်းကြောင်းကို ပြင်ပေးပါ
+// import { logAction } from '../utils/auditLog' 
 
 const NAV_MAIN = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -23,22 +25,23 @@ const NAV_MAIN = [
 ]
 
 const AnkoraLogo = () => (
-  <img 
-    src="https://raw.githubusercontent.com/thukhaedu-glitch/invoice-saas/main/public/ankora_x_logo_2.png" 
-    alt="AnkoraX Logo"
-    style={{ 
-      width: 34, 
-      height: 34, 
-      borderRadius: 10,
-      objectFit: 'cover' 
-    }} 
-  />
+  <svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="https://raw.githubusercontent.com/thukhaedu-glitch/invoice-saas/refs/heads/main/public/ankora_x_logo_2.png">
+    <rect width="34" height="34" rx="10" fill="url(#ankoraGrad)" />
+    <defs>
+      <linearGradient id="ankoraGrad" x1="0" y1="0" x2="34" y2="34" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="#4F6EF7" />
+        <stop offset="100%" stopColor="#7C3AED" />
+      </linearGradient>
+    </defs>
+    <text x="5" y="24" fontSize="18" fontWeight="800" fill="white" fontFamily="Georgia,serif">X</text>
+  </svg>
 )
 
 export default function Layout({ children, title }) {
   const [open, setOpen] = useState(false)
   const [companyId, setCompanyId] = useState(null)
   const [plan, setPlan] = useState('free')
+  const { planLabel } = usePlans()
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -79,10 +82,10 @@ export default function Layout({ children, title }) {
     setOpen(false)
   }
 
+  // အသစ်ထည့်သွင်းထားသော Logout Function
   const handleLogout = async () => {
     try {
       if (companyId) {
-        // Ensure logAction is imported or available in scope
         await logAction(companyId, {
           action: 'logout',
           module: 'auth',
@@ -108,6 +111,7 @@ export default function Layout({ children, title }) {
           </div>
         </div>
         <nav style={{ flex: 1, padding: '12px 10px', overflowY: 'auto' }}>
+
           <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em', padding: '8px 8px 4px' }}>Main</div>
           {NAV_MAIN.map((item) => (
             <div key={item.path} className={`nav-item${isActive(item) ? ' active' : ''}`} onClick={() => handleNav(item)}>
@@ -162,6 +166,7 @@ export default function Layout({ children, title }) {
           <div style={{ padding: '6px 8px', marginBottom: 6, fontSize: 11, color: 'var(--text-3)', textAlign: 'center' }}>
             Powered by <span style={{ fontWeight: 700, color: 'var(--primary)' }}>AnkoraX</span>
           </div>
+          {/* အသစ်အစားထိုးထားသော Logout Button */}
           <div className="nav-item" style={{ color: '#ef4444' }} onClick={handleLogout}>
             <LogOut size={17} /><span>Logout</span>
           </div>
@@ -175,9 +180,7 @@ export default function Layout({ children, title }) {
           </button>
           <div style={{ flex: 1, fontWeight: 500, fontSize: 15, color: 'var(--text-1)' }}>{title}</div>
           <Notifications companyId={companyId} />
-          <span style={{ fontSize: 11, background: 'var(--primary-light)', color: 'var(--primary)', padding: '3px 10px', borderRadius: 20, fontWeight: 600 }}>
-            {planLabel(plan)}
-          </span>
+          <span style={{ fontSize: 11, background: 'var(--primary-light)', color: 'var(--primary)', padding: '3px 10px', borderRadius: 20, fontWeight: 600 }}>{planLabel(plan)}</span>
         </div>
         <div className="page-content">{children}</div>
       </div>
