@@ -58,6 +58,28 @@ Sign Out
 )
 }
 
+function ExpiredScreen(){
+return(
+<div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',background:'#f8fafc'}}>
+<div style={{background:'white',borderRadius:20,padding:'48px 40px',textAlign:'center',maxWidth:420,boxShadow:'0 8px 32px rgba(0,0,0,0.08)',border:'0.5px solid #e2e8f0'}}>
+<div style={{width:64,height:64,borderRadius:'50%',background:'rgba(217,119,6,0.1)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 20px'}}>
+<span style={{fontSize:28}}>⏰</span>
+</div>
+<div style={{fontSize:20,fontWeight:700,color:'#d97706',marginBottom:8}}>Subscription ကုန်ဆုံးသွားပါပြီ</div>
+<div style={{fontSize:14,color:'#94a3b8',marginBottom:24,lineHeight:1.6}}>
+သင့်ရဲ့ subscription သက်တမ်း ကုန်ဆုံးသွားပါပြီ။ ဆက်လက် အသုံးပြုဖို့ plan ကို renew/upgrade လုပ်ပါ။
+</div>
+<button type="button" onClick={()=>{window.location.href='/upgrade'}} style={{background:'#8b5cf6',color:'white',border:'none',borderRadius:10,padding:'12px 24px',cursor:'pointer',fontSize:14,fontWeight:600,width:'100%',marginBottom:10}}>
+Renew / Upgrade Plan
+</button>
+<button type="button" onClick={()=>signOut(auth)} style={{background:'none',border:'0.5px solid #e2e8f0',borderRadius:8,padding:'8px 20px',cursor:'pointer',fontSize:13,color:'#64748b'}}>
+Sign Out
+</button>
+</div>
+</div>
+)
+}
+
 function PrivateRoute({children}){
 const[status,setStatus]=useState('checking')
 
@@ -73,6 +95,16 @@ if(subStatus==='blocked'||subStatus==='hold'){
 setStatus('blocked')
 return
 }
+// Auto-expired — paid plan ဖြစ်ပြီး subscriptionEnd ကျော်ရင်
+const plan=(data.plan||'free').toLowerCase()
+const isPaid=plan!=='free'&&plan!==''
+if(isPaid&&data.subscriptionEnd){
+const end=new Date(data.subscriptionEnd+'T23:59:59')
+if(end<new Date()){
+setStatus('expired')
+return
+}
+}
 }
 }catch(e){}
 setStatus('ok')
@@ -83,6 +115,11 @@ return unsub
 if(status==='checking')return<div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',color:'#9aa0b4'}}>Loading...</div>
 if(status==='unauthenticated')return<Navigate to="/login"/>
 if(status==='blocked')return<BlockedScreen/>
+if(status==='expired'){
+// expired ဖြစ်ပေမယ် upgrade page ကတော့ ခွင့်ပြု (renew လုပ်လို့ရအောင်)
+if(window.location.pathname==='/upgrade')return children
+return<ExpiredScreen/>
+}
 return children
 }
 
