@@ -34,6 +34,7 @@ import CustomDashboard from'./pages/CustomDashboard'
 import ReportBuilder from'./pages/ReportBuilder'
 import AuditLog from'./pages/AuditLog'
 import Upgrade from'./pages/Upgrade'
+import PlanGuard from'./components/PlanGuard'
 
 function BlockedScreen(){
 return(
@@ -114,17 +115,17 @@ return(
 <Route path="/projects" element={<PrivateRoute><Projects/></PrivateRoute>}/>
 <Route path="/quotation/:id" element={<PrivateRoute><QuotationDetail/></PrivateRoute>}/>
 <Route path="/edit-quotation/:id" element={<PrivateRoute><EditQuotation/></PrivateRoute>}/>
-<Route path="/chart-of-accounts" element={<PrivateRoute><ChartOfAccounts/></PrivateRoute>}/>
-<Route path="/bank-accounts" element={<PrivateRoute><BankAccounts/></PrivateRoute>}/>
+<Route path="/chart-of-accounts" element={<PrivateRoute><PlanGuard feature="finance"><ChartOfAccounts/></PlanGuard></PrivateRoute>}/>
+<Route path="/bank-accounts" element={<PrivateRoute><PlanGuard feature="finance"><BankAccounts/></PlanGuard></PrivateRoute>}/>
 <Route path="/invoices" element={<PrivateRoute><Invoices/></PrivateRoute>}/>
 <Route path="/quotations" element={<PrivateRoute><Quotations/></PrivateRoute>}/>
 <Route path="/customer/:id" element={<PrivateRoute><CustomerDetail/></PrivateRoute>}/>
-<Route path="/bills" element={<PrivateRoute><Bills/></PrivateRoute>}/>
-<Route path="/reconcile/:accountId" element={<PrivateRoute><Reconcile/></PrivateRoute>}/>
-<Route path="/journal-entries" element={<PrivateRoute><JournalEntries/></PrivateRoute>}/>
+<Route path="/bills" element={<PrivateRoute><PlanGuard feature="finance"><Bills/></PlanGuard></PrivateRoute>}/>
+<Route path="/reconcile/:accountId" element={<PrivateRoute><PlanGuard feature="finance"><Reconcile/></PlanGuard></PrivateRoute>}/>
+<Route path="/journal-entries" element={<PrivateRoute><PlanGuard feature="finance"><JournalEntries/></PlanGuard></PrivateRoute>}/>
 <Route path="/custom-dashboard" element={<PrivateRoute><CustomDashboard/></PrivateRoute>}/>
-<Route path="/report-builder" element={<PrivateRoute><ReportBuilder/></PrivateRoute>}/>
-<Route path="/audit-log" element={<PrivateRoute><AuditLog/></PrivateRoute>}/>
+<Route path="/report-builder" element={<PrivateRoute><PlanGuard feature="reportBuilder"><ReportBuilder/></PlanGuard></PrivateRoute>}/>
+<Route path="/audit-log" element={<PrivateRoute><PlanGuard feature="auditLog"><AuditLog/></PlanGuard></PrivateRoute>}/>
 <Route path="/upgrade" element={<PrivateRoute><Upgrade/></PrivateRoute>}/>
 <Route path="*" element={<Navigate to="/"/>}/>
 </Routes>
