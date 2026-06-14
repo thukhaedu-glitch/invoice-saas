@@ -6,6 +6,7 @@ import{useNavigate}from'react-router-dom'
 import{Crown,Calendar,CheckCircle,Clock,XCircle,Download,CreditCard,FileText,Users,UserPlus}from'lucide-react'
 import{usePlans,formatMMK}from'../hooks/usePlans'
 import jsPDF from'jspdf'
+import QRCode from'qrcode'
 
 const fmtDate=(d)=>{if(!d)return'-';try{return new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}catch{return d}}
 const fmtTS=(ts)=>{if(!ts)return'-';try{const d=ts.seconds?new Date(ts.seconds*1000):new Date(ts);return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}catch{return'-'}}
@@ -138,6 +139,19 @@ pdf.roundedRect(20,y,W-40,16,2,2,'F')
 pdf.setTextColor(255,255,255);pdf.setFontSize(13);pdf.setFont(undefined,'bold')
 pdf.text('Total Paid',26,y+10)
 pdf.text(formatMMK(req.amount),W-26,y+10,{align:'right'})
+y+=16
+
+// QR — CRM verify URL
+try{
+const verifyUrl=`https://ankorax-sales-crm.vercel.app/verify-receipt/${req.id}`
+const qrUrl=await QRCode.toDataURL(verifyUrl,{width:200,margin:1})
+y+=12
+pdf.addImage(qrUrl,'PNG',20,y,28,28)
+pdf.setFontSize(9);pdf.setTextColor(120,120,120);pdf.setFont(undefined,'normal')
+pdf.text('Scan to verify',52,y+10)
+pdf.setFontSize(8);pdf.setTextColor(160,160,160)
+pdf.text('QR scan လုပ်ပြီး receipt စစ်မှန်မှု စစ်ဆေးနိုင်ပါတယ်။',52,y+16)
+}catch(e){console.error('qr:',e)}
 
 // footer
 pdf.setFontSize(9);pdf.setTextColor(160,160,160);pdf.setFont(undefined,'normal')
@@ -214,6 +228,8 @@ return(
 <td style={{textAlign:'center'}}>
 {req.status==='approved'?(
 <button onClick={()=>downloadReceipt(req)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--primary)',display:'inline-flex',alignItems:'center',gap:4,fontSize:12}}><Download size={13}/>Receipt</button>
+):req.status==='refunded'?(
+<span style={{fontSize:11,color:'#dc2626',fontWeight:600}}>Refunded</span>
 ):<span style={{fontSize:12,color:'var(--text-3)'}}>-</span>}
 </td>
 </tr>
