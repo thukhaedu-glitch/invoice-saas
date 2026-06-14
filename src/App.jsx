@@ -35,6 +35,8 @@ import ReportBuilder from'./pages/ReportBuilder'
 import AuditLog from'./pages/AuditLog'
 import Upgrade from'./pages/Upgrade'
 import PlanGuard from'./components/PlanGuard'
+import Usage from'./pages/Usage'
+import Billing from'./pages/Billing'
 
 function BlockedScreen(){
 return(
@@ -163,6 +165,8 @@ return(
 <Route path="/custom-dashboard" element={<PrivateRoute><CustomDashboard/></PrivateRoute>}/>
 <Route path="/report-builder" element={<PrivateRoute><PlanGuard feature="reportBuilder"><ReportBuilder/></PlanGuard></PrivateRoute>}/>
 <Route path="/audit-log" element={<PrivateRoute><PlanGuard feature="auditLog"><AuditLog/></PlanGuard></PrivateRoute>}/>
+<Route path="/usage" element={<PrivateRoute><Usage/></PrivateRoute>}/>
+<Route path="/billing" element={<PrivateRoute><Billing/></PrivateRoute>}/>
 <Route path="/upgrade" element={<PrivateRoute><Upgrade/></PrivateRoute>}/>
 <Route path="*" element={<Navigate to="/"/>}/>
 </Routes>
