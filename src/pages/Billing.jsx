@@ -59,14 +59,19 @@ load()
 // image URL → base64 (PDF embed အတွက်)
 const loadImg=(url)=>new Promise((resolve)=>{
 const img=new Image()
+// external URL (Firebase storage) ဆိုမှ crossOrigin လို၊ local public file ဆို မလို
+if(/^https?:\/\//.test(url)&&!url.startsWith(window.location.origin)){
 img.crossOrigin='anonymous'
-img.onload=()=>{
-const c=document.createElement('canvas')
-c.width=img.width;c.height=img.height
-c.getContext('2d').drawImage(img,0,0)
-try{resolve({data:c.toDataURL('image/png'),w:img.width,h:img.height})}catch(e){resolve(null)}
 }
-img.onerror=()=>resolve(null)
+img.onload=()=>{
+try{
+const c=document.createElement('canvas')
+c.width=img.naturalWidth;c.height=img.naturalHeight
+c.getContext('2d').drawImage(img,0,0)
+resolve({data:c.toDataURL('image/png'),w:img.naturalWidth,h:img.naturalHeight})
+}catch(e){console.error('logo canvas:',e);resolve(null)}
+}
+img.onerror=(e)=>{console.error('logo load fail:',url,e);resolve(null)}
 img.src=url
 })
 
@@ -86,8 +91,8 @@ let y=20
 // logo
 const logo=await loadImg(logoUrl)
 if(logo){
-const lw=32,lh=logo.h/logo.w*lw
-pdf.addImage(logo.data,'PNG',20,y,lw,Math.min(lh,20))
+const lw=24,lh=logo.h/logo.w*lw
+pdf.addImage(logo.data,'PNG',20,y,lw,lh)
 }
 // business name (right)
 pdf.setFontSize(22);pdf.setTextColor(pr,pg,pb);pdf.setFont(undefined,'bold')
