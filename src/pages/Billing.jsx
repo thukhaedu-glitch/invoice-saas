@@ -1,10 +1,11 @@
 import{useState,useEffect}from'react'
 import{db,auth}from'../firebase'
-import{collection,getDocs,query,where,orderBy}from'firebase/firestore'
+import{collection,getDocs,query,where,orderBy,doc,getDoc}from'firebase/firestore'
 import Layout from'../components/Layout'
 import{useNavigate}from'react-router-dom'
 import{Crown,Calendar,CheckCircle,Clock,XCircle,Download,CreditCard,FileText,Users,UserPlus}from'lucide-react'
 import{usePlans,formatMMK}from'../hooks/usePlans'
+import jsPDF from'jspdf'
 
 const fmtDate=(d)=>{if(!d)return'-';try{return new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}catch{return d}}
 const fmtTS=(ts)=>{if(!ts)return'-';try{const d=ts.seconds?new Date(ts.seconds*1000):new Date(ts);return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}catch{return'-'}}
@@ -15,6 +16,7 @@ const{getLimit,planLabel,planPrice,loading:plansLoading}=usePlans()
 const[company,setCompany]=useState(null)
 const[history,setHistory]=useState([])
 const[counts,setCounts]=useState({docs:0,customers:0,members:0})
+const[receiptCfg,setReceiptCfg]=useState(null)
 const[loading,setLoading]=useState(true)
 
 useEffect(()=>{
@@ -43,35 +45,100 @@ getDocs(collection(db,'companies',cid,'quotations')),
 const cm=(docs)=>docs.filter(d=>{const dt=d.data();let m='';if(dt.createdAt?.seconds)m=new Date(dt.createdAt.seconds*1000).toISOString().slice(0,7);else if(dt.date)m=String(dt.date).slice(0,7);return m===ym}).length
 setCounts({docs:cm(invSnap.docs)+cm(quoSnap.docs),customers:custSnap.size,members:Object.keys(cdata.members||{}).length})
 }
+// receipt config
+try{
+const rSnap=await getDoc(doc(db,'config','receipt'))
+if(rSnap.exists())setReceiptCfg(rSnap.data())
+}catch(e){}
 }catch(e){console.error(e)}
 setLoading(false)
 }
 load()
 },[])
 
-const downloadReceipt=(req)=>{
-const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt ${req.id}</title>
-<style>body{font-family:Arial,sans-serif;max-width:600px;margin:40px auto;padding:20px;color:#1e293b}
-.head{border-bottom:2px solid #4f6ef7;padding-bottom:16px;margin-bottom:24px}
-.row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid #e2e8f0}
-.total{font-size:20px;font-weight:700;color:#4f6ef7;margin-top:16px}
-.badge{display:inline-block;background:#eaf3de;color:#16a34a;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600}</style></head>
-<body>
-<div class="head"><h1 style="margin:0;color:#4f6ef7">Payment Receipt</h1><div style="color:#94a3b8;font-size:13px;margin-top:4px">Ankorax Invoice</div></div>
-<div class="row"><span>Receipt ID</span><strong>${req.id}</strong></div>
-<div class="row"><span>Date</span><strong>${fmtTS(req.approvedAt||req.createdAt)}</strong></div>
-<div class="row"><span>Plan</span><strong style="text-transform:capitalize">${req.requestedPlan}</strong></div>
-<div class="row"><span>Billing Email</span><strong>${req.requestedByEmail||'-'}</strong></div>
-${req.couponCode?`<div class="row"><span>Coupon</span><strong>${req.couponCode}</strong></div>`:''}
-<div class="row"><span>Status</span><span class="badge">Paid</span></div>
-<div class="row total"><span>Total Paid</span><span>${formatMMK(req.amount)}</span></div>
-<p style="color:#94a3b8;font-size:12px;margin-top:32px;text-align:center">Thank you for your business — Ankorax</p>
-</body></html>`
-const blob=new Blob([html],{type:'text/html'})
-const url=URL.createObjectURL(blob)
-const a=document.createElement('a')
-a.href=url;a.download=`receipt-${req.id.slice(0,8)}.html`;a.click()
-URL.revokeObjectURL(url)
+// image URL → base64 (PDF embed အတွက်)
+const loadImg=(url)=>new Promise((resolve)=>{
+const img=new Image()
+img.crossOrigin='anonymous'
+img.onload=()=>{
+const c=document.createElement('canvas')
+c.width=img.width;c.height=img.height
+c.getContext('2d').drawImage(img,0,0)
+try{resolve({data:c.toDataURL('image/png'),w:img.width,h:img.height})}catch(e){resolve(null)}
+}
+img.onerror=()=>resolve(null)
+img.src=url
+})
+
+const downloadReceipt=async(req)=>{
+const cfg=receiptCfg||{}
+const primary=cfg.primaryColor||'#4f6ef7'
+const bizName=cfg.businessName||'Ankorax'
+const logoUrl=cfg.logoUrl||'/ankora_x_logo_2.png'
+// hex → rgb
+const hex2rgb=(h)=>{const x=h.replace('#','');return[parseInt(x.slice(0,2),16),parseInt(x.slice(2,4),16),parseInt(x.slice(4,6),16)]}
+const[pr,pg,pb]=hex2rgb(primary)
+
+const pdf=new jsPDF('p','mm','a4')
+const W=210
+let y=20
+
+// logo
+const logo=await loadImg(logoUrl)
+if(logo){
+const lw=32,lh=logo.h/logo.w*lw
+pdf.addImage(logo.data,'PNG',20,y,lw,Math.min(lh,20))
+}
+// business name (right)
+pdf.setFontSize(22);pdf.setTextColor(pr,pg,pb);pdf.setFont(undefined,'bold')
+pdf.text(bizName,W-20,y+8,{align:'right'})
+pdf.setFontSize(10);pdf.setTextColor(150,150,150);pdf.setFont(undefined,'normal')
+pdf.text('Payment Receipt',W-20,y+15,{align:'right'})
+
+y+=32
+// divider
+pdf.setDrawColor(pr,pg,pb);pdf.setLineWidth(0.8);pdf.line(20,y,W-20,y)
+y+=12
+
+// business info block
+pdf.setFontSize(9);pdf.setTextColor(120,120,120)
+const bizLines=[cfg.addressLine,cfg.phone?'Tel: '+cfg.phone:'',cfg.email,cfg.website].filter(Boolean)
+bizLines.forEach(line=>{pdf.text(line,20,y);y+=5})
+y+=8
+
+// receipt detail rows
+const rows=[
+['Receipt ID',req.id],
+['Date',fmtTS(req.approvedAt||req.createdAt)],
+['Plan',(req.requestedPlan||'').charAt(0).toUpperCase()+(req.requestedPlan||'').slice(1)],
+['Billing Email',req.requestedByEmail||'-'],
+]
+if(req.couponCode)rows.push(['Coupon',req.couponCode])
+rows.push(['Status','Paid'])
+
+pdf.setFontSize(11)
+rows.forEach(([k,v])=>{
+pdf.setTextColor(120,120,120);pdf.setFont(undefined,'normal')
+pdf.text(k,20,y)
+pdf.setTextColor(30,41,59);pdf.setFont(undefined,'bold')
+pdf.text(String(v),W-20,y,{align:'right'})
+pdf.setDrawColor(235,235,235);pdf.setLineWidth(0.2);pdf.line(20,y+2,W-20,y+2)
+y+=9
+})
+
+// total box
+y+=6
+pdf.setFillColor(pr,pg,pb)
+pdf.roundedRect(20,y,W-40,16,2,2,'F')
+pdf.setTextColor(255,255,255);pdf.setFontSize(13);pdf.setFont(undefined,'bold')
+pdf.text('Total Paid',26,y+10)
+pdf.text(formatMMK(req.amount),W-26,y+10,{align:'right'})
+
+// footer
+pdf.setFontSize(9);pdf.setTextColor(160,160,160);pdf.setFont(undefined,'normal')
+pdf.text(cfg.footerNote||'Thank you for your business',W/2,280,{align:'center'})
+
+pdf.save(`receipt-${req.id.slice(0,8)}.pdf`)
 }
 
 if(loading||plansLoading)return<Layout title="Billing"><div style={{padding:40,textAlign:'center'}}>Loading...</div></Layout>
