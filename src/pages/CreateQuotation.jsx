@@ -5,10 +5,11 @@ import{ref,uploadBytes,getDownloadURL}from'firebase/storage'
 import{useNavigate}from'react-router-dom'
 import Layout from'../components/Layout'
 import{Plus,Trash2,Save,ArrowLeft,Image,X}from'lucide-react'
-import{canAdd,getLimit,planLabel}from'../config/planLimits'
+import{usePlans}from'../hooks/usePlans'
 
 export default function CreateQuotation(){
 const navigate=useNavigate()
+const{canAdd,getLimit,planLabel}=usePlans()
 const[companyId,setCompanyId]=useState(null)
 const[plan,setPlan]=useState('free')
 const[docCount,setDocCount]=useState(0)
