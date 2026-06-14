@@ -5,6 +5,7 @@ import{updatePassword,reauthenticateWithCredential,EmailAuthProvider}from'fireba
 import{ref,uploadBytes,getDownloadURL}from'firebase/storage'
 import Layout from'../components/Layout'
 import{Save,Upload,User,Lock,Building2,X,Shield,Users,Copy,Check,PenLine,Trash2,UserMinus}from'lucide-react'
+import{usePlans}from'../hooks/usePlans'
 
 const Section=({title,icon:Icon,children})=>(
 <div className="card" style={{padding:24,marginBottom:16}}>
@@ -16,6 +17,7 @@ const Section=({title,icon:Icon,children})=>(
 )
 
 export default function Profile(){
+const{getLimit,planLabel}=usePlans()
 const[companyId,setCompanyId]=useState(null)
 const[saving,setSaving]=useState(false)
 const[uploadingAvatar,setUploadingAvatar]=useState(false)
@@ -300,14 +302,29 @@ return(
 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderBottom:'0.5px solid #f1f5f9'}}>
 <span style={{fontSize:13,color:'var(--text-2)'}}>Invite Code</span>
 <div style={{display:'flex',alignItems:'center',gap:8}}>
+{(()=>{
+const lim=getLimit(company.plan,'members')
+const atLimit=lim!==-1&&members.length>=lim
+if(atLimit)return<span style={{fontSize:12,color:'#d97706',fontWeight:500}}>🔒 Limit reached ({members.length}/{lim})</span>
+return<>
 <span style={{fontFamily:'monospace',fontWeight:600,color:'var(--primary)',fontSize:14,letterSpacing:1}}>{company.inviteCode||'-'}</span>
 {company.inviteCode&&(
 <button type="button" onClick={handleCopyInvite} style={{background:'none',border:'none',cursor:'pointer',color:copied?'#16a34a':'var(--text-3)',padding:2}}>
 {copied?<Check size={14}/>:<Copy size={14}/>}
 </button>
 )}
+</>
+})()}
 </div>
 </div>
+{(()=>{
+const lim=getLimit(company.plan,'members')
+const atLimit=lim!==-1&&members.length>=lim
+if(!atLimit)return null
+return<div style={{fontSize:12,color:'#d97706',background:'#faeeda',padding:'8px 12px',borderRadius:8,marginTop:8}}>
+Member limit ({lim}) ပြည့်ပါပြီ။ နောက်ထပ် member ထည့်ဖို့ <a href="/upgrade" style={{color:'var(--primary)',fontWeight:600}}>plan upgrade</a> လုပ်ပါ။
+</div>
+})()}
 </Section>
 
 {/* Organization */}
