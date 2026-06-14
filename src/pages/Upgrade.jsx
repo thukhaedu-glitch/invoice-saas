@@ -1,10 +1,10 @@
 import{useState,useEffect}from'react'
 import{db,auth,storage}from'../firebase'
-import{collection,getDocs,query,where,addDoc,serverTimestamp}from'firebase/firestore'
+import{collection,getDocs,query,where,addDoc,serverTimestamp,doc,updateDoc,increment}from'firebase/firestore'
 import{ref,uploadBytes,getDownloadURL}from'firebase/storage'
 import{useNavigate}from'react-router-dom'
 import Layout from'../components/Layout'
-import{Check,Upload,ArrowLeft,Crown,X,Copy}from'lucide-react'
+import{Check,Upload,ArrowLeft,Crown,X,Copy,Ticket}from'lucide-react'
 import{usePlans,formatMMK,normalizePlan}from'../hooks/usePlans'
 
 export default function Upgrade(){
@@ -20,6 +20,9 @@ const[submitting,setSubmitting]=useState(false)
 const[done,setDone]=useState(false)
 const[hasPending,setHasPending]=useState(false)
 const[copied,setCopied]=useState('')
+const[couponCode,setCouponCode]=useState('')
+const[coupon,setCoupon]=useState(null)
+const[couponMsg,setCouponMsg]=useState('')
 
 useEffect(()=>{
 const load=async()=>{
@@ -36,6 +39,32 @@ load()
 },[])
 
 const priceAfter=(p)=>p.discount>0?Math.round(p.price*(1-p.discount/100)):p.price
+
+// coupon apply ပြီးနောက် နောက်ဆုံး ဈေး
+const finalPrice=(p)=>{
+let price=priceAfter(p)
+if(coupon){
+if(coupon.type==='percent')price=Math.round(price*(1-coupon.value/100))
+else price=Math.max(0,price-coupon.value)
+}
+return price
+}
+
+const applyCoupon=async()=>{
+const code=couponCode.trim().toUpperCase()
+if(!code){setCouponMsg('');setCoupon(null);return}
+setCouponMsg('Checking...')
+try{
+const snap=await getDocs(query(collection(db,'coupons'),where('code','==',code)))
+if(snap.empty){setCoupon(null);setCouponMsg('❌ Coupon မရှိပါ');return}
+const c={id:snap.docs[0].id,...snap.docs[0].data()}
+if(!c.active){setCoupon(null);setCouponMsg('❌ ဒီ coupon ပိတ်ထားပါတယ်');return}
+if(c.expiry&&new Date(c.expiry)<new Date()){setCoupon(null);setCouponMsg('❌ Coupon သက်တမ်းကုန်ပါပြီ');return}
+if(c.usageLimit>0&&(c.usedCount||0)>=c.usageLimit){setCoupon(null);setCouponMsg('❌ Coupon အသုံးပြုခွင့် ကုန်ပါပြီ');return}
+setCoupon(c)
+setCouponMsg(`✓ ${c.type==='percent'?c.value+'% off':formatMMK(c.value)+' off'} applied!`)
+}catch(e){setCouponMsg('Error: '+e.message)}
+}
 
 const handleUpload=async(file)=>{
 if(!file)return
@@ -69,12 +98,17 @@ requestedBy:auth.currentUser.uid,
 requestedByEmail:auth.currentUser.email,
 currentPlan,
 requestedPlan:selectedPlan,
-amount:priceAfter(plan),
+amount:finalPrice(plan),
+couponCode:coupon?coupon.code:'',
 txnNote:txnNote.trim(),
 proofUrl:screenshotUrl,
 status:'pending',
 createdAt:serverTimestamp(),
 })
+// coupon သုံးပြီးရင် usedCount တိုး
+if(coupon){
+try{await updateDoc(doc(db,'coupons',coupon.id),{usedCount:increment(1)})}catch(e){}
+}
 setDone(true)
 }catch(e){alert(e.message)}
 setSubmitting(false)
@@ -161,7 +195,40 @@ opacity:isCurrent?0.6:1,transition:'all 0.15s',
 {selPlan&&!hasPending&&(
 <div style={{background:'white',borderRadius:16,padding:24,border:'0.5px solid var(--border)',marginTop:8}}>
 <h3 style={{fontSize:16,fontWeight:700,marginBottom:4}}>Payment — {selPlan.label}</h3>
-<p style={{fontSize:13,color:'var(--text-3)',marginBottom:16}}>အောက်က account ကို <strong>{formatMMK(priceAfter(selPlan))}</strong> လွှဲပြီး screenshot upload ပါ။</p>
+
+{/* Coupon */}
+<div style={{marginBottom:14}}>
+<label style={{fontSize:13,fontWeight:500,display:'flex',alignItems:'center',gap:6,marginBottom:6}}><Ticket size={14} color="var(--primary)"/>Coupon Code (optional)</label>
+<div style={{display:'flex',gap:8}}>
+<input className="form-input" value={couponCode} onChange={e=>setCouponCode(e.target.value.toUpperCase())} placeholder="ENTER CODE" style={{flex:1,fontFamily:'monospace',fontWeight:600}}/>
+<button onClick={applyCoupon} className="btn btn-ghost" style={{fontSize:13}}>Apply</button>
+</div>
+{couponMsg&&<div style={{fontSize:12,marginTop:6,color:couponMsg.startsWith('✓')?'#16a34a':'#dc2626'}}>{couponMsg}</div>}
+</div>
+
+{/* Final price */}
+<div style={{background:'#f8fafc',borderRadius:10,padding:'12px 16px',marginBottom:16}}>
+{(selPlan.discount>0||coupon)&&(
+<div style={{display:'flex',justifyContent:'space-between',fontSize:13,color:'var(--text-3)',marginBottom:4}}>
+<span>Original</span><span style={{textDecoration:'line-through'}}>{formatMMK(selPlan.price)}</span>
+</div>
+)}
+{selPlan.discount>0&&(
+<div style={{display:'flex',justifyContent:'space-between',fontSize:13,color:'#16a34a',marginBottom:4}}>
+<span>Plan discount ({selPlan.discount}%)</span><span>-{formatMMK(selPlan.price-priceAfter(selPlan))}</span>
+</div>
+)}
+{coupon&&(
+<div style={{display:'flex',justifyContent:'space-between',fontSize:13,color:'#16a34a',marginBottom:4}}>
+<span>Coupon ({coupon.code})</span><span>-{formatMMK(priceAfter(selPlan)-finalPrice(selPlan))}</span>
+</div>
+)}
+<div style={{display:'flex',justifyContent:'space-between',fontSize:16,fontWeight:700,borderTop:'0.5px solid var(--border)',paddingTop:8,marginTop:4}}>
+<span>Total</span><span style={{color:'var(--primary)'}}>{formatMMK(finalPrice(selPlan))}</span>
+</div>
+</div>
+
+<p style={{fontSize:13,color:'var(--text-3)',marginBottom:16}}>အောက်က account ကို <strong>{formatMMK(finalPrice(selPlan))}</strong> လွှဲပြီး screenshot upload ပါ။</p>
 
 {/* Payment accounts */}
 <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:12,marginBottom:20}}>
