@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { auth, db } from '../firebase'
 import { signOut } from 'firebase/auth'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { FileText, FileCheck, ScrollText, Users, Wallet, Briefcase, BarChart2, User, Settings, LogOut, Menu, X, BookOpen, Landmark, LayoutDashboard, Receipt, GitCompare, BookMarked, PieChart, Shield, Crown } from 'lucide-react'
+import { FileText, FileCheck, ScrollText, Users, Wallet, Briefcase, BarChart2, User, Settings, LogOut, Menu, X, BookOpen,CreditCard, Landmark, LayoutDashboard, Receipt, GitCompare, BookMarked, PieChart, Shield,TrendingUp, Crown } from 'lucide-react'
 import { getDocs, collection, query, where } from 'firebase/firestore'
 import { usePlans } from '../hooks/usePlans'
 import Notifications from './Notifications'
@@ -22,6 +22,8 @@ const NAV_MAIN = [
   { path: '/projects', label: 'Projects', icon: Briefcase },
   { path: '/custom-dashboard', label: 'My Dashboard', icon: PieChart },
   { path: '/report-builder', label: 'Report Builder', icon: BarChart2 },
+  {path:'/usage',label:'Usage',icon:TrendingUp},
+{path:'/billing',label:'Billing',icon:CreditCard},
 ]
 
 const AnkoraLogo = () => (
