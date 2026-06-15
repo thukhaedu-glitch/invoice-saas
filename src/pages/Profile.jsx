@@ -231,7 +231,7 @@ return(
 <div style={{fontSize:12,color:'var(--text-3)',marginTop:2}}>{auth.currentUser?.email}</div>
 <div style={{display:'flex',gap:6,marginTop:8,flexWrap:'wrap'}}>
 <span style={{background:roleBg[myRole]||'#f1f5f9',color:roleColor[myRole]||'#64748b',padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:600,textTransform:'capitalize'}}>{myRole}</span>
-<span style={{background:'var(--primary-light)',color:'var(--primary)',padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:600,textTransform:'capitalize'}}>{company.plan} Plan</span>
+<span style={{background:'var(--primary-light)',color:'var(--primary)',padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:600}}>{planLabel(company.plan)}</span>
 </div>
 </div>
 </div>
@@ -291,7 +291,7 @@ return(
 {[
 {label:'Company Name',value:company.name},
 {label:'My Role',value:<span style={{background:roleBg[myRole]||'#f1f5f9',color:roleColor[myRole]||'#64748b',padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:600,textTransform:'capitalize'}}>{myRole}</span>},
-{label:'Plan',value:company.plan},
+{label:'Plan',value:planLabel(company.plan)},
 {label:'Email',value:auth.currentUser?.email},
 ].map(({label,value})=>(
 <div key={label} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom:'0.5px solid #f1f5f9'}}>
