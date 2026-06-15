@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { db, auth } from '../firebase'
 import Layout from '../components/Layout'
 import { Plus, Trash2, X, Save, BookOpen, Search, ChevronDown, ChevronUp, AlertCircle, CheckCircle } from 'lucide-react'
