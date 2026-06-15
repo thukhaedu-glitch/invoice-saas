@@ -13,6 +13,7 @@ const{plans,paymentAccounts,loading:plansLoading,planLabel,paidPlans}=usePlans()
 const[companyId,setCompanyId]=useState(null)
 const[currentPlan,setCurrentPlan]=useState('free')
 const[selectedPlan,setSelectedPlan]=useState(null)
+const[months,setMonths]=useState(1)
 const[txnNote,setTxnNote]=useState('')
 const[screenshotUrl,setScreenshotUrl]=useState('')
 const[uploading,setUploading]=useState(false)
@@ -40,9 +41,12 @@ load()
 
 const priceAfter=(p)=>p.discount>0?Math.round(p.price*(1-p.discount/100)):p.price
 
-// coupon apply ပြီးနောက် နောက်ဆုံး ဈေး
+// ၁ လ ဈေး × months (coupon မပါ)
+const priceForMonths=(p)=>priceAfter(p)*months
+
+// coupon apply ပြီးနောက် နောက်ဆုံး ဈေး (months × coupon)
 const finalPrice=(p)=>{
-let price=priceAfter(p)
+let price=priceForMonths(p)
 if(coupon){
 if(coupon.type==='percent')price=Math.round(price*(1-coupon.value/100))
 else price=Math.max(0,price-coupon.value)
@@ -98,6 +102,7 @@ requestedBy:auth.currentUser.uid,
 requestedByEmail:auth.currentUser.email,
 currentPlan,
 requestedPlan:selectedPlan,
+months:months,
 amount:finalPrice(plan),
 couponCode:coupon?coupon.code:'',
 txnNote:txnNote.trim(),
@@ -196,6 +201,23 @@ opacity:isCurrent?0.6:1,transition:'all 0.15s',
 <div style={{background:'white',borderRadius:16,padding:24,border:'0.5px solid var(--border)',marginTop:8}}>
 <h3 style={{fontSize:16,fontWeight:700,marginBottom:4}}>Payment — {selPlan.label}</h3>
 
+{/* Duration selector */}
+<div style={{marginBottom:16,marginTop:12}}>
+<label style={{fontSize:13,fontWeight:500,display:'block',marginBottom:8}}>Duration ရွေးပါ</label>
+<div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8}}>
+{[1,3,6,12].map(m=>(
+<button key={m} onClick={()=>setMonths(m)} style={{
+padding:'12px 8px',borderRadius:10,cursor:'pointer',textAlign:'center',
+border:months===m?'2px solid var(--primary)':'0.5px solid var(--border)',
+background:months===m?'var(--primary-light)':'white',
+}}>
+<div style={{fontSize:16,fontWeight:700,color:months===m?'var(--primary)':'var(--text-1)'}}>{m}</div>
+<div style={{fontSize:11,color:'var(--text-3)'}}>{m===1?'month':'months'}</div>
+</button>
+))}
+</div>
+</div>
+
 {/* Coupon */}
 <div style={{marginBottom:14}}>
 <label style={{fontSize:13,fontWeight:500,display:'flex',alignItems:'center',gap:6,marginBottom:6}}><Ticket size={14} color="var(--primary)"/>Coupon Code (optional)</label>
@@ -208,19 +230,12 @@ opacity:isCurrent?0.6:1,transition:'all 0.15s',
 
 {/* Final price */}
 <div style={{background:'#f8fafc',borderRadius:10,padding:'12px 16px',marginBottom:16}}>
-{(selPlan.discount>0||coupon)&&(
 <div style={{display:'flex',justifyContent:'space-between',fontSize:13,color:'var(--text-3)',marginBottom:4}}>
-<span>Original</span><span style={{textDecoration:'line-through'}}>{formatMMK(selPlan.price)}</span>
+<span>{formatMMK(priceAfter(selPlan))} × {months} {months===1?'month':'months'}</span><span>{formatMMK(priceForMonths(selPlan))}</span>
 </div>
-)}
-{selPlan.discount>0&&(
-<div style={{display:'flex',justifyContent:'space-between',fontSize:13,color:'#16a34a',marginBottom:4}}>
-<span>Plan discount ({selPlan.discount}%)</span><span>-{formatMMK(selPlan.price-priceAfter(selPlan))}</span>
-</div>
-)}
 {coupon&&(
 <div style={{display:'flex',justifyContent:'space-between',fontSize:13,color:'#16a34a',marginBottom:4}}>
-<span>Coupon ({coupon.code})</span><span>-{formatMMK(priceAfter(selPlan)-finalPrice(selPlan))}</span>
+<span>Coupon ({coupon.code})</span><span>-{formatMMK(priceForMonths(selPlan)-finalPrice(selPlan))}</span>
 </div>
 )}
 <div style={{display:'flex',justifyContent:'space-between',fontSize:16,fontWeight:700,borderTop:'0.5px solid var(--border)',paddingTop:8,marginTop:4}}>
