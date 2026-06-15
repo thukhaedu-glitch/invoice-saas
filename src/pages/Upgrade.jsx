@@ -12,6 +12,8 @@ const navigate=useNavigate()
 const{plans,paymentAccounts,loading:plansLoading,planLabel,paidPlans}=usePlans()
 const[companyId,setCompanyId]=useState(null)
 const[currentPlan,setCurrentPlan]=useState('free')
+const[subEnd,setSubEnd]=useState('')
+const[cancelled,setCancelled]=useState(false)
 const[selectedPlan,setSelectedPlan]=useState(null)
 const[months,setMonths]=useState(1)
 const[txnNote,setTxnNote]=useState('')
@@ -30,8 +32,11 @@ const load=async()=>{
 const snap=await getDocs(query(collection(db,'companies'),where(`members.${auth.currentUser.uid}`,'!=',null)))
 if(!snap.empty){
 const cid=snap.docs[0].id
+const cdata=snap.docs[0].data()
 setCompanyId(cid)
-setCurrentPlan(snap.docs[0].data().plan||'free')
+setCurrentPlan(cdata.plan||'free')
+setSubEnd(cdata.subscriptionEnd||'')
+setCancelled(cdata.subscriptionCancelled===true)
 const reqSnap=await getDocs(query(collection(db,'upgradeRequests'),where('companyId','==',cid),where('status','==','pending')))
 if(!reqSnap.empty)setHasPending(true)
 }
@@ -39,8 +44,25 @@ if(!reqSnap.empty)setHasPending(true)
 load()
 },[])
 
-const priceAfter=(p)=>p.discount>0?Math.round(p.price*(1-p.discount/100)):p.price
+const fmtDate=(d)=>{if(!d)return'-';try{return new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}catch{return d}}
+const daysToExpiry=subEnd?Math.ceil((new Date(subEnd+'T23:59:59')-new Date())/(1000*60*60*24)):null
+const isExpiring=normalizePlan(currentPlan)!=='free'&&daysToExpiry!==null&&daysToExpiry<=7&&daysToExpiry>=0
 
+const handleCancelSub=async()=>{
+if(!confirm('Subscription cancel မလား?\n\n⚠️ '+fmtDate(subEnd)+' အထိ ဆက်သုံးနိုင်ပါတယ်။'))return
+try{
+await updateDoc(doc(db,'companies',companyId),{subscriptionCancelled:true,cancelledAt:new Date().toISOString()})
+setCancelled(true)
+}catch(e){alert(e.message)}
+}
+const handleResub=async()=>{
+try{
+await updateDoc(doc(db,'companies',companyId),{subscriptionCancelled:false})
+setCancelled(false)
+}catch(e){alert(e.message)}
+}
+
+const priceAfter=(p)=>p.discount>0?Math.round(p.price*(1-p.discount/100)):p.price
 // ၁ လ ဈေး × months (coupon မပါ)
 const priceForMonths=(p)=>priceAfter(p)*months
 
@@ -156,7 +178,19 @@ return(
 <div style={{textAlign:'center',marginBottom:8}}>
 <h1 style={{fontSize:26,fontWeight:700,marginBottom:6}}>Simple pricing, no hidden fees</h1>
 <p style={{color:'var(--text-3)',fontSize:14}}>Per workspace, per month. Start free, upgrade anytime.</p>
-<div style={{fontSize:12,color:'var(--primary)',marginTop:6}}>Current plan: <strong>{planLabel(currentPlan)}</strong></div>
+<div style={{fontSize:12,color:'var(--primary)',marginTop:6}}>Current plan: <strong>{planLabel(currentPlan)}</strong>{cancelled&&<span style={{color:'#dc2626',marginLeft:6}}>(Cancelled — active until {fmtDate(subEnd)})</span>}</div>
+{isExpiring&&!cancelled&&(
+<div style={{display:'inline-block',background:'#faeeda',color:'#d97706',fontSize:12,fontWeight:600,padding:'6px 14px',borderRadius:20,marginTop:8}}>⏰ {daysToExpiry===0?'ဒီနေ့ ကုန်မယ်':`${daysToExpiry} ရက် အတွင်း ကုန်မယ်`} — Please resubscribe</div>
+)}
+{normalizePlan(currentPlan)!=='free'&&(
+<div style={{marginTop:8}}>
+{cancelled?(
+<button onClick={handleResub} style={{background:'none',border:'none',color:'var(--primary)',fontSize:12,fontWeight:600,cursor:'pointer',textDecoration:'underline'}}>Resubscribe (auto-renew ပြန်ဖွင့်)</button>
+):(
+<button onClick={handleCancelSub} style={{background:'none',border:'none',color:'var(--text-3)',fontSize:12,cursor:'pointer',textDecoration:'underline'}}>Cancel subscription</button>
+)}
+</div>
+)}
 </div>
 
 {hasPending&&(
