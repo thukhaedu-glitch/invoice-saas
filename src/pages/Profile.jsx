@@ -1,4 +1,4 @@
-import{useState,useEffect}from'react'
+import React,{useState,useEffect}from'react'
 import{db,auth,storage}from'../firebase'
 import{doc,getDoc,setDoc,getDocs,collection,query,where,updateDoc}from'firebase/firestore'
 import{updatePassword,reauthenticateWithCredential,EmailAuthProvider}from'firebase/auth'
