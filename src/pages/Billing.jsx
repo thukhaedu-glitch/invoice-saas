@@ -131,10 +131,16 @@ bizLines.forEach(line=>{pdf.text(line,20,y);y+=5})
 y+=8
 
 // receipt detail rows
+const months=req.months||1
+// expiry = approve date + months×30
+const baseDate=req.approvedAt?.seconds?new Date(req.approvedAt.seconds*1000):new Date()
+const expiry=new Date(baseDate);expiry.setDate(expiry.getDate()+30*months)
 const rows=[
 ['Receipt ID',req.id],
 ['Date',fmtTS(req.approvedAt||req.createdAt)],
 ['Plan',planLabel(req.requestedPlan)],
+['Duration',months+(months===1?' month':' months')],
+['Valid Until',expiry.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})],
 ['Billing Email',req.requestedByEmail||'-'],
 ]
 if(req.couponCode)rows.push(['Coupon',req.couponCode])
