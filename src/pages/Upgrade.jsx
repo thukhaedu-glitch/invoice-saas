@@ -65,6 +65,15 @@ const c={id:snap.docs[0].id,...snap.docs[0].data()}
 if(!c.active){setCoupon(null);setCouponMsg('❌ ဒီ coupon ပိတ်ထားပါတယ်');return}
 if(c.expiry&&new Date(c.expiry)<new Date()){setCoupon(null);setCouponMsg('❌ Coupon သက်တမ်းကုန်ပါပြီ');return}
 if(c.usageLimit>0&&(c.usedCount||0)>=c.usageLimit){setCoupon(null);setCouponMsg('❌ Coupon အသုံးပြုခွင့် ကုန်ပါပြီ');return}
+// plan restriction
+if(c.plans&&c.plans.length&&!c.plans.includes(selectedPlan)){
+const names=c.plans.map(p=>{const pl=plans.find(x=>x.key===p);return pl?pl.label:p}).join(', ')
+setCoupon(null);setCouponMsg(`❌ ဒီ coupon က ${names} plan အတွက်ပဲ`);return
+}
+// duration restriction
+if(c.durations&&c.durations.length&&!c.durations.map(Number).includes(months)){
+setCoupon(null);setCouponMsg(`❌ ဒီ coupon က ${c.durations.join('/')} လ အတွက်ပဲ`);return
+}
 setCoupon(c)
 setCouponMsg(`✓ ${c.type==='percent'?c.value+'% off':formatMMK(c.value)+' off'} applied!`)
 }catch(e){setCouponMsg('Error: '+e.message)}
@@ -162,7 +171,7 @@ return(
 const isSelected=selectedPlan===p.key
 const isCurrent=normalizePlan(currentPlan)===p.key
 return(
-<div key={p.key} onClick={()=>!isCurrent&&setSelectedPlan(p.key)} style={{
+<div key={p.key} onClick={()=>{if(!isCurrent){setSelectedPlan(p.key);setCoupon(null);setCouponMsg('');setCouponCode('')}}} style={{
 position:'relative',background:'white',borderRadius:16,padding:24,cursor:isCurrent?'default':'pointer',
 border:isSelected?'2px solid var(--primary)':'0.5px solid var(--border)',
 opacity:isCurrent?0.6:1,transition:'all 0.15s',
@@ -206,7 +215,7 @@ opacity:isCurrent?0.6:1,transition:'all 0.15s',
 <label style={{fontSize:13,fontWeight:500,display:'block',marginBottom:8}}>Duration ရွေးပါ</label>
 <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8}}>
 {[1,3,6,12].map(m=>(
-<button key={m} onClick={()=>setMonths(m)} style={{
+<button key={m} onClick={()=>{setMonths(m);setCoupon(null);setCouponMsg('');setCouponCode('')}} style={{
 padding:'12px 8px',borderRadius:10,cursor:'pointer',textAlign:'center',
 border:months===m?'2px solid var(--primary)':'0.5px solid var(--border)',
 background:months===m?'var(--primary-light)':'white',
