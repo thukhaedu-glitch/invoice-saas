@@ -6,7 +6,8 @@ import{useNavigate}from'react-router-dom'
 import{Crown,Calendar,CheckCircle,Clock,XCircle,Download,CreditCard,FileText,Users,UserPlus}from'lucide-react'
 import{usePlans,formatMMK}from'../hooks/usePlans'
 import jsPDF from'jspdf'
-import QRCode from'qrcode'
+import{QRCodeCanvas}from'qrcode.react'
+import{createRoot}from'react-dom/client'
 
 const fmtDate=(d)=>{if(!d)return'-';try{return new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}catch{return d}}
 const fmtTS=(ts)=>{if(!ts)return'-';try{const d=ts.seconds?new Date(ts.seconds*1000):new Date(ts);return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}catch{return'-'}}
@@ -56,6 +57,23 @@ setLoading(false)
 }
 load()
 },[])
+
+// qrcode.react ကို hidden render ပြီး base64 ထုတ် (package အသစ် မလို)
+const genQR=(text)=>new Promise((resolve)=>{
+const div=document.createElement('div')
+div.style.position='fixed';div.style.left='-9999px'
+document.body.appendChild(div)
+const root=createRoot(div)
+root.render(<QRCodeCanvas value={text} size={200} level="M"/>)
+setTimeout(()=>{
+try{
+const canvas=div.querySelector('canvas')
+const data=canvas?canvas.toDataURL('image/png'):null
+resolve(data)
+}catch(e){resolve(null)}
+finally{root.unmount();document.body.removeChild(div)}
+},100)
+})
 
 // image URL → base64 (PDF embed အတွက်)
 const loadImg=(url)=>new Promise((resolve)=>{
@@ -144,13 +162,15 @@ y+=16
 // QR — CRM verify URL
 try{
 const verifyUrl=`https://ankorax-sales-crm.vercel.app/verify-receipt/${req.id}`
-const qrUrl=await QRCode.toDataURL(verifyUrl,{width:200,margin:1})
+const qrUrl=await genQR(verifyUrl)
+if(qrUrl){
 y+=12
 pdf.addImage(qrUrl,'PNG',20,y,28,28)
 pdf.setFontSize(9);pdf.setTextColor(120,120,120);pdf.setFont(undefined,'normal')
 pdf.text('Scan to verify',52,y+10)
 pdf.setFontSize(8);pdf.setTextColor(160,160,160)
 pdf.text('QR scan လုပ်ပြီး receipt စစ်မှန်မှု စစ်ဆေးနိုင်ပါတယ်။',52,y+16)
+}
 }catch(e){console.error('qr:',e)}
 
 // footer
