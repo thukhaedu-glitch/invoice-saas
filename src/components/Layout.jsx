@@ -6,6 +6,7 @@ import { FileText, FileCheck, ScrollText, Users, Wallet, Briefcase, BarChart2, U
 import { getDocs, collection, query, where } from 'firebase/firestore'
 import { usePlans } from '../hooks/usePlans'
 import Notifications from './Notifications'
+import LanguageSwitcher from './LanguageSwitcher'
 import { useNotifications } from '../hooks/useNotifications'
 import { useRecurring } from '../hooks/useRecurring'
 import { useRole } from '../hooks/useRole'
@@ -170,6 +171,7 @@ export default function Layout({ children, title }) {
             {open ? <X size={18} /> : <Menu size={18} />}
           </button>
           <div style={{ flex: 1, fontWeight: 500, fontSize: 15, color: 'var(--text-1)' }}>{title}</div>
+          <LanguageSwitcher />
           <Notifications companyId={companyId} />
           <span style={{ fontSize: 11, background: 'var(--primary-light)', color: 'var(--primary)', padding: '3px 10px', borderRadius: 20, fontWeight: 600 }}>{planLabel(plan)}</span>
         </div>
