@@ -1,6 +1,6 @@
 import{useState,useEffect}from'react'
 import{db,auth}from'../firebase'
-import{collection,getDocs,query,where,orderBy,doc,getDoc}from'firebase/firestore'
+import{collection,getDocs,query,where,orderBy,doc,getDoc,updateDoc}from'firebase/firestore'
 import Layout from'../components/Layout'
 import{useNavigate}from'react-router-dom'
 import{Crown,Calendar,CheckCircle,Clock,XCircle,Download,CreditCard,FileText,Users,UserPlus}from'lucide-react'
@@ -191,6 +191,25 @@ if(!company)return<Layout title="Billing"><div style={{padding:40,textAlign:'cen
 
 const plan=company.plan||'free'
 const isPaid=plan!=='free'
+const isCancelled=company.subscriptionCancelled===true
+// expiring — end date နီးနေလား (7 ရက်အတွင်း)
+const daysToExpiry=company.subscriptionEnd?Math.ceil((new Date(company.subscriptionEnd+'T23:59:59')-new Date())/(1000*60*60*24)):null
+const isExpiring=isPaid&&daysToExpiry!==null&&daysToExpiry<=7&&daysToExpiry>=0
+
+const handleCancel=async()=>{
+if(!confirm('Subscription ကို cancel မလား?\n\n⚠️ ဝယ်ထားတဲ့ '+fmtDate(company.subscriptionEnd)+' အထိတော့ ဆက်သုံးနိုင်ပါတယ်။ အဲ့ဒီနောက် free plan ပြန်ဖြစ်ပါမယ်။'))return
+try{
+await updateDoc(doc(db,'companies',company.id),{subscriptionCancelled:true,cancelledAt:new Date().toISOString()})
+setCompany({...company,subscriptionCancelled:true})
+}catch(e){alert(e.message)}
+}
+const handleResubscribe=async()=>{
+try{
+await updateDoc(doc(db,'companies',company.id),{subscriptionCancelled:false})
+setCompany({...company,subscriptionCancelled:false})
+}catch(e){alert(e.message)}
+}
+
 const statusIcon=(s)=>s==='approved'?<CheckCircle size={14} color="#16a34a"/>:s==='pending'?<Clock size={14} color="#d97706"/>:s==='refunded'?<XCircle size={14} color="#dc2626"/>:<XCircle size={14} color="#dc2626"/>
 const statusText=(s)=>({approved:'Paid',pending:'Pending',rejected:'Rejected',refunded:'Refunded'}[s]||s)
 
@@ -204,20 +223,41 @@ return(
 <Layout title="Billing">
 <div style={{maxWidth:820,margin:'0 auto'}}>
 
+{/* Expiring warning */}
+{isExpiring&&(
+<div style={{background:isCancelled?'#fcebeb':'#faeeda',border:`0.5px solid ${isCancelled?'#dc2626':'#f59e0b'}`,borderRadius:12,padding:'14px 18px',marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:10}}>
+<div>
+<div style={{fontSize:14,fontWeight:700,color:isCancelled?'#dc2626':'#d97706'}}>
+{daysToExpiry===0?'⏰ ဒီနေ့ ကုန်ဆုံးမယ်!':`⏰ ${daysToExpiry} ရက် အတွင်း ကုန်ဆုံးမယ်`}
+</div>
+<div style={{fontSize:12,color:'var(--text-3)',marginTop:2}}>
+{isCancelled?'Subscription cancel လုပ်ထားတယ်။ ဆက်သုံးချင်ရင် resubscribe လုပ်ပါ။':'Plan ဆက်သုံးဖို့ renew လုပ်ပါ။'} (Valid until {fmtDate(company.subscriptionEnd)})
+</div>
+</div>
+<button onClick={()=>navigate('/upgrade')} style={{background:isCancelled?'#dc2626':'#d97706',color:'white',border:'none',borderRadius:8,padding:'8px 16px',fontWeight:600,fontSize:13,cursor:'pointer',whiteSpace:'nowrap'}}>Resubscribe</button>
+</div>
+)}
+
 {/* Current plan card */}
 <div style={{background:'linear-gradient(135deg,#4f6ef7,#8b5cf6)',borderRadius:16,padding:24,color:'white',marginBottom:20}}>
 <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
 <div>
 <div style={{fontSize:13,opacity:0.85,marginBottom:4}}>Current Plan</div>
-<div style={{fontSize:26,fontWeight:700,display:'flex',alignItems:'center',gap:8,marginBottom:8}}><Crown size={24}/>{planLabel(plan)}</div>
+<div style={{fontSize:26,fontWeight:700,display:'flex',alignItems:'center',gap:8,marginBottom:8}}><Crown size={24}/>{planLabel(plan)}{isCancelled&&<span style={{fontSize:11,background:'rgba(255,255,255,0.25)',padding:'2px 8px',borderRadius:10,fontWeight:600}}>Cancelled</span>}</div>
 {isPaid&&<div style={{fontSize:14,opacity:0.9}}>{formatMMK(planPrice(plan))} / month</div>}
 </div>
 <button onClick={()=>navigate('/upgrade')} style={{background:'white',color:'#4f6ef7',border:'none',borderRadius:10,padding:'10px 20px',fontWeight:600,fontSize:13,cursor:'pointer'}}>{isPaid?'Change Plan':'Upgrade'}</button>
 </div>
 {isPaid&&company.subscriptionEnd&&(
-<div style={{marginTop:16,paddingTop:16,borderTop:'0.5px solid rgba(255,255,255,0.2)',display:'flex',gap:24,fontSize:13}}>
+<div style={{marginTop:16,paddingTop:16,borderTop:'0.5px solid rgba(255,255,255,0.2)',display:'flex',gap:24,fontSize:13,alignItems:'center',flexWrap:'wrap'}}>
 <div><span style={{opacity:0.8}}>Started: </span>{fmtDate(company.subscriptionStart)}</div>
-<div><span style={{opacity:0.8}}>Renews/Ends: </span><strong>{fmtDate(company.subscriptionEnd)}</strong></div>
+<div><span style={{opacity:0.8}}>{isCancelled?'Active until: ':'Renews/Ends: '}</span><strong>{fmtDate(company.subscriptionEnd)}</strong></div>
+<div style={{flex:1}}/>
+{isCancelled?(
+<button onClick={handleResubscribe} style={{background:'rgba(255,255,255,0.2)',color:'white',border:'0.5px solid rgba(255,255,255,0.4)',borderRadius:8,padding:'6px 14px',fontSize:12,fontWeight:600,cursor:'pointer'}}>Resubscribe</button>
+):(
+<button onClick={handleCancel} style={{background:'rgba(255,255,255,0.15)',color:'white',border:'0.5px solid rgba(255,255,255,0.3)',borderRadius:8,padding:'6px 14px',fontSize:12,fontWeight:500,cursor:'pointer'}}>Cancel Subscription</button>
+)}
 </div>
 )}
 </div>
