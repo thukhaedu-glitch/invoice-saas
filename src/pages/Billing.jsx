@@ -134,7 +134,7 @@ y+=8
 const rows=[
 ['Receipt ID',req.id],
 ['Date',fmtTS(req.approvedAt||req.createdAt)],
-['Plan',(req.requestedPlan||'').charAt(0).toUpperCase()+(req.requestedPlan||'').slice(1)],
+['Plan',planLabel(req.requestedPlan)],
 ['Billing Email',req.requestedByEmail||'-'],
 ]
 if(req.couponCode)rows.push(['Coupon',req.couponCode])
@@ -169,7 +169,7 @@ pdf.addImage(qrUrl,'PNG',20,y,28,28)
 pdf.setFontSize(9);pdf.setTextColor(120,120,120);pdf.setFont(undefined,'normal')
 pdf.text('Scan to verify',52,y+10)
 pdf.setFontSize(8);pdf.setTextColor(160,160,160)
-pdf.text('QR scan လုပ်ပြီး receipt စစ်မှန်မှု စစ်ဆေးနိုင်ပါတယ်။',52,y+16)
+pdf.text('Scan this QR code to verify receipt authenticity.',52,y+16)
 }
 }catch(e){console.error('qr:',e)}
 
@@ -242,7 +242,7 @@ return(
 {history.map(req=>(
 <tr key={req.id}>
 <td style={{fontSize:12,color:'var(--text-3)'}}>{fmtTS(req.approvedAt||req.createdAt)}</td>
-<td><span style={{fontSize:13,fontWeight:600,textTransform:'capitalize',color:'var(--primary)'}}>{req.requestedPlan}</span>{req.couponCode&&<span style={{fontSize:10,color:'#16a34a',marginLeft:6}}>🎟{req.couponCode}</span>}</td>
+<td><span style={{fontSize:13,fontWeight:600,color:'var(--primary)'}}>{planLabel(req.requestedPlan)}</span>{req.couponCode&&<span style={{fontSize:10,color:'#16a34a',marginLeft:6}}>🎟{req.couponCode}</span>}</td>
 <td style={{fontSize:13,fontWeight:600}}>{formatMMK(req.amount)}</td>
 <td style={{textAlign:'center'}}><span style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:12}}>{statusIcon(req.status)}{statusText(req.status)}</span></td>
 <td style={{textAlign:'center'}}>
