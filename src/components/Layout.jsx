@@ -1,191 +1,403 @@
-import { useState, useEffect } from 'react'
-import { auth, db } from '../firebase'
-import { signOut } from 'firebase/auth'
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { FileText, FileCheck, ScrollText, Users, Wallet, Briefcase, BarChart2, User, Settings, LogOut, Menu, X, BookOpen,CreditCard, Landmark, LayoutDashboard, Receipt, GitCompare, BookMarked, PieChart, Shield,TrendingUp, Crown } from 'lucide-react'
-import { getDocs, collection, query, where } from 'firebase/firestore'
-import { usePlans } from '../hooks/usePlans'
-import Notifications from './Notifications'
-import { useNotifications } from '../hooks/useNotifications'
-import { useRecurring } from '../hooks/useRecurring'
-import { useRole } from '../hooks/useRole'
-// မှတ်ချက် - logAction function ဘယ်ကလာသလဲပေါ်မူတည်ပြီး အောက်ကလမ်းကြောင်းကို ပြင်ပေးပါ
-// import { logAction } from '../utils/auditLog' 
+import{useState,useEffect}from'react'
+import{db,auth,storage}from'../firebase'
+import{doc,getDoc,setDoc,getDocs,collection,query,where,updateDoc}from'firebase/firestore'
+import{updatePassword,reauthenticateWithCredential,EmailAuthProvider}from'firebase/auth'
+import{ref,uploadBytes,getDownloadURL}from'firebase/storage'
+import Layout from'../components/Layout'
+import{Save,Upload,User,Lock,Building2,X,Shield,Users,Copy,Check,PenLine,Trash2,UserMinus}from'lucide-react'
+import{usePlans}from'../hooks/usePlans'
 
-const NAV_MAIN = [
-  { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/invoices', label: 'Invoices', icon: FileText },
-  { path: '/quotations', label: 'Quotations', icon: FileCheck },
-  { path: '/contracts', label: 'Contracts', icon: ScrollText },
-  { path: '/customers', label: 'Customers', icon: Users },
-  { path: '/expenses', label: 'Expenses', icon: Wallet },
-  { path: '/projects', label: 'Projects', icon: Briefcase },
-  { path: '/custom-dashboard', label: 'My Dashboard', icon: PieChart },
-  { path: '/report-builder', label: 'Report Builder', icon: BarChart2 },
-  {path:'/usage',label:'Usage',icon:TrendingUp},
-{path:'/billing',label:'Billing',icon:CreditCard},
-]
-
-const AnkoraLogo = () => (
-  <svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="https://raw.githubusercontent.com/thukhaedu-glitch/invoice-saas/refs/heads/main/public/ankora_x_logo_2.png">
-    <rect width="34" height="34" rx="10" fill="url(#ankoraGrad)" />
-    <defs>
-      <linearGradient id="ankoraGrad" x1="0" y1="0" x2="34" y2="34" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stopColor="#4F6EF7" />
-        <stop offset="100%" stopColor="#7C3AED" />
-      </linearGradient>
-    </defs>
-    <text x="5" y="24" fontSize="18" fontWeight="800" fill="white" fontFamily="Georgia,serif">X</text>
-  </svg>
+const Section=({title,icon:Icon,children})=>(
+<div className="card" style={{padding:24,marginBottom:16}}>
+<div style={{display:'flex',alignItems:'center',gap:8,fontWeight:600,fontSize:13,color:'var(--text-2)',marginBottom:16,textTransform:'uppercase',letterSpacing:'0.05em'}}>
+<Icon size={15}/>{title}
+</div>
+{children}
+</div>
 )
 
-export default function Layout({ children, title }) {
-  const [open, setOpen] = useState(false)
-  const [companyId, setCompanyId] = useState(null)
-  const [plan, setPlan] = useState('free')
-  const { planLabel } = usePlans()
-  const location = useLocation()
-  const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-  const { canSettings, canReports } = useRole()
+export default function Profile(){
+const{getLimit,planLabel}=usePlans()
+const[companyId,setCompanyId]=useState(null)
+const[saving,setSaving]=useState(false)
+const[uploadingAvatar,setUploadingAvatar]=useState(false)
+const[uploadingSignature,setUploadingSignature]=useState(false)
+const[pwModal,setPwModal]=useState(false)
+const[profile,setProfile]=useState({displayName:'',avatarUrl:'',signatureUrl:'',phone:'',role:'staff'})
+const[company,setCompany]=useState({name:'',plan:'free',inviteCode:''})
+const[members,setMembers]=useState([])
+const[managedBy,setManagedBy]=useState({})
+const[pwForm,setPwForm]=useState({current:'',newPw:'',confirm:''})
+const[pwError,setPwError]=useState('')
+const[savingPw,setSavingPw]=useState(false)
+const[myRole,setMyRole]=useState('staff')
+const[copied,setCopied]=useState(false)
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const snap = await getDocs(query(collection(db, 'companies'), where(`members.${auth.currentUser?.uid}`, '!=', null)))
-        if (!snap.empty) {
-          setCompanyId(snap.docs[0].id)
-          setPlan(snap.docs[0].data().plan || 'free')
-        }
-      } catch (e) { }
-    }
-    load()
-  }, [])
+useEffect(()=>{
+const load=async()=>{
+const user=auth.currentUser
+const snap=await getDocs(query(collection(db,'companies'),where(`members.${user.uid}`,'!=',null)))
+if(!snap.empty){
+const cid=snap.docs[0].id
+const cData=snap.docs[0].data()
+setCompanyId(cid)
+setCompany({name:cData.name||'',plan:cData.plan||'free',inviteCode:cData.inviteCode||''})
+const role=cData.members?.[user.uid]||'staff'
+setMyRole(role)
+setManagedBy(cData.managedBy||{})
+const memberIds=Object.keys(cData.members||{})
+const memberRoles=cData.members||{}
+const memberProfiles=await Promise.all(memberIds.map(async uid=>{
+const pSnap=await getDoc(doc(db,'users',uid))
+const userData=pSnap.exists()?pSnap.data():{}
+return{
+uid,
+role:memberRoles[uid],
+displayName:userData.displayName||'',
+email:userData.email||'',
+avatarUrl:userData.avatarUrl||'',
+phone:userData.phone||'',
+}
+}))
+setMembers(memberProfiles)
+const pSnap=await getDoc(doc(db,'users',user.uid))
+if(pSnap.exists())setProfile(p=>({...p,...pSnap.data(),role}))
+else setProfile(p=>({...p,displayName:user.displayName||'',avatarUrl:user.photoURL||'',role}))
+}
+}
+load()
+},[])
 
-  useNotifications(companyId)
-  useRecurring(companyId)
+const handleAvatarUpload=async(e)=>{
+const file=e.target.files[0]
+if(!file)return
+setUploadingAvatar(true)
+try{
+const storageRef=ref(storage,`avatars/${auth.currentUser.uid}`)
+await uploadBytes(storageRef,file)
+const url=await getDownloadURL(storageRef)
+setProfile(p=>({...p,avatarUrl:url}))
+}catch(err){console.error(err)}
+setUploadingAvatar(false)
+}
 
-  const isActive = (item) => {
-    if (!item.path) return false
-    if (item.path === '/' && !item.tab) {
-      return location.pathname === '/' && !searchParams.get('tab')
-    }
-    if (item.tab) {
-      const currentTab = searchParams.get('tab') || ''
-      return location.pathname === '/' && currentTab === item.tab
-    }
-    return location.pathname === item.path || location.pathname.startsWith(item.path + '/')
-  }
+const handleSignatureUpload=async(e)=>{
+const file=e.target.files[0]
+if(!file)return
+setUploadingSignature(true)
+try{
+const storageRef=ref(storage,`signatures/${auth.currentUser.uid}`)
+await uploadBytes(storageRef,file)
+const url=await getDownloadURL(storageRef)
+setProfile(p=>({...p,signatureUrl:url}))
+await setDoc(doc(db,'users',auth.currentUser.uid),{signatureUrl:url},{merge:true})
+alert('Signature saved!')
+}catch(err){console.error(err)}
+setUploadingSignature(false)
+}
 
-  const handleNav = (item) => {
-    if (!item.path) return
-    if (item.tab) navigate(`/?tab=${item.tab}`)
-    else navigate(item.path)
-    setOpen(false)
-  }
+const handleRemoveSignature=async()=>{
+if(!confirm('Remove signature?'))return
+setProfile(p=>({...p,signatureUrl:''}))
+await setDoc(doc(db,'users',auth.currentUser.uid),{signatureUrl:''},{merge:true})
+}
 
-  // အသစ်ထည့်သွင်းထားသော Logout Function
-  const handleLogout = async () => {
-    try {
-      if (companyId) {
-        await logAction(companyId, {
-          action: 'logout',
-          module: 'auth',
-          description: `User logged out: ${auth.currentUser?.email}`,
-          metadata: {},
-        })
-      }
-    } catch (e) { }
-    await signOut(auth)
-  }
+const save=async()=>{
+setSaving(true)
+try{
+await setDoc(doc(db,'users',auth.currentUser.uid),{...profile},{merge:true})
+alert('Profile saved!')
+}catch(e){alert(e.message)}
+setSaving(false)
+}
 
-  return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
-      {open && <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 98 }} />}
-      <aside className={`sidebar${open ? ' open' : ''}`}>
-        <div style={{ padding: '20px 18px 16px', borderBottom: '0.5px solid var(--border)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <AnkoraLogo />
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-1)', letterSpacing: '0.02em' }}>Ankora<span style={{color: 'var(--primary)'}}>X</span></div>
-              <div style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 1 }}>{auth.currentUser?.email}</div>
-            </div>
-          </div>
-        </div>
-        <nav style={{ flex: 1, padding: '12px 10px', overflowY: 'auto' }}>
+const handleChangePassword=async()=>{
+setPwError('')
+if(pwForm.newPw!==pwForm.confirm){setPwError('Passwords do not match');return}
+if(pwForm.newPw.length<6){setPwError('Min 6 characters');return}
+setSavingPw(true)
+try{
+const credential=EmailAuthProvider.credential(auth.currentUser.email,pwForm.current)
+await reauthenticateWithCredential(auth.currentUser,credential)
+await updatePassword(auth.currentUser,pwForm.newPw)
+setPwModal(false)
+setPwForm({current:'',newPw:'',confirm:''})
+alert('Password changed!')
+}catch(e){setPwError(e.message)}
+setSavingPw(false)
+}
 
-          <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em', padding: '8px 8px 4px' }}>Main</div>
-          {NAV_MAIN.map((item) => (
-            <div key={item.path} className={`nav-item${isActive(item) ? ' active' : ''}`} onClick={() => handleNav(item)}>
-              <item.icon size={17} /><span>{item.label}</span>
-            </div>
-          ))}
+const handleRoleChange=async(uid,newRole)=>{
+if(myRole!=='owner'){alert('Only owner can change roles');return}
+try{
+await updateDoc(doc(db,'companies',companyId),{[`members.${uid}`]:newRole})
+setMembers(m=>m.map(mem=>mem.uid===uid?{...mem,role:newRole}:mem))
+}catch(e){alert(e.message)}
+}
 
-          {canReports && (
-            <>
-              <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em', padding: '12px 8px 4px', marginTop: 8 }}>Finance</div>
-              <div className={`nav-item${location.pathname === '/chart-of-accounts' ? ' active' : ''}`} onClick={() => { navigate('/chart-of-accounts'); setOpen(false) }}>
-                <BookOpen size={17} /><span>Chart of Accounts</span>
-              </div>
-              <div className={`nav-item${location.pathname === '/bank-accounts' ? ' active' : ''}`} onClick={() => { navigate('/bank-accounts'); setOpen(false) }}>
-                <Landmark size={17} /><span>Bank Accounts</span>
-              </div>
-              <div className={`nav-item${location.pathname === '/journal-entries' ? ' active' : ''}`} onClick={() => { navigate('/journal-entries'); setOpen(false) }}>
-                <BookMarked size={17} /><span>Journal Entries</span>
-              </div>
-              <div className={`nav-item${location.pathname === '/bills' ? ' active' : ''}`} onClick={() => { navigate('/bills'); setOpen(false) }}>
-                <Receipt size={17} /><span>Bills & Payable</span>
-              </div>
-              <div className={`nav-item${location.pathname === '/reports' ? ' active' : ''}`} onClick={() => { navigate('/reports'); setOpen(false) }}>
-                <BarChart2 size={17} /><span>Reports</span>
-              </div>
-              <div className={`nav-item${location.pathname.startsWith('/reconcile') ? ' active' : ''}`} onClick={() => { navigate('/bank-accounts'); setOpen(false) }}>
-                <GitCompare size={17} /><span>Reconciliation</span>
-              </div>
-            </>
-          )}
+const handleManagedByChange=async(staffUid,adminUid)=>{
+if(myRole!=='owner'){alert('Only owner can assign managers');return}
+try{
+const newManagedBy={...managedBy}
+if(adminUid===''){
+delete newManagedBy[staffUid]
+}else{
+newManagedBy[staffUid]=adminUid
+}
+await updateDoc(doc(db,'companies',companyId),{managedBy:newManagedBy})
+setManagedBy(newManagedBy)
+}catch(e){alert(e.message)}
+}
 
-          <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em', padding: '12px 8px 4px', marginTop: 8 }}>Account</div>
-          <div className={`nav-item${location.pathname === '/upgrade' ? ' active' : ''}`} onClick={() => { navigate('/upgrade'); setOpen(false) }} style={{ color: location.pathname === '/upgrade' ? undefined : '#8b5cf6' }}>
-            <Crown size={17} /><span>Upgrade Plan</span>
-          </div>
-          <div className={`nav-item${location.pathname === '/profile' ? ' active' : ''}`} onClick={() => { navigate('/profile'); setOpen(false) }}>
-            <User size={17} /><span>Profile</span>
-          </div>
-          {canSettings && (
-            <div className={`nav-item${location.pathname === '/settings' ? ' active' : ''}`} onClick={() => { navigate('/settings'); setOpen(false) }}>
-              <Settings size={17} /><span>Settings</span>
-            </div>
-          )}
-          {canSettings && (
-            <div className={`nav-item${location.pathname === '/audit-log' ? ' active' : ''}`} onClick={() => { navigate('/audit-log'); setOpen(false) }}>
-              <Shield size={17} /><span>Audit Log</span>
-            </div>
-          )}
-        </nav>
+const handleRemoveMember=async(uid,memberEmail)=>{
+if(myRole!=='owner'){alert('Only owner can remove members');return}
+if(!confirm(`Remove ${memberEmail||uid} from company?`))return
+try{
+const cSnap=await getDoc(doc(db,'companies',companyId))
+if(cSnap.exists()){
+const mems=cSnap.data().members||{}
+const mgBy=cSnap.data().managedBy||{}
+delete mems[uid]
+delete mgBy[uid]
+// Remove this uid from managedBy values too
+Object.keys(mgBy).forEach(k=>{if(mgBy[k]===uid)delete mgBy[k]})
+await updateDoc(doc(db,'companies',companyId),{members:mems,managedBy:mgBy})
+setMembers(m=>m.filter(mem=>mem.uid!==uid))
+const newMgBy={...managedBy}
+delete newMgBy[uid]
+setManagedBy(newMgBy)
+alert('Member removed!')
+}
+}catch(e){alert(e.message)}
+}
 
-        <div style={{ padding: 10, borderTop: '0.5px solid var(--border)' }}>
-          <div style={{ padding: '6px 8px', marginBottom: 6, fontSize: 11, color: 'var(--text-3)', textAlign: 'center' }}>
-            Powered by <span style={{ fontWeight: 700, color: 'var(--primary)' }}>AnkoraX</span>
-          </div>
-          {/* အသစ်အစားထိုးထားသော Logout Button */}
-          <div className="nav-item" style={{ color: '#ef4444' }} onClick={handleLogout}>
-            <LogOut size={17} /><span>Logout</span>
-          </div>
-        </div>
-      </aside>
+const handleCopyInvite=()=>{
+navigator.clipboard.writeText(company.inviteCode)
+setCopied(true)
+setTimeout(()=>setCopied(false),2000)
+}
 
-      <div className="main-area">
-        <div className="topbar">
-          <button id="hamburger" onClick={() => setOpen(v => !v)} className="btn btn-ghost" style={{ padding: '6px 8px' }}>
-            {open ? <X size={18} /> : <Menu size={18} />}
-          </button>
-          <div style={{ flex: 1, fontWeight: 500, fontSize: 15, color: 'var(--text-1)' }}>{title}</div>
-          <Notifications companyId={companyId} />
-          <span style={{ fontSize: 11, background: 'var(--primary-light)', color: 'var(--primary)', padding: '3px 10px', borderRadius: 20, fontWeight: 600 }}>{planLabel(plan)}</span>
-        </div>
-        <div className="page-content">{children}</div>
-      </div>
-    </div>
-  )
+const roleColor={owner:'#4F6EF7',admin:'#16a34a',staff:'#d97706'}
+const roleBg={owner:'rgba(79,110,247,0.1)',admin:'rgba(22,163,74,0.1)',staff:'rgba(217,119,6,0.1)'}
+const adminMembers=members.filter(m=>m.role==='admin')
+
+return(
+<Layout title="Profile">
+<div style={{maxWidth:720,margin:'0 auto'}}>
+
+{/* Password Modal */}
+{pwModal&&(
+<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
+<div style={{background:'white',borderRadius:16,width:'100%',maxWidth:400,boxShadow:'0 20px 60px rgba(0,0,0,0.2)'}}>
+<div style={{padding:'20px 24px',borderBottom:'0.5px solid #f1f5f9',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+<div style={{fontWeight:600,fontSize:15}}>Change Password</div>
+<button type="button" onClick={()=>setPwModal(false)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-3)'}}><X size={18}/></button>
+</div>
+<div style={{padding:24}}>
+{pwError&&<div style={{background:'#fcebeb',color:'#dc2626',padding:'8px 12px',borderRadius:8,fontSize:13,marginBottom:12}}>{pwError}</div>}
+{[{label:'Current Password',key:'current'},{label:'New Password',key:'newPw'},{label:'Confirm Password',key:'confirm'}].map(({label,key})=>(
+<div key={key} style={{marginBottom:12}}>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>{label}</label>
+<input className="form-input" type="password" value={pwForm[key]} onChange={e=>setPwForm(f=>({...f,[key]:e.target.value}))} placeholder="••••••••"/>
+</div>
+))}
+<div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+<button type="button" onClick={()=>setPwModal(false)} className="btn btn-ghost">Cancel</button>
+<button type="button" onClick={handleChangePassword} disabled={savingPw} className="btn btn-primary">
+<Lock size={14}/>{savingPw?'Saving...':'Change Password'}
+</button>
+</div>
+</div>
+</div>
+</div>
+)}
+
+{/* Profile */}
+<Section title="My Profile" icon={User}>
+<div style={{display:'flex',alignItems:'center',gap:20,marginBottom:20}}>
+<div style={{position:'relative'}}>
+<div style={{width:80,height:80,borderRadius:'50%',background:'var(--primary-light)',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',border:'2px solid var(--primary)'}}>
+{profile.avatarUrl?<img src={profile.avatarUrl} style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<User size={32} color="var(--primary)"/>}
+</div>
+<label style={{position:'absolute',bottom:0,right:0,cursor:'pointer'}}>
+<input type="file" accept="image/*" onChange={handleAvatarUpload} style={{display:'none'}}/>
+<div style={{width:24,height:24,background:'var(--primary)',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',border:'2px solid white'}}>
+<Upload size={12} color="white"/>
+</div>
+</label>
+</div>
+<div>
+<div style={{fontWeight:600,fontSize:16,color:'var(--text-1)'}}>{profile.displayName||auth.currentUser?.email}</div>
+<div style={{fontSize:12,color:'var(--text-3)',marginTop:2}}>{auth.currentUser?.email}</div>
+<div style={{display:'flex',gap:6,marginTop:8,flexWrap:'wrap'}}>
+<span style={{background:roleBg[myRole]||'#f1f5f9',color:roleColor[myRole]||'#64748b',padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:600,textTransform:'capitalize'}}>{myRole}</span>
+<span style={{background:'var(--primary-light)',color:'var(--primary)',padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:600}}>{planLabel(company.plan)}</span>
+</div>
+</div>
+</div>
+<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+<div style={{gridColumn:'1/-1'}}>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Display Name</label>
+<input className="form-input" value={profile.displayName} onChange={e=>setProfile(p=>({...p,displayName:e.target.value}))} placeholder="Your name..."/>
+</div>
+<div style={{gridColumn:'1/-1'}}>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Phone</label>
+<input className="form-input" value={profile.phone||''} onChange={e=>setProfile(p=>({...p,phone:e.target.value}))} placeholder="09..."/>
+</div>
+</div>
+</Section>
+
+{/* Signature */}
+<Section title="My Signature" icon={PenLine}>
+<div style={{fontSize:12,color:'var(--text-3)',marginBottom:12}}>
+လက်မှတ် ပုံ upload လုပ်ပါ — Invoice, Quotation, Contract မှာ auto-show ဖြစ်မည်။
+</div>
+{profile.signatureUrl?(
+<div>
+<div style={{border:'0.5px solid var(--border)',borderRadius:10,padding:16,background:'#f8fafc',marginBottom:12,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+<img src={profile.signatureUrl} style={{height:60,objectFit:'contain',maxWidth:200}} alt="Signature"/>
+<button type="button" onClick={handleRemoveSignature} style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)',padding:4}}>
+<Trash2 size={16}/>
+</button>
+</div>
+<label style={{cursor:'pointer'}}>
+<input type="file" accept="image/*" onChange={handleSignatureUpload} style={{display:'none'}}/>
+<span className="btn btn-ghost" style={{fontSize:13}}>
+<Upload size={14}/>{uploadingSignature?'Uploading...':'Change Signature'}
+</span>
+</label>
+</div>
+):(
+<div>
+<div style={{border:'1.5px dashed var(--border)',borderRadius:10,padding:32,textAlign:'center',marginBottom:12,background:'#fafbff'}}>
+<PenLine size={32} color="var(--text-3)" style={{margin:'0 auto 8px'}}/>
+<div style={{fontSize:13,color:'var(--text-3)',marginBottom:12}}>No signature uploaded yet</div>
+<label style={{cursor:'pointer'}}>
+<input type="file" accept="image/*" onChange={handleSignatureUpload} style={{display:'none'}}/>
+<span className="btn btn-primary" style={{fontSize:13}}>
+<Upload size={14}/>{uploadingSignature?'Uploading...':'Upload Signature'}
+</span>
+</label>
+</div>
+<div style={{fontSize:11,color:'var(--text-3)',padding:'8px 12px',background:'rgba(79,110,247,0.05)',borderRadius:8}}>
+💡 လက်မှတ် ဓာတ်ပုံ ရိုက်ပြီး ဖြူဆက်မရှိတဲ့ background နဲ့ upload လုပ်ပါ (PNG recommended)
+</div>
+</div>
+)}
+</Section>
+
+{/* Company */}
+<Section title="Company" icon={Building2}>
+{[
+{label:'Company Name',value:company.name},
+{label:'My Role',value:<span style={{background:roleBg[myRole]||'#f1f5f9',color:roleColor[myRole]||'#64748b',padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:600,textTransform:'capitalize'}}>{myRole}</span>},
+{label:'Plan',value:planLabel(company.plan)},
+{label:'Email',value:auth.currentUser?.email},
+].map(({label,value})=>(
+<div key={label} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom:'0.5px solid #f1f5f9'}}>
+<span style={{fontSize:13,color:'var(--text-2)'}}>{label}</span>
+<span style={{fontSize:13,fontWeight:500}}>{value}</span>
+</div>
+))}
+<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderBottom:'0.5px solid #f1f5f9'}}>
+<span style={{fontSize:13,color:'var(--text-2)'}}>Invite Code</span>
+<div style={{display:'flex',alignItems:'center',gap:8}}>
+{(()=>{
+const lim=getLimit(company.plan,'members')
+const atLimit=lim!==-1&&members.length>=lim
+if(atLimit)return<span style={{fontSize:12,color:'#d97706',fontWeight:500}}>🔒 Limit reached ({members.length}/{lim})</span>
+return<>
+<span style={{fontFamily:'monospace',fontWeight:600,color:'var(--primary)',fontSize:14,letterSpacing:1}}>{company.inviteCode||'-'}</span>
+{company.inviteCode&&(
+<button type="button" onClick={handleCopyInvite} style={{background:'none',border:'none',cursor:'pointer',color:copied?'#16a34a':'var(--text-3)',padding:2}}>
+{copied?<Check size={14}/>:<Copy size={14}/>}
+</button>
+)}
+</>
+})()}
+</div>
+</div>
+{(()=>{
+const lim=getLimit(company.plan,'members')
+const atLimit=lim!==-1&&members.length>=lim
+if(!atLimit)return null
+return<div style={{fontSize:12,color:'#d97706',background:'#faeeda',padding:'8px 12px',borderRadius:8,marginTop:8}}>
+Member limit ({lim}) ပြည့်ပါပြီ။ နောက်ထပ် member ထည့်ဖို့ <a href="/upgrade" style={{color:'var(--primary)',fontWeight:600}}>plan upgrade</a> လုပ်ပါ။
+</div>
+})()}
+</Section>
+
+{/* Organization */}
+<Section title="Organization" icon={Users}>
+<div style={{marginBottom:12,fontSize:12,color:'var(--text-3)'}}>
+{members.length} member{members.length!==1?'s':''} in {company.name}
+</div>
+{members.map(m=>(
+<div key={m.uid} style={{padding:'12px 0',borderBottom:'0.5px solid #f1f5f9'}}>
+<div style={{display:'flex',alignItems:'center',gap:12,marginBottom:myRole==='owner'&&m.uid!==auth.currentUser?.uid?8:0}}>
+<div style={{width:38,height:38,borderRadius:'50%',background:'var(--primary-light)',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',flexShrink:0}}>
+{m.avatarUrl?<img src={m.avatarUrl} style={{width:'100%',height:'100%',objectFit:'cover'}}/>:<User size={18} color="var(--primary)"/>}
+</div>
+<div style={{flex:1}}>
+<div style={{fontSize:13,fontWeight:500,color:'var(--text-1)',display:'flex',alignItems:'center',gap:6}}>
+{m.displayName||m.email||m.uid.slice(0,8)}
+{m.uid===auth.currentUser?.uid&&<span style={{fontSize:10,color:'var(--text-3)'}}>(You)</span>}
+</div>
+<div style={{fontSize:11,color:'var(--text-3)',marginTop:1}}>{m.email||'-'}</div>
+{/* Show assigned admin for staff */}
+{m.role==='staff'&&managedBy[m.uid]&&(
+<div style={{fontSize:11,color:'#16a34a',marginTop:2}}>
+👤 {members.find(x=>x.uid===managedBy[m.uid])?.displayName||members.find(x=>x.uid===managedBy[m.uid])?.email||'Admin'}
+</div>
+)}
+</div>
+<span style={{background:roleBg[m.role]||'#f1f5f9',color:roleColor[m.role]||'#64748b',padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:600,textTransform:'capitalize',flexShrink:0}}>{m.role}</span>
+</div>
+
+{myRole==='owner'&&m.uid!==auth.currentUser?.uid&&(
+<div style={{display:'flex',gap:8,paddingLeft:50,flexWrap:'wrap',alignItems:'center'}}>
+<select value={m.role} onChange={e=>handleRoleChange(m.uid,e.target.value)} className="form-input" style={{width:'auto',fontSize:12,padding:'4px 8px'}}>
+<option value="owner">Owner</option>
+<option value="admin">Admin</option>
+<option value="staff">Staff</option>
+</select>
+{/* Managed by — staff only */}
+{m.role==='staff'&&(
+<select value={managedBy[m.uid]||''} onChange={e=>handleManagedByChange(m.uid,e.target.value)} className="form-input" style={{width:'auto',fontSize:12,padding:'4px 8px'}}>
+<option value="">No Admin Assigned</option>
+{adminMembers.map(a=>(
+<option key={a.uid} value={a.uid}>{a.displayName||a.email}</option>
+))}
+</select>
+)}
+<button type="button" onClick={()=>handleRemoveMember(m.uid,m.email)} style={{background:'rgba(220,38,38,0.1)',border:'none',cursor:'pointer',color:'#dc2626',padding:'4px 10px',borderRadius:6,fontSize:12,display:'flex',alignItems:'center',gap:4}}>
+<UserMinus size={13}/>Remove
+</button>
+</div>
+)}
+</div>
+))}
+</Section>
+
+{/* Security */}
+<Section title="Security" icon={Shield}>
+<div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+<div>
+<div style={{fontSize:13,fontWeight:500,color:'var(--text-1)'}}>Password</div>
+<div style={{fontSize:12,color:'var(--text-3)',marginTop:2}}>Change your account password</div>
+</div>
+<button type="button" onClick={()=>setPwModal(true)} className="btn btn-ghost" style={{fontSize:13}}>
+<Lock size={14}/>Change Password
+</button>
+</div>
+</Section>
+
+<div style={{display:'flex',justifyContent:'flex-end'}}>
+<button type="button" onClick={save} disabled={saving||uploadingAvatar} className="btn btn-primary">
+<Save size={15}/>{saving?'Saving...':'Save Profile'}
+</button>
+</div>
+</div>
+</Layout>
+)
 }
