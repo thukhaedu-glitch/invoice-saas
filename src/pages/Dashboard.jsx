@@ -13,6 +13,7 @@ const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep
 export default function Dashboard() {
   const [dismissedBanners, setDismissedBanners] = useState(false)
   const [companyId, setCompanyId] = useState(null)
+  const [subInfo, setSubInfo] = useState({ plan: 'free', end: '', cancelled: false })
   const [invoices, setInvoices] = useState([])
   const [bills, setBills] = useState([])
   const [expenses, setExpenses] = useState([])
@@ -32,6 +33,8 @@ export default function Dashboard() {
         if (!snap.empty) {
           const cid = snap.docs[0].id
           setCompanyId(cid)
+          const cd = snap.docs[0].data()
+          setSubInfo({ plan: cd.plan || 'free', end: cd.subscriptionEnd || '', cancelled: cd.subscriptionCancelled === true })
           const unsubs = []
           ;[
             { name: 'invoices', setter: setInvoices },
@@ -99,6 +102,23 @@ export default function Dashboard() {
 
   return (
     <Layout title="Dashboard">
+      {/* Subscription expiring warning */}
+      {(() => {
+        const d = subInfo.end ? Math.ceil((new Date(subInfo.end + 'T23:59:59') - new Date()) / (1000 * 60 * 60 * 24)) : null
+        const expiring = subInfo.plan !== 'free' && d !== null && d <= 7 && d >= 0
+        if (!expiring) return null
+        return (
+          <div style={{ background: subInfo.cancelled ? '#fcebeb' : '#faeeda', border: `0.5px solid ${subInfo.cancelled ? '#dc2626' : '#f59e0b'}`, borderRadius: 12, padding: '12px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <AlertCircle size={16} color={subInfo.cancelled ? '#dc2626' : '#d97706'} />
+              <span style={{ fontSize: 13, fontWeight: 600, color: subInfo.cancelled ? '#dc2626' : '#d97706' }}>
+                {d === 0 ? 'Subscription ဒီနေ့ ကုန်မယ်!' : `Subscription ${d} ရက် အတွင်း ကုန်မယ်`} — Please resubscribe
+              </span>
+            </div>
+            <button onClick={() => navigate('/upgrade')} style={{ background: subInfo.cancelled ? '#dc2626' : '#d97706', color: 'white', border: 'none', borderRadius: 8, padding: '6px 14px', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>Resubscribe</button>
+          </div>
+        )
+      })()}
       {/* Approval banners */}
       {role === 'admin' && pendingApproval.length > 0 && (
         <div style={{ background: 'rgba(22,163,74,0.08)', border: '0.5px solid rgba(22,163,74,0.2)', borderRadius: 12, padding: '12px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
