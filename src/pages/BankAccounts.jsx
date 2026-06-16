@@ -94,10 +94,16 @@ createdBy:auth.currentUser.uid,
 })
 // Chart of Accounts (accounts) ထဲ Cash & Bank entry auto-create + link
 try{
-// နောက်ဆုံး bank account code ရှာ (1002 ကစ)
-const acctSnap=await getDocs(query(collection(db,'companies',companyId,'accounts'),where('subType','==','Cash & Bank')))
+// နောက်ဆုံး bank account code ရှာ (where query မသုံး — index မလို)
+const acctSnap=await getDocs(collection(db,'companies',companyId,'accounts'))
 let maxCode=1001
-acctSnap.docs.forEach(d=>{const c=parseInt(d.data().code);if(!isNaN(c)&&c>maxCode)maxCode=c})
+acctSnap.docs.forEach(d=>{
+const data=d.data()
+if(data.subType==='Cash & Bank'){
+const c=parseInt(data.code)
+if(!isNaN(c)&&c>maxCode)maxCode=c
+}
+})
 await addDoc(collection(db,'companies',companyId,'accounts'),{
 name:form.name,
 type:'Assets',
@@ -110,13 +116,41 @@ bankAccountId:bankRef.id,
 createdAt:serverTimestamp(),
 createdBy:auth.currentUser.uid,
 })
-}catch(e){console.error('chart link:',e)}
+}catch(e){console.error('chart link error:',e);alert('Bank account ဆောက်ပြီး — ဒါပေမယ် Chart of Accounts ထဲ ထည့်ရာမှာ error: '+e.message)}
 }else{
 await updateDoc(doc(db,'companies',companyId,'bankAccounts',selected.id),{
 ...form,
 openingBalance:Number(form.openingBalance),
 updatedAt:serverTimestamp(),
 })
+// Chart မှာ ဒီ bank account ရှိ/မရှိ စစ် — မရှိရင် ထည့် (ဟောင်း account အတွက်)
+try{
+const acctSnap=await getDocs(collection(db,'companies',companyId,'accounts'))
+let maxCode=1001
+let exists=false
+acctSnap.docs.forEach(d=>{
+const data=d.data()
+if(data.bankAccountId===selected.id)exists=true
+if(data.subType==='Cash & Bank'){
+const c=parseInt(data.code)
+if(!isNaN(c)&&c>maxCode)maxCode=c
+}
+})
+if(!exists){
+await addDoc(collection(db,'companies',companyId,'accounts'),{
+name:form.name,
+type:'Assets',
+subType:'Cash & Bank',
+code:String(maxCode+1),
+openingBalance:Number(form.openingBalance),
+currentBalance:Number(form.openingBalance),
+description:`Bank account: ${form.name}`,
+bankAccountId:selected.id,
+createdAt:serverTimestamp(),
+createdBy:auth.currentUser.uid,
+})
+}
+}catch(e){console.error('chart link error:',e);alert('Chart of Accounts ထဲ ထည့်ရာမှာ error: '+e.message)}
 }
 setView('list')
 }catch(e){alert(e.message)}
