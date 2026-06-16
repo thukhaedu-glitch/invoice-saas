@@ -29,9 +29,9 @@ type:'in',amount:0,description:'',reference:''
 })
 const[showTxForm,setShowTxForm]=useState(false)
 const[savingTx,setSavingTx]=useState(false)
-const[debugMsg,setDebugMsg]=useState('')
 
 useEffect(()=>{
+let unsub=null
 const load=async()=>{
 const snap=await getDocs(query(collection(db,'companies'),where(`members.${auth.currentUser.uid}`,'!=',null)))
 if(!snap.empty){
@@ -42,13 +42,16 @@ if(sSnap.exists()&&sSnap.data().currencies){
 const currList=sSnap.data().currencies.filter(c=>c.code).map(c=>c.code)
 if(currList.length>0)setCurrencies(currList)
 }
-onSnapshot(collection(db,'companies',cid,'bankAccounts'),snap=>{
+unsub=onSnapshot(collection(db,'companies',cid,'bankAccounts'),snap=>{
 setAccounts(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0)))
 setLoading(false)
 })
+}else{
+setLoading(false)
 }
 }
 load()
+return()=>{if(unsub)unsub()}
 },[])
 
 const loadTransactions=async(accountId)=>{
@@ -83,10 +86,9 @@ setView('detail')
 const handleSave=async()=>{
 if(!form.name){alert('Account name required');return}
 setSaving(true)
-let dbg='handleSave: selected='+(selected?selected.id:'NULL')+' | '
 try{
 if(!selected){
-// bank account ဆောက်
+// ✅ Bank account create
 const bankRef=await addDoc(collection(db,'companies',companyId,'bankAccounts'),{
 ...form,
 openingBalance:Number(form.openingBalance),
@@ -94,10 +96,10 @@ currentBalance:Number(form.openingBalance),
 createdAt:serverTimestamp(),
 createdBy:auth.currentUser.uid,
 })
-dbg+='bank created | '
-// Chart of Accounts (accounts) ထဲ Cash & Bank entry auto-create + link
+
+// ✅ FIX: Code collision ကာကွယ်ဖို့ maxCode 1099 ကနေ စတင် (default accounts 1001-1003 ကျော်)
 const acctSnap=await getDocs(collection(db,'companies',companyId,'accounts'))
-let maxCode=1001
+let maxCode=1099
 acctSnap.docs.forEach(d=>{
 const data=d.data()
 if(data.subType==='Cash & Bank'){
@@ -105,6 +107,8 @@ const c=parseInt(data.code)
 if(!isNaN(c)&&c>maxCode)maxCode=c
 }
 })
+
+// ✅ Chart of Accounts ထဲ auto-add (onSnapshot က CoA page ကို ချက်ချင်း update လုပ်မယ်)
 await addDoc(collection(db,'companies',companyId,'accounts'),{
 name:form.name,
 type:'Assets',
@@ -117,29 +121,35 @@ bankAccountId:bankRef.id,
 createdAt:serverTimestamp(),
 createdBy:auth.currentUser.uid,
 })
-dbg+='✓ chart added code '+(maxCode+1)
-setDebugMsg(dbg)
-await new Promise(r=>setTimeout(r,2500))
 }else{
 await updateDoc(doc(db,'companies',companyId,'bankAccounts',selected.id),{
 ...form,
 openingBalance:Number(form.openingBalance),
 updatedAt:serverTimestamp(),
 })
-// Chart မှာ ဒီ bank account ရှိ/မရှိ စစ် — မရှိရင် ထည့် (ဟောင်း account အတွက်)
+// ✅ Edit လုပ်ရင် CoA ထဲ မရှိသေးရင် ထည့် (ဟောင်း account migration)
 try{
 const acctSnap=await getDocs(collection(db,'companies',companyId,'accounts'))
-let maxCode=1001
-let exists=false
+let maxCode=1099
+let existingDoc=null
 acctSnap.docs.forEach(d=>{
 const data=d.data()
-if(data.bankAccountId===selected.id)exists=true
+if(data.bankAccountId===selected.id)existingDoc={id:d.id,...data}
 if(data.subType==='Cash & Bank'){
 const c=parseInt(data.code)
 if(!isNaN(c)&&c>maxCode)maxCode=c
 }
 })
-if(!exists){
+if(existingDoc){
+// ✅ Name ပြောင်းခဲ့ရင် CoA မှာပါ update လုပ်
+await updateDoc(doc(db,'companies',companyId,'accounts',existingDoc.id),{
+name:form.name,
+openingBalance:Number(form.openingBalance),
+description:`Bank account: ${form.name}`,
+updatedAt:serverTimestamp(),
+})
+}else{
+// ✅ CoA မှာ မရှိသေးဘူးဆိုရင် အသစ် ထည့်
 await addDoc(collection(db,'companies',companyId,'accounts'),{
 name:form.name,
 type:'Assets',
@@ -190,7 +200,6 @@ setShowTxForm(false)
 setSavingTx(false)
 }
 
-// Currency group ဖြင့် balance calculate
 const balanceByCurrency={}
 accounts.filter(a=>a.isActive!==false).forEach(a=>{
 const cur=a.currency||'MMK'
@@ -364,9 +373,6 @@ Transaction History
 
 return(
 <Layout title="Bank Accounts">
-<div style={{background:'#dbeafe',border:'1px solid #3b82f6',borderRadius:8,padding:'8px 14px',marginBottom:12,fontSize:12,fontFamily:'monospace',color:'#1e40af'}}>VERSION: DEBUG5-v2 (ဒါ ပေါ်ရင် code ရောက်ပြီ)</div>
-{debugMsg&&<div style={{background:'#fef3c7',border:'1px solid #f59e0b',borderRadius:8,padding:'10px 14px',marginBottom:16,fontSize:13,fontFamily:'monospace',color:'#92400e'}}>🐛 DEBUG: {debugMsg}</div>}
-
 {/* Total Balance — currency ခွဲပြ */}
 <div className="card" style={{padding:24,marginBottom:20,background:'linear-gradient(135deg,#1a1d2e,#2d3260)',color:'white'}}>
 <div style={{fontSize:12,opacity:0.7,marginBottom:12,textTransform:'uppercase',letterSpacing:'0.05em'}}>Total Balance — All Accounts</div>
