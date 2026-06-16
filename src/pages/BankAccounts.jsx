@@ -364,6 +364,7 @@ Transaction History
 
 return(
 <Layout title="Bank Accounts">
+<div style={{background:'#dbeafe',border:'1px solid #3b82f6',borderRadius:8,padding:'8px 14px',marginBottom:12,fontSize:12,fontFamily:'monospace',color:'#1e40af'}}>VERSION: DEBUG5-v2 (ဒါ ပေါ်ရင် code ရောက်ပြီ)</div>
 {debugMsg&&<div style={{background:'#fef3c7',border:'1px solid #f59e0b',borderRadius:8,padding:'10px 14px',marginBottom:16,fontSize:13,fontFamily:'monospace',color:'#92400e'}}>🐛 DEBUG: {debugMsg}</div>}
 
 {/* Total Balance — currency ခွဲပြ */}
