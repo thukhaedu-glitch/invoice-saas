@@ -37,8 +37,11 @@ jes.forEach(je=>{
 ;(je.entries||[]).forEach(line=>{
 const matched=
 line.account?.toLowerCase()===a.name?.toLowerCase()||
+line.accountName?.toLowerCase()===a.name?.toLowerCase()||
 line.account===a.code||
-line.accountId===a.id
+line.accountId===a.id||
+// 'Revenue' alias → Sales Revenue account နဲ့ match (ဟောင်း invoice journal entries)
+(line.account==='Revenue'&&a.name==='Sales Revenue')
 if(!matched)return
 const amt=Number(line.amount||0)
 if(NORMAL_DEBIT.includes(a.type)){
