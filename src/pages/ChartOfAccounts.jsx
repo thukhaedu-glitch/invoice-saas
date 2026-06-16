@@ -1,4 +1,4 @@
-import{useState,useEffect}from'react'
+import{useState,useEffect,useRef}from'react'
 import{db,auth}from'../firebase'
 import{collection,getDocs,query,where,doc,addDoc,updateDoc,deleteDoc,serverTimestamp,onSnapshot}from'firebase/firestore'
 import Layout from'../components/Layout'
@@ -27,23 +27,8 @@ const DEFAULT_ACCOUNTS=[
 ]
 
 const NORMAL_DEBIT=['Assets','Expenses']
-const NORMAL_CREDIT=['Liabilities','Equity','Income']
 
-export default function ChartOfAccounts(){
-const[companyId,setCompanyId]=useState(null)
-const[accounts,setAccounts]=useState([])
-const[journalEntries,setJournalEntries]=useState([])
-const[loading,setLoading]=useState(true)
-const[recalculating,setRecalculating]=useState(false)
-const[view,setView]=useState('list')
-const[selected,setSelected]=useState(null)
-const[saving,setSaving]=useState(false)
-const[expanded,setExpanded]=useState({Assets:true,Liabilities:true,Equity:true,Income:true,Expenses:true})
-const[form,setForm]=useState({name:'',type:'Assets',subType:'Cash & Bank',code:'',openingBalance:0,description:''})
-const[initializing,setInitializing]=useState(false)
-
-// Journal entries ကနေ balance calculate
-const calcBalances=(accs,jes)=>{
+function calcBalances(accs,jes){
 return accs.map(a=>{
 let balance=Number(a.openingBalance||0)
 jes.forEach(je=>{
@@ -65,53 +50,87 @@ return{...a,currentBalance:balance}
 })
 }
 
+export default function ChartOfAccounts(){
+const[companyId,setCompanyId]=useState(null)
+const[accounts,setAccounts]=useState([])
+const[loading,setLoading]=useState(true)
+const[recalculating,setRecalculating]=useState(false)
+const[view,setView]=useState('list')
+const[selected,setSelected]=useState(null)
+const[saving,setSaving]=useState(false)
+const[expanded,setExpanded]=useState({Assets:true,Liabilities:true,Equity:true,Income:true,Expenses:true})
+const[form,setForm]=useState({name:'',type:'Assets',subType:'Cash & Bank',code:'',openingBalance:0,description:''})
+const[initializing,setInitializing]=useState(false)
+// DEBUG state
+const[debugLog,setDebugLog]=useState([])
+
+const jesRef=useRef([])
+const companyIdRef=useRef(null)
+
+const addLog=(msg)=>{
+const ts=new Date().toLocaleTimeString()
+console.log('[CoA]',msg)
+setDebugLog(prev=>[...prev.slice(-9),`${ts} ${msg}`])
+}
+
 useEffect(()=>{
 let unsubAccounts=null
-
 const init=async()=>{
+try{
+addLog('init start, uid='+auth.currentUser?.uid)
 const snap=await getDocs(query(collection(db,'companies'),where(`members.${auth.currentUser.uid}`,'!=',null)))
+addLog('companies found: '+snap.size)
 if(!snap.empty){
 const cid=snap.docs[0].id
 setCompanyId(cid)
+companyIdRef.current=cid
+addLog('companyId='+cid)
 
-// Journal entries load (one-time — changes infrequently)
 const jeSnap=await getDocs(collection(db,'companies',cid,'journalEntries'))
-const jes=jeSnap.docs.map(d=>({id:d.id,...d.data()}))
-setJournalEntries(jes)
+jesRef.current=jeSnap.docs.map(d=>({id:d.id,...d.data()}))
+addLog('journalEntries loaded: '+jesRef.current.length)
 
-// ✅ FIX: onSnapshot သုံး — Bank Account create လုပ်ရင် ချက်ချင်း ပေါ်လာမယ်
-unsubAccounts=onSnapshot(collection(db,'companies',cid,'accounts'),acSnap=>{
+addLog('setting up onSnapshot on accounts...')
+unsubAccounts=onSnapshot(
+collection(db,'companies',cid,'accounts'),
+(acSnap)=>{
+addLog('onSnapshot fired! docs='+acSnap.size)
 const accs=acSnap.docs.map(d=>({id:d.id,...d.data()}))
-setAccounts(calcBalances(accs,jes))
+accs.forEach(a=>addLog('  account: '+a.name+' type='+a.type))
+const result=calcBalances(accs,jesRef.current)
+setAccounts(result)
 setLoading(false)
-})
+},
+(err)=>{
+addLog('onSnapshot ERROR: '+err.message)
+setLoading(false)
+}
+)
 }else{
+addLog('ERROR: no company found!')
+setLoading(false)
+}
+}catch(e){
+addLog('CATCH ERROR: '+e.message)
 setLoading(false)
 }
 }
-
 init()
-
-// Cleanup listener on unmount
-return()=>{
-if(unsubAccounts)unsubAccounts()
-}
+return()=>{ if(unsubAccounts){addLog('cleanup unsub');unsubAccounts()} }
 },[])
 
-const loadAccounts=async(cid)=>{
-const[acSnap,jeSnap]=await Promise.all([
-getDocs(collection(db,'companies',cid||companyId,'accounts')),
-getDocs(collection(db,'companies',cid||companyId,'journalEntries')),
-])
-const accs=acSnap.docs.map(d=>({id:d.id,...d.data()}))
-const jes=jeSnap.docs.map(d=>({id:d.id,...d.data()}))
-setJournalEntries(jes)
-setAccounts(calcBalances(accs,jes))
+const reloadJournals=async()=>{
+if(!companyIdRef.current)return
+const jeSnap=await getDocs(collection(db,'companies',companyIdRef.current,'journalEntries'))
+jesRef.current=jeSnap.docs.map(d=>({id:d.id,...d.data()}))
 }
 
 const handleRecalculate=async()=>{
 setRecalculating(true)
-await loadAccounts()
+await reloadJournals()
+const acSnap=await getDocs(collection(db,'companies',companyIdRef.current,'accounts'))
+const accs=acSnap.docs.map(d=>({id:d.id,...d.data()}))
+setAccounts(calcBalances(accs,jesRef.current))
 setRecalculating(false)
 }
 
@@ -129,7 +148,6 @@ createdBy:auth.currentUser.uid,
 isDefault:true,
 })
 ))
-// onSnapshot က auto-update လုပ်ပေးမှာ ဖြစ်တာကြောင့် loadAccounts မလိုတော့ဘူး
 }catch(e){alert(e.message)}
 setInitializing(false)
 }
@@ -153,7 +171,6 @@ openingBalance:Number(form.openingBalance),
 updatedAt:serverTimestamp(),
 })
 }
-// onSnapshot က auto-update လုပ်ပေးမှာ ဖြစ်တာကြောင့် loadAccounts မလိုတော့ဘူး
 setView('list')
 }catch(e){alert(e.message)}
 setSaving(false)
@@ -162,7 +179,6 @@ setSaving(false)
 const handleDelete=async(id)=>{
 if(!confirm('Delete this account?'))return
 await deleteDoc(doc(db,'companies',companyId,'accounts',id))
-// onSnapshot က auto-update လုပ်ပေးမှာ ဖြစ်တာကြောင့် local state update မလိုတော့ဘူး
 }
 
 const openNew=()=>{
@@ -235,6 +251,17 @@ if(view==='form')return(
 
 return(
 <Layout title="Chart of Accounts">
+
+{/* ===== DEBUG PANEL — ပြဿနာ ရှာပြီးရင် ဖျက်မယ် ===== */}
+<div style={{background:'#0f172a',borderRadius:8,padding:12,marginBottom:16,fontFamily:'monospace',fontSize:11,color:'#94a3b8'}}>
+<div style={{color:'#f59e0b',fontWeight:700,marginBottom:6}}>🐛 DEBUG LOG (accounts in state: {accounts.length})</div>
+{debugLog.map((l,i)=><div key={i} style={{color:l.includes('ERROR')?'#f87171':l.includes('onSnapshot')?'#4ade80':'#94a3b8'}}>{l}</div>)}
+<div style={{marginTop:8,color:'#64748b'}}>
+Raw accounts: [{accounts.map(a=>`${a.name}(${a.type})`).join(', ')}]
+</div>
+</div>
+{/* ===== END DEBUG ===== */}
+
 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20,gap:12}}>
 <div style={{display:'flex',alignItems:'center',gap:8}}>
 <BookOpen size={20} style={{color:'var(--primary)'}}/>
@@ -255,7 +282,6 @@ return(
 </div>
 </div>
 
-{/* Summary Cards */}
 <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginBottom:20}}>
 {ACCOUNT_TYPES.map(t=>(
 <div key={t.type} className="card" style={{padding:16,borderTop:`3px solid ${t.color}`}}>
@@ -267,7 +293,6 @@ return(
 ))}
 </div>
 
-{/* Accounting Equation */}
 {accounts.length>0&&(()=>{
 const assets=totalByType('Assets')
 const liabilities=totalByType('Liabilities')
@@ -280,28 +305,14 @@ return(
 <div className="card" style={{padding:16,marginBottom:16,background:'rgba(79,110,247,0.04)',border:`0.5px solid ${balanced?'rgba(79,110,247,0.2)':'rgba(220,38,38,0.3)'}`}}>
 <div style={{fontSize:12,fontWeight:600,color:'var(--text-2)',marginBottom:10}}>Accounting Equation</div>
 <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
-<div style={{textAlign:'center'}}>
-<div style={{fontSize:11,color:'var(--text-3)'}}>Assets</div>
-<div style={{fontSize:16,fontWeight:700,color:'#16a34a'}}>{assets.toLocaleString()} Ks</div>
-</div>
+<div style={{textAlign:'center'}}><div style={{fontSize:11,color:'var(--text-3)'}}>Assets</div><div style={{fontSize:16,fontWeight:700,color:'#16a34a'}}>{assets.toLocaleString()} Ks</div></div>
 <div style={{fontSize:16,color:'var(--text-3)'}}>= </div>
-<div style={{textAlign:'center'}}>
-<div style={{fontSize:11,color:'var(--text-3)'}}>Liabilities</div>
-<div style={{fontSize:16,fontWeight:700,color:'#dc2626'}}>{liabilities.toLocaleString()} Ks</div>
-</div>
+<div style={{textAlign:'center'}}><div style={{fontSize:11,color:'var(--text-3)'}}>Liabilities</div><div style={{fontSize:16,fontWeight:700,color:'#dc2626'}}>{liabilities.toLocaleString()} Ks</div></div>
 <div style={{fontSize:16,color:'var(--text-3)'}}>+</div>
-<div style={{textAlign:'center'}}>
-<div style={{fontSize:11,color:'var(--text-3)'}}>Equity</div>
-<div style={{fontSize:16,fontWeight:700,color:'#6366f1'}}>{equity.toLocaleString()} Ks</div>
-</div>
+<div style={{textAlign:'center'}}><div style={{fontSize:11,color:'var(--text-3)'}}>Equity</div><div style={{fontSize:16,fontWeight:700,color:'#6366f1'}}>{equity.toLocaleString()} Ks</div></div>
 <div style={{fontSize:16,color:'var(--text-3)'}}>+</div>
-<div style={{textAlign:'center'}}>
-<div style={{fontSize:11,color:'var(--text-3)'}}>Net Profit</div>
-<div style={{fontSize:16,fontWeight:700,color:netProfit>=0?'#4F6EF7':'#dc2626'}}>{netProfit.toLocaleString()} Ks</div>
-</div>
-<div style={{marginLeft:'auto',fontSize:12,fontWeight:600,color:balanced?'#16a34a':'#dc2626'}}>
-{balanced?'✓ Balanced':'✗ Not Balanced'}
-</div>
+<div style={{textAlign:'center'}}><div style={{fontSize:11,color:'var(--text-3)'}}>Net Profit</div><div style={{fontSize:16,fontWeight:700,color:netProfit>=0?'#4F6EF7':'#dc2626'}}>{netProfit.toLocaleString()} Ks</div></div>
+<div style={{marginLeft:'auto',fontSize:12,fontWeight:600,color:balanced?'#16a34a':'#dc2626'}}>{balanced?'✓ Balanced':'✗ Not Balanced'}</div>
 </div>
 </div>
 )
