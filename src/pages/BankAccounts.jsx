@@ -84,13 +84,33 @@ if(!form.name){alert('Account name required');return}
 setSaving(true)
 try{
 if(!selected){
-await addDoc(collection(db,'companies',companyId,'bankAccounts'),{
+// bank account ဆောက်
+const bankRef=await addDoc(collection(db,'companies',companyId,'bankAccounts'),{
 ...form,
 openingBalance:Number(form.openingBalance),
 currentBalance:Number(form.openingBalance),
 createdAt:serverTimestamp(),
 createdBy:auth.currentUser.uid,
 })
+// Chart of Accounts (accounts) ထဲ Cash & Bank entry auto-create + link
+try{
+// နောက်ဆုံး bank account code ရှာ (1002 ကစ)
+const acctSnap=await getDocs(query(collection(db,'companies',companyId,'accounts'),where('subType','==','Cash & Bank')))
+let maxCode=1001
+acctSnap.docs.forEach(d=>{const c=parseInt(d.data().code);if(!isNaN(c)&&c>maxCode)maxCode=c})
+await addDoc(collection(db,'companies',companyId,'accounts'),{
+name:form.name,
+type:'Assets',
+subType:'Cash & Bank',
+code:String(maxCode+1),
+openingBalance:Number(form.openingBalance),
+currentBalance:Number(form.openingBalance),
+description:`Bank account: ${form.name}`,
+bankAccountId:bankRef.id,
+createdAt:serverTimestamp(),
+createdBy:auth.currentUser.uid,
+})
+}catch(e){console.error('chart link:',e)}
 }else{
 await updateDoc(doc(db,'companies',companyId,'bankAccounts',selected.id),{
 ...form,
