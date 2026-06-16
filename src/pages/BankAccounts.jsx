@@ -80,6 +80,7 @@ setView('detail')
 }
 
 const handleSave=async()=>{
+alert('STEP 0: handleSave start — selected='+(selected?selected.id:'NULL (new)'))
 if(!form.name){alert('Account name required');return}
 setSaving(true)
 try{
