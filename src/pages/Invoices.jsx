@@ -359,7 +359,7 @@ export default function Invoices() {
             description: `Invoice payment: ${item.invoiceNumber} — ${item.clientName}`,
             entries: [
               { account: 'Bank', accountId: paymentBankAccountId, accountName: acSnap.data().name, type: 'debit', amount },
-              { account: 'Revenue', accountId: 'revenue', type: 'credit', amount },
+              { account: 'Sales Revenue', accountId: 'revenue', accountName: 'Sales Revenue', type: 'credit', amount },
             ],
             ref: 'INV',
             createdAt: serverTimestamp(),
