@@ -29,6 +29,7 @@ type:'in',amount:0,description:'',reference:''
 })
 const[showTxForm,setShowTxForm]=useState(false)
 const[savingTx,setSavingTx]=useState(false)
+const[debugMsg,setDebugMsg]=useState('')
 
 useEffect(()=>{
 const load=async()=>{
@@ -80,9 +81,9 @@ setView('detail')
 }
 
 const handleSave=async()=>{
-alert('STEP 0: handleSave start — selected='+(selected?selected.id:'NULL (new)'))
 if(!form.name){alert('Account name required');return}
 setSaving(true)
+let dbg='handleSave: selected='+(selected?selected.id:'NULL')+' | '
 try{
 if(!selected){
 // bank account ဆောက်
@@ -93,10 +94,8 @@ currentBalance:Number(form.openingBalance),
 createdAt:serverTimestamp(),
 createdBy:auth.currentUser.uid,
 })
-alert('STEP 1: Bank ဆောက်ပြီး။ companyId='+companyId+' — အခု Chart ထဲ ထည့်မယ်')
+dbg+='bank created | '
 // Chart of Accounts (accounts) ထဲ Cash & Bank entry auto-create + link
-try{
-// နောက်ဆုံး bank account code ရှာ (where query မသုံး — index မလို)
 const acctSnap=await getDocs(collection(db,'companies',companyId,'accounts'))
 let maxCode=1001
 acctSnap.docs.forEach(d=>{
@@ -118,10 +117,10 @@ bankAccountId:bankRef.id,
 createdAt:serverTimestamp(),
 createdBy:auth.currentUser.uid,
 })
-alert('✓ Chart of Accounts ထဲ "'+form.name+'" (code '+String(maxCode+1)+') ထည့်ပြီး! Chart of Accounts page ကို refresh လုပ်ပါ။')
-}catch(e){console.error('chart link error:',e);alert('Bank account ဆောက်ပြီး — ဒါပေမယ် Chart of Accounts ထဲ ထည့်ရာမှာ error: '+e.message)}
+dbg+='✓ chart added code '+(maxCode+1)
+setDebugMsg(dbg)
+await new Promise(r=>setTimeout(r,2500))
 }else{
-alert('STEP E: EDIT branch ထဲ ရောက်နေတယ် (selected ရှိနေ — New Account မဟုတ်)')
 await updateDoc(doc(db,'companies',companyId,'bankAccounts',selected.id),{
 ...form,
 openingBalance:Number(form.openingBalance),
@@ -365,6 +364,7 @@ Transaction History
 
 return(
 <Layout title="Bank Accounts">
+{debugMsg&&<div style={{background:'#fef3c7',border:'1px solid #f59e0b',borderRadius:8,padding:'10px 14px',marginBottom:16,fontSize:13,fontFamily:'monospace',color:'#92400e'}}>🐛 DEBUG: {debugMsg}</div>}
 
 {/* Total Balance — currency ခွဲပြ */}
 <div className="card" style={{padding:24,marginBottom:20,background:'linear-gradient(135deg,#1a1d2e,#2d3260)',color:'white'}}>
