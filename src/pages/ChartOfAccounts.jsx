@@ -61,20 +61,43 @@ const[saving,setSaving]=useState(false)
 const[expanded,setExpanded]=useState({Assets:true,Liabilities:true,Equity:true,Income:true,Expenses:true})
 const[form,setForm]=useState({name:'',type:'Assets',subType:'Cash & Bank',code:'',openingBalance:0,description:''})
 const[initializing,setInitializing]=useState(false)
-// DEBUG state
-const[debugLog,setDebugLog]=useState([])
 
 const jesRef=useRef([])
 const companyIdRef=useRef(null)
 
 const addLog=(msg)=>{
-const ts=new Date().toLocaleTimeString()
 console.log('[CoA]',msg)
-setDebugLog(prev=>[...prev.slice(-9),`${ts} ${msg}`])
 }
 
 useEffect(()=>{
 let unsubAccounts=null
+let unsubBank=null
+let latestAccs=[]
+let latestBanks=[]
+const rebuild=()=>{
+const existingBankIds=new Set(latestAccs.filter(a=>a.bankAccountId).map(a=>a.bankAccountId))
+let maxCode=1003
+latestAccs.forEach(a=>{if(a.subType==='Cash & Bank'){const c=parseInt(a.code);if(!isNaN(c)&&c>maxCode)maxCode=c}})
+const merged=[...latestAccs]
+latestBanks.forEach(b=>{
+if(!existingBankIds.has(b.id)){
+maxCode++
+merged.push({
+id:'bank_'+b.id,
+name:b.name,
+type:'Assets',
+subType:'Cash & Bank',
+code:String(maxCode),
+openingBalance:Number(b.openingBalance||0),
+currentBalance:Number(b.currentBalance||b.openingBalance||0),
+description:b.bankName?('Bank: '+b.bankName):'Bank account',
+isBankAccount:true,
+})
+}
+})
+setAccounts(calcBalances(merged,jesRef.current))
+setLoading(false)
+}
 const init=async()=>{
 try{
 addLog('init start, uid='+auth.currentUser?.uid)
@@ -90,22 +113,17 @@ const jeSnap=await getDocs(collection(db,'companies',cid,'journalEntries'))
 jesRef.current=jeSnap.docs.map(d=>({id:d.id,...d.data()}))
 addLog('journalEntries loaded: '+jesRef.current.length)
 
-addLog('setting up onSnapshot on accounts...')
-unsubAccounts=onSnapshot(
-collection(db,'companies',cid,'accounts'),
-(acSnap)=>{
-addLog('onSnapshot fired! docs='+acSnap.size)
-const accs=acSnap.docs.map(d=>({id:d.id,...d.data()}))
-accs.forEach(a=>addLog('  account: '+a.name+' type='+a.type))
-const result=calcBalances(accs,jesRef.current)
-setAccounts(result)
-setLoading(false)
-},
-(err)=>{
-addLog('onSnapshot ERROR: '+err.message)
-setLoading(false)
-}
-)
+addLog('setting up onSnapshot on accounts + bankAccounts...')
+unsubAccounts=onSnapshot(collection(db,'companies',cid,'accounts'),(acSnap)=>{
+addLog('accounts snapshot: '+acSnap.size)
+latestAccs=acSnap.docs.map(d=>({id:d.id,...d.data()}))
+rebuild()
+},(err)=>{addLog('accounts ERROR: '+err.message);setLoading(false)})
+unsubBank=onSnapshot(collection(db,'companies',cid,'bankAccounts'),(bSnap)=>{
+addLog('bankAccounts snapshot: '+bSnap.size)
+latestBanks=bSnap.docs.map(d=>({id:d.id,...d.data()}))
+rebuild()
+},(err)=>{addLog('bankAccounts ERROR: '+err.message)})
 }else{
 addLog('ERROR: no company found!')
 setLoading(false)
@@ -116,7 +134,7 @@ setLoading(false)
 }
 }
 init()
-return()=>{ if(unsubAccounts){addLog('cleanup unsub');unsubAccounts()} }
+return()=>{ if(unsubAccounts){addLog('cleanup unsub');unsubAccounts()} if(unsubBank){unsubBank()} }
 },[])
 
 const reloadJournals=async()=>{
@@ -252,15 +270,6 @@ if(view==='form')return(
 return(
 <Layout title="Chart of Accounts">
 
-{/* ===== DEBUG PANEL — ပြဿနာ ရှာပြီးရင် ဖျက်မယ် ===== */}
-<div style={{background:'#0f172a',borderRadius:8,padding:12,marginBottom:16,fontFamily:'monospace',fontSize:11,color:'#94a3b8'}}>
-<div style={{color:'#f59e0b',fontWeight:700,marginBottom:6}}>🐛 DEBUG LOG (accounts in state: {accounts.length})</div>
-{debugLog.map((l,i)=><div key={i} style={{color:l.includes('ERROR')?'#f87171':l.includes('onSnapshot')?'#4ade80':'#94a3b8'}}>{l}</div>)}
-<div style={{marginTop:8,color:'#64748b'}}>
-Raw accounts: [{accounts.map(a=>`${a.name}(${a.type})`).join(', ')}]
-</div>
-</div>
-{/* ===== END DEBUG ===== */}
 
 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20,gap:12}}>
 <div style={{display:'flex',alignItems:'center',gap:8}}>
@@ -363,7 +372,7 @@ return(
 <td style={{fontWeight:500}}>
 {a.name}
 {a.isDefault&&<span style={{fontSize:10,background:'#f1f5f9',color:'var(--text-3)',padding:'1px 6px',borderRadius:10,marginLeft:6}}>default</span>}
-{a.bankAccountId&&<span style={{fontSize:10,background:'#dbeafe',color:'#1d4ed8',padding:'1px 6px',borderRadius:10,marginLeft:6}}>bank</span>}
+{(a.bankAccountId||a.isBankAccount)&&<span style={{fontSize:10,background:'#dbeafe',color:'#1d4ed8',padding:'1px 6px',borderRadius:10,marginLeft:6}}>bank</span>}
 </td>
 <td style={{fontSize:12,color:'var(--text-2)'}}>{a.subType}</td>
 <td style={{fontSize:12,color:'var(--text-3)'}}>{a.description||'-'}</td>
@@ -373,10 +382,14 @@ return(
 {diff!==0&&<div style={{fontSize:10,color:diff>0?'#16a34a':'#dc2626'}}>{diff>0?'+':''}{diff.toLocaleString()}</div>}
 </td>
 <td style={{textAlign:'center'}}>
+{a.isBankAccount?(
+<span style={{fontSize:10,color:'var(--text-3)'}}>Bank Accounts ↗</span>
+):(
 <div style={{display:'flex',gap:4,justifyContent:'center'}}>
 <button type="button" onClick={()=>openEdit(a)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-2)',padding:4,borderRadius:6}}><Edit size={14}/></button>
 <button type="button" onClick={()=>handleDelete(a.id)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)',padding:4,borderRadius:6}}><Trash2 size={14}/></button>
 </div>
+)}
 </td>
 </tr>
 )
