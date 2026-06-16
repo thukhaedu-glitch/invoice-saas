@@ -63,9 +63,14 @@ export default function Dashboard() {
 
   const getInvDate = inv => inv.date || (inv.createdAt?.seconds ? new Date(inv.createdAt.seconds * 1000).toISOString().split('T')[0] : null)
   const totalRevenue = useMemo(() => invoices.filter(i => getInvDate(i)?.startsWith(filterYear) && (i.status === 'paid' || i.status === 'partial')).reduce((s, i) => s + Number(i.paidAmount || i.totalAmount || 0), 0), [invoices, filterYear])
+  // Refund — refunded invoice တွေ (revenue ကနေ ဖြုတ်)
+  const totalRefund = useMemo(() => invoices.filter(i => getInvDate(i)?.startsWith(filterYear) && i.status === 'refunded').reduce((s, i) => s + Number(i.paidAmount || i.totalAmount || 0), 0), [invoices, filterYear])
+  const netRevenue = totalRevenue - totalRefund
   const totalExpenses = useMemo(() => expenses.filter(e => e.date?.startsWith(filterYear)).reduce((s, e) => s + Number(e.amount || 0), 0), [expenses, filterYear])
-  const netProfit = totalRevenue - totalExpenses
+  const netProfit = netRevenue - totalExpenses
   const totalReceivable = invoices.filter(i => i.status === 'pending' || i.status === 'partial').reduce((s, i) => s + Number(i.remainingAmount || i.totalAmount || 0), 0)
+  // Liabilities — မပေးရသေးတဲ့ bills (Accounts Payable)
+  const totalLiabilities = bills.filter(b => b.status === 'unpaid' || b.status === 'partial').reduce((s, b) => s + Number(b.remainingAmount || b.amount || 0), 0)
 
   const balanceByCurrency = {}
   bankAccounts.forEach(a => {
@@ -175,10 +180,12 @@ export default function Dashboard() {
 
       <div className="stats-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
         {[
-          { label: 'Total Revenue', value: totalRevenue, icon: TrendingUp, color: '#4F6EF7', bg: 'rgba(79,110,247,0.10)' },
+          { label: 'Total Revenue', value: netRevenue, icon: TrendingUp, color: '#4F6EF7', bg: 'rgba(79,110,247,0.10)' },
           { label: 'Total Expenses', value: totalExpenses, icon: TrendingDown, color: '#dc2626', bg: 'rgba(220,38,38,0.10)' },
           { label: 'Net Profit', value: netProfit, icon: CheckCircle, color: netProfit >= 0 ? '#16a34a' : '#dc2626', bg: netProfit >= 0 ? 'rgba(22,163,74,0.10)' : 'rgba(220,38,38,0.10)' },
           { label: 'Receivable', value: totalReceivable, icon: Clock, color: '#d97706', bg: 'rgba(217,119,6,0.10)' },
+          ...(totalLiabilities > 0 ? [{ label: 'Liabilities', value: totalLiabilities, icon: TrendingDown, color: '#dc2626', bg: 'rgba(220,38,38,0.10)' }] : []),
+          ...(totalRefund > 0 ? [{ label: 'Refunds', value: totalRefund, icon: TrendingDown, color: '#6366f1', bg: 'rgba(99,102,241,0.10)' }] : []),
         ].map(({ label, value, icon: Icon, color, bg }) => (
           <div key={label} className="card" style={{ padding: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
