@@ -116,6 +116,7 @@ bankAccountId:bankRef.id,
 createdAt:serverTimestamp(),
 createdBy:auth.currentUser.uid,
 })
+alert('✓ Chart of Accounts ထဲ "'+form.name+'" (code '+String(maxCode+1)+') ထည့်ပြီး! Chart of Accounts page ကို refresh လုပ်ပါ။')
 }catch(e){console.error('chart link error:',e);alert('Bank account ဆောက်ပြီး — ဒါပေမယ် Chart of Accounts ထဲ ထည့်ရာမှာ error: '+e.message)}
 }else{
 await updateDoc(doc(db,'companies',companyId,'bankAccounts',selected.id),{
