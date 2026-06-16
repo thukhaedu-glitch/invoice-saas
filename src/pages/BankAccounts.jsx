@@ -92,6 +92,7 @@ currentBalance:Number(form.openingBalance),
 createdAt:serverTimestamp(),
 createdBy:auth.currentUser.uid,
 })
+alert('STEP 1: Bank ဆောက်ပြီး။ companyId='+companyId+' — အခု Chart ထဲ ထည့်မယ်')
 // Chart of Accounts (accounts) ထဲ Cash & Bank entry auto-create + link
 try{
 // နောက်ဆုံး bank account code ရှာ (where query မသုံး — index မလို)
