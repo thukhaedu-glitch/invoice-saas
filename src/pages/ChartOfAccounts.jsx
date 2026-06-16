@@ -1,6 +1,6 @@
 import{useState,useEffect}from'react'
 import{db,auth}from'../firebase'
-import{collection,getDocs,query,where,doc,addDoc,updateDoc,deleteDoc,serverTimestamp}from'firebase/firestore'
+import{collection,getDocs,query,where,doc,addDoc,updateDoc,deleteDoc,serverTimestamp,onSnapshot}from'firebase/firestore'
 import Layout from'../components/Layout'
 import{Plus,Edit,Trash2,ChevronDown,ChevronRight,BookOpen,Building2,RefreshCcw}from'lucide-react'
 
@@ -26,7 +26,6 @@ const DEFAULT_ACCOUNTS=[
 {name:'Utilities Expense',type:'Expenses',subType:'Utilities',code:'5003',openingBalance:0,description:'Water, electricity, internet'},
 ]
 
-// Normal balance rules
 const NORMAL_DEBIT=['Assets','Expenses']
 const NORMAL_CREDIT=['Liabilities','Equity','Income']
 
@@ -42,26 +41,6 @@ const[saving,setSaving]=useState(false)
 const[expanded,setExpanded]=useState({Assets:true,Liabilities:true,Equity:true,Income:true,Expenses:true})
 const[form,setForm]=useState({name:'',type:'Assets',subType:'Cash & Bank',code:'',openingBalance:0,description:''})
 const[initializing,setInitializing]=useState(false)
-
-useEffect(()=>{
-const load=async()=>{
-const snap=await getDocs(query(collection(db,'companies'),where(`members.${auth.currentUser.uid}`,'!=',null)))
-if(!snap.empty){
-const cid=snap.docs[0].id
-setCompanyId(cid)
-const[acSnap,jeSnap]=await Promise.all([
-getDocs(collection(db,'companies',cid,'accounts')),
-getDocs(collection(db,'companies',cid,'journalEntries')),
-])
-const accs=acSnap.docs.map(d=>({id:d.id,...d.data()}))
-const jes=jeSnap.docs.map(d=>({id:d.id,...d.data()}))
-setJournalEntries(jes)
-setAccounts(calcBalances(accs,jes))
-}
-setLoading(false)
-}
-load()
-},[])
 
 // Journal entries ကနေ balance calculate
 const calcBalances=(accs,jes)=>{
@@ -85,6 +64,39 @@ balance+=line.type==='credit'?amt:-amt
 return{...a,currentBalance:balance}
 })
 }
+
+useEffect(()=>{
+let unsubAccounts=null
+
+const init=async()=>{
+const snap=await getDocs(query(collection(db,'companies'),where(`members.${auth.currentUser.uid}`,'!=',null)))
+if(!snap.empty){
+const cid=snap.docs[0].id
+setCompanyId(cid)
+
+// Journal entries load (one-time — changes infrequently)
+const jeSnap=await getDocs(collection(db,'companies',cid,'journalEntries'))
+const jes=jeSnap.docs.map(d=>({id:d.id,...d.data()}))
+setJournalEntries(jes)
+
+// ✅ FIX: onSnapshot သုံး — Bank Account create လုပ်ရင် ချက်ချင်း ပေါ်လာမယ်
+unsubAccounts=onSnapshot(collection(db,'companies',cid,'accounts'),acSnap=>{
+const accs=acSnap.docs.map(d=>({id:d.id,...d.data()}))
+setAccounts(calcBalances(accs,jes))
+setLoading(false)
+})
+}else{
+setLoading(false)
+}
+}
+
+init()
+
+// Cleanup listener on unmount
+return()=>{
+if(unsubAccounts)unsubAccounts()
+}
+},[])
 
 const loadAccounts=async(cid)=>{
 const[acSnap,jeSnap]=await Promise.all([
@@ -117,7 +129,7 @@ createdBy:auth.currentUser.uid,
 isDefault:true,
 })
 ))
-await loadAccounts()
+// onSnapshot က auto-update လုပ်ပေးမှာ ဖြစ်တာကြောင့် loadAccounts မလိုတော့ဘူး
 }catch(e){alert(e.message)}
 setInitializing(false)
 }
@@ -141,7 +153,7 @@ openingBalance:Number(form.openingBalance),
 updatedAt:serverTimestamp(),
 })
 }
-await loadAccounts()
+// onSnapshot က auto-update လုပ်ပေးမှာ ဖြစ်တာကြောင့် loadAccounts မလိုတော့ဘူး
 setView('list')
 }catch(e){alert(e.message)}
 setSaving(false)
@@ -150,7 +162,7 @@ setSaving(false)
 const handleDelete=async(id)=>{
 if(!confirm('Delete this account?'))return
 await deleteDoc(doc(db,'companies',companyId,'accounts',id))
-setAccounts(a=>a.filter(x=>x.id!==id))
+// onSnapshot က auto-update လုပ်ပေးမှာ ဖြစ်တာကြောင့် local state update မလိုတော့ဘူး
 }
 
 const openNew=()=>{
@@ -272,7 +284,7 @@ return(
 <div style={{fontSize:11,color:'var(--text-3)'}}>Assets</div>
 <div style={{fontSize:16,fontWeight:700,color:'#16a34a'}}>{assets.toLocaleString()} Ks</div>
 </div>
-<div style={{fontSize:16,color:'var(--text-3)'}}>=</div>
+<div style={{fontSize:16,color:'var(--text-3)'}}>= </div>
 <div style={{textAlign:'center'}}>
 <div style={{fontSize:11,color:'var(--text-3)'}}>Liabilities</div>
 <div style={{fontSize:16,fontWeight:700,color:'#dc2626'}}>{liabilities.toLocaleString()} Ks</div>
@@ -340,6 +352,7 @@ return(
 <td style={{fontWeight:500}}>
 {a.name}
 {a.isDefault&&<span style={{fontSize:10,background:'#f1f5f9',color:'var(--text-3)',padding:'1px 6px',borderRadius:10,marginLeft:6}}>default</span>}
+{a.bankAccountId&&<span style={{fontSize:10,background:'#dbeafe',color:'#1d4ed8',padding:'1px 6px',borderRadius:10,marginLeft:6}}>bank</span>}
 </td>
 <td style={{fontSize:12,color:'var(--text-2)'}}>{a.subType}</td>
 <td style={{fontSize:12,color:'var(--text-3)'}}>{a.description||'-'}</td>
