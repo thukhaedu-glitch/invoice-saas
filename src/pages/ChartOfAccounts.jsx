@@ -30,6 +30,8 @@ const NORMAL_DEBIT=['Assets','Expenses']
 
 function calcBalances(accs,jes){
 return accs.map(a=>{
+// Bank account — balance က bank transactions ကနေ (currentBalance တိုက်ရိုက် သုံး)
+if(a.isBankAccount)return a
 let balance=Number(a.openingBalance||0)
 jes.forEach(je=>{
 ;(je.entries||[]).forEach(line=>{
@@ -61,7 +63,7 @@ const[saving,setSaving]=useState(false)
 const[expanded,setExpanded]=useState({Assets:true,Liabilities:true,Equity:true,Income:true,Expenses:true})
 const[form,setForm]=useState({name:'',type:'Assets',subType:'Cash & Bank',code:'',openingBalance:0,description:''})
 const[initializing,setInitializing]=useState(false)
-const[bankDebug,setBankDebug]=useState('loading...')
+
 
 const jesRef=useRef([])
 const companyIdRef=useRef(null)
@@ -97,7 +99,6 @@ isBankAccount:true,
 }
 })
 setAccounts(calcBalances(merged,jesRef.current))
-setBankDebug('accounts='+latestAccs.length+' | banks='+latestBanks.length+' | merged bank rows='+merged.filter(m=>m.isBankAccount).length+' | total='+merged.length)
 setLoading(false)
 }
 const init=async()=>{
@@ -271,7 +272,6 @@ if(view==='form')return(
 
 return(
 <Layout title="Chart of Accounts">
-<div style={{background:'#dbeafe',border:'1px solid #3b82f6',borderRadius:8,padding:'8px 14px',marginBottom:12,fontSize:12,fontFamily:'monospace',color:'#1e40af'}}>🐛 {bankDebug}</div>
 
 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20,gap:12}}>
 <div style={{display:'flex',alignItems:'center',gap:8}}>
