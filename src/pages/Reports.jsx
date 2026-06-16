@@ -1,4 +1,4 @@
-import{useState,useEffect}from'react'
+import React,{useState,useEffect}from'react'
 import{db,auth}from'../firebase'
 import{collection,getDocs,query,where}from'firebase/firestore'
 import Layout from'../components/Layout'
@@ -41,20 +41,54 @@ const snap=await getDocs(query(collection(db,'companies'),where(`members.${auth.
 if(!snap.empty){
 const cid=snap.docs[0].id
 setCompanyId(cid)
-const[invSnap,expSnap,prjSnap,baSnap,billSnap,acSnap]=await Promise.all([
+const[invSnap,expSnap,prjSnap,baSnap,billSnap,acSnap,jeSnap]=await Promise.all([
 getDocs(collection(db,'companies',cid,'invoices')),
 getDocs(collection(db,'companies',cid,'expenses')),
 getDocs(collection(db,'companies',cid,'projects')),
 getDocs(collection(db,'companies',cid,'bankAccounts')),
 getDocs(collection(db,'companies',cid,'bills')),
 getDocs(collection(db,'companies',cid,'accounts')),
+getDocs(collection(db,'companies',cid,'journalEntries')),
 ])
 setInvoices(invSnap.docs.map(d=>({id:d.id,...d.data()})))
 setExpenses(expSnap.docs.map(d=>({id:d.id,...d.data()})))
 setProjects(prjSnap.docs.map(d=>({id:d.id,...d.data()})))
-setBankAccounts(baSnap.docs.map(d=>({id:d.id,...d.data()})).filter(a=>a.isActive!==false))
+const banks=baSnap.docs.map(d=>({id:d.id,...d.data()})).filter(a=>a.isActive!==false)
+setBankAccounts(banks)
 setBills(billSnap.docs.map(d=>({id:d.id,...d.data()})))
-setCoaAccounts(acSnap.docs.map(d=>({id:d.id,...d.data()})))
+// COA accounts — journal entries နဲ့ balance တွက် + bank accounts merge
+const rawAccs=acSnap.docs.map(d=>({id:d.id,...d.data()}))
+const jes=jeSnap.docs.map(d=>({id:d.id,...d.data()}))
+// bank accounts ကို COA ထဲ merge (accounts ထဲ မရှိသေးတာ)
+const existingBankIds=new Set(rawAccs.filter(a=>a.bankAccountId).map(a=>a.bankAccountId))
+let maxCode=1003
+rawAccs.forEach(a=>{if(a.subType==='Cash & Bank'){const c=parseInt(a.code);if(!isNaN(c)&&c>maxCode)maxCode=c}})
+const mergedAccs=[...rawAccs]
+banks.forEach(b=>{
+if(!existingBankIds.has(b.id)){
+maxCode++
+mergedAccs.push({
+id:'bank_'+b.id,name:b.name,type:'Assets',subType:'Cash & Bank',code:String(maxCode),
+openingBalance:Number(b.openingBalance||0),currentBalance:Number(b.currentBalance||b.openingBalance||0),
+bankAccountId:b.id,isBankAccount:true,
+})
+}
+})
+// journal entries နဲ့ balance recalculate (bank account မဟုတ်တာ)
+const NORMAL_DEBIT=['Assets','Expenses']
+const withBalance=mergedAccs.map(a=>{
+if(a.isBankAccount)return a
+let bal=Number(a.openingBalance||0)
+jes.forEach(je=>{(je.entries||[]).forEach(line=>{
+const matched=line.account?.toLowerCase()===a.name?.toLowerCase()||line.accountName?.toLowerCase()===a.name?.toLowerCase()||line.account===a.code||line.accountId===a.id||(line.account==='Revenue'&&a.name==='Sales Revenue')
+if(!matched)return
+const amt=Number(line.amount||0)
+if(NORMAL_DEBIT.includes(a.type))bal+=line.type==='debit'?amt:-amt
+else bal+=line.type==='credit'?amt:-amt
+})})
+return{...a,currentBalance:bal}
+})
+setCoaAccounts(withBalance)
 }
 setLoading(false)
 }
@@ -534,12 +568,19 @@ const totalBankBalance=bankAccounts.reduce((s,a)=>s+Number(a.currentBalance||a.o
 const totalReceivable=invoices.filter(i=>i.status==='pending'||i.status==='partial').reduce((s,i)=>s+Number(i.remainingAmount||i.totalAmount||0),0)
 const totalPayable=bills.filter(b=>b.status==='unpaid'||b.status==='partial').reduce((s,b)=>s+Number(b.remainingAmount||b.amount||0),0)
 
-// Assets — COA ရှိရင် COA၊ မရှိရင် bank+receivable
+// COA accounts ထဲ bankAccountId နဲ့ link ဖြစ်ထားတာ ရှိ/မရှိ
+const linkedBankIds=new Set(coaAccounts.filter(a=>a.bankAccountId).map(a=>a.bankAccountId))
+// COA Assets (bank မဟုတ်တဲ့ — Cash in Hand, Receivable စသည်)
+const coaNonBankAssets=coaAccounts.filter(a=>a.type==='Assets'&&!a.bankAccountId).reduce((s,a)=>s+Number(a.currentBalance||a.openingBalance||0),0)
+// bank balance — COA မှာ link ဖြစ်ထားတာ + မ link တာ အကုန်
+const allBankBalance=totalBankBalance
+
+// Assets — COA ရှိရင် COA non-bank + bank balance + receivable
 const totalAssets=hasCOA
-?coaAccounts.filter(a=>a.type==='Assets').reduce((s,a)=>s+Number(a.currentBalance||a.openingBalance||0),0)
+?coaNonBankAssets+allBankBalance+totalReceivable
 :totalBankBalance+totalReceivable
 
-// Liabilities — COA ရှိရင် COA + unpaid bills၊ မရှိရင် unpaid bills သာ
+// Liabilities — COA Liabilities + unpaid bills
 const coaLiabilities=coaAccounts.filter(a=>a.type==='Liabilities').reduce((s,a)=>s+Number(a.currentBalance||a.openingBalance||0),0)
 const totalLiabilities=hasCOA?coaLiabilities+totalPayable:totalPayable
 
@@ -565,12 +606,26 @@ return(
 </div>
 <div style={{padding:20}}>
 {hasCOA?(
-coaAccounts.filter(a=>a.type==='Assets').sort((a,b)=>(a.code||'').localeCompare(b.code||'')).map(a=>(
+<>
+{coaAccounts.filter(a=>a.type==='Assets'&&!a.bankAccountId).sort((a,b)=>(a.code||'').localeCompare(b.code||'')).map(a=>(
 <div key={a.id} style={{display:'flex',justifyContent:'space-between',padding:'8px 0',borderBottom:'0.5px solid #f1f5f9'}}>
 <span style={{fontSize:13,color:'var(--text-2)'}}>{a.code} — {a.name}</span>
 <span style={{fontSize:13,fontWeight:600,color:Number(a.currentBalance||a.openingBalance||0)>=0?'#16a34a':'#dc2626'}}>{Number(a.currentBalance||a.openingBalance||0).toLocaleString()} Ks</span>
 </div>
-))
+))}
+{bankAccounts.map(a=>(
+<div key={a.id} style={{display:'flex',justifyContent:'space-between',padding:'8px 0',borderBottom:'0.5px solid #f1f5f9'}}>
+<span style={{fontSize:13,color:'var(--text-2)'}}>🏦 {a.name}{a.bankName?` (${a.bankName})`:''}</span>
+<span style={{fontSize:13,fontWeight:600,color:'#16a34a'}}>{Number(a.currentBalance||a.openingBalance||0).toLocaleString()} Ks</span>
+</div>
+))}
+{totalReceivable>0&&(
+<div style={{display:'flex',justifyContent:'space-between',padding:'8px 0',borderBottom:'0.5px solid #f1f5f9'}}>
+<span style={{fontSize:13,color:'var(--text-2)'}}>Accounts Receivable</span>
+<span style={{fontSize:13,fontWeight:600,color:'#d97706'}}>{totalReceivable.toLocaleString()} Ks</span>
+</div>
+)}
+</>
 ):(
 <>
 <div style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'0.5px solid #f1f5f9'}}>
