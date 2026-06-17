@@ -275,6 +275,7 @@ if(view==='form')return(
 
 return(
 <Layout title="Chart of Accounts">
+<div style={{maxWidth:1320,margin:'0 auto'}}>
 
 <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:20,gap:12,flexWrap:'wrap'}}>
 <div>
@@ -296,7 +297,7 @@ return(
 </div>
 </div>
 
-<div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginBottom:20}} className="stats-grid-4">
+<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(190px,1fr))',gap:12,marginBottom:20}} className="stats-grid-4">
 {ACCOUNT_TYPES.map(t=>{
 const count=accounts.filter(a=>a.type===t.type).length
 const total=totalByType(t.type)
@@ -366,7 +367,8 @@ return(
 <span style={{marginLeft:'auto',fontWeight:700,color:t.color,fontSize:14}}>{typeTotal.toLocaleString()} Ks</span>
 </div>
 {expanded[t.type]&&(
-<table>
+<div style={{overflowX:'auto'}}>
+<table style={{minWidth:720}}>
 <thead>
 <tr>
 <th style={{width:80}}>Code</th>
@@ -419,6 +421,7 @@ return(
 </tr>
 </tfoot>
 </table>
+</div>
 )}
 </div>
 )
@@ -426,6 +429,7 @@ return(
 </div>
 )}
 <div style={{textAlign:'center',fontSize:12,color:'var(--text-3)',padding:'16px 0 4px'}}>All balances are in Myanmar Kyat (Ks)</div>
+</div>
 </Layout>
 )
 }
