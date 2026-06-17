@@ -2,14 +2,14 @@ import{useState,useEffect,useRef}from'react'
 import{db,auth}from'../firebase'
 import{collection,getDocs,query,where,doc,addDoc,updateDoc,deleteDoc,serverTimestamp,onSnapshot}from'firebase/firestore'
 import Layout from'../components/Layout'
-import{Plus,Edit,Trash2,ChevronDown,ChevronRight,BookOpen,Building2,RefreshCcw}from'lucide-react'
+import{Plus,Edit,Trash2,ChevronDown,ChevronRight,BookOpen,Building2,RefreshCcw,Wallet,Landmark,User,TrendingUp,Receipt}from'lucide-react'
 
 const ACCOUNT_TYPES=[
-{type:'Assets',code:'1',color:'#16a34a',bg:'#eaf3de',sub:['Cash & Bank','Accounts Receivable','Inventory','Other Assets']},
-{type:'Liabilities',code:'2',color:'#dc2626',bg:'#fcebeb',sub:['Accounts Payable','Short-term Loans','Other Liabilities']},
-{type:'Equity',code:'3',color:'#6366f1',bg:'#ede9fe',sub:['Owner Equity','Retained Earnings']},
-{type:'Income',code:'4',color:'#4F6EF7',bg:'rgba(79,110,247,0.1)',sub:['Sales Revenue','Service Revenue','Other Income']},
-{type:'Expenses',code:'5',color:'#d97706',bg:'#faeeda',sub:['Cost of Goods Sold','Salary','Rent','Utilities','Other Expenses']},
+{type:'Assets',code:'1',color:'#2563eb',bg:'#eef4ff',icon:Wallet,sub:['Cash & Bank','Accounts Receivable','Inventory','Other Assets']},
+{type:'Liabilities',code:'2',color:'#dc2626',bg:'#fdecec',icon:Landmark,sub:['Accounts Payable','Short-term Loans','Other Liabilities']},
+{type:'Equity',code:'3',color:'#16a34a',bg:'#eaf7ee',icon:User,sub:['Owner Equity','Retained Earnings']},
+{type:'Income',code:'4',color:'#7c3aed',bg:'#f3eefe',icon:TrendingUp,sub:['Sales Revenue','Service Revenue','Other Income']},
+{type:'Expenses',code:'5',color:'#ea580c',bg:'#fff2e8',icon:Receipt,sub:['Cost of Goods Sold','Salary','Rent','Utilities','Other Expenses']},
 ]
 
 const DEFAULT_ACCOUNTS=[
@@ -276,10 +276,10 @@ if(view==='form')return(
 return(
 <Layout title="Chart of Accounts">
 
-<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20,gap:12}}>
-<div style={{display:'flex',alignItems:'center',gap:8}}>
-<BookOpen size={20} style={{color:'var(--primary)'}}/>
-<h2 style={{fontSize:18,fontWeight:600}}>Chart of Accounts</h2>
+<div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:20,gap:12,flexWrap:'wrap'}}>
+<div>
+<h2 style={{fontSize:20,fontWeight:700,color:'var(--text-1)'}}>Chart of Accounts</h2>
+<div style={{fontSize:13,color:'var(--text-3)',marginTop:2}}>View and manage all your accounts</div>
 </div>
 <div style={{display:'flex',gap:8}}>
 <button type="button" onClick={handleRecalculate} disabled={recalculating} className="btn btn-ghost" style={{fontSize:12}}>
@@ -291,20 +291,28 @@ return(
 </button>
 )}
 <button type="button" onClick={openNew} className="btn btn-primary">
-<Plus size={15}/>New Account
+<Plus size={15}/>Add Account
 </button>
 </div>
 </div>
 
-<div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginBottom:20}}>
-{ACCOUNT_TYPES.map(t=>(
-<div key={t.type} className="card" style={{padding:16,borderTop:`3px solid ${t.color}`}}>
-<div style={{fontSize:11,fontWeight:600,color:t.color,textTransform:'uppercase',marginBottom:6}}>{t.type}</div>
-<div style={{fontSize:20,fontWeight:700,color:'var(--text-1)',marginBottom:2}}>{accounts.filter(a=>a.type===t.type).length}</div>
-<div style={{fontSize:12,fontWeight:600,color:t.color}}>{totalByType(t.type).toLocaleString()} Ks</div>
-<div style={{fontSize:10,color:'var(--text-3)',marginTop:2}}>Current Balance</div>
+<div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginBottom:20}} className="stats-grid-4">
+{ACCOUNT_TYPES.map(t=>{
+const count=accounts.filter(a=>a.type===t.type).length
+const total=totalByType(t.type)
+return(
+<div key={t.type} className="card" style={{padding:16,borderTop:`3px solid ${t.color}`,display:'flex',alignItems:'center',gap:13}}>
+<div style={{width:44,height:44,borderRadius:12,background:t.bg,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+<t.icon size={22} style={{color:t.color}}/>
 </div>
-))}
+<div style={{minWidth:0}}>
+<div style={{fontSize:11,fontWeight:700,color:t.color,textTransform:'uppercase',letterSpacing:'0.04em'}}>{t.type}</div>
+<div style={{fontSize:11,color:'var(--text-3)'}}>{count} Account{count!==1?'s':''}</div>
+<div style={{fontSize:18,fontWeight:700,color:t.color,marginTop:2,whiteSpace:'nowrap'}}>{total.toLocaleString()} Ks</div>
+</div>
+</div>
+)
+})}
 </div>
 
 {accounts.length>0&&(()=>{
@@ -316,7 +324,7 @@ const expenses=totalByType('Expenses')
 const netProfit=income-expenses
 const balanced=Math.abs(assets-(liabilities+equity+netProfit))<1
 return(
-<div className="card" style={{padding:16,marginBottom:16,background:'rgba(79,110,247,0.04)',border:`0.5px solid ${balanced?'rgba(79,110,247,0.2)':'rgba(220,38,38,0.3)'}`}}>
+<div className="card" style={{padding:16,marginBottom:16,background:'rgba(20,184,166,0.05)',border:`0.5px solid ${balanced?'rgba(20,184,166,0.25)':'rgba(220,38,38,0.3)'}`}}>
 <div style={{fontSize:12,fontWeight:600,color:'var(--text-2)',marginBottom:10}}>Accounting Equation</div>
 <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
 <div style={{textAlign:'center'}}><div style={{fontSize:11,color:'var(--text-3)'}}>Assets</div><div style={{fontSize:16,fontWeight:700,color:'#16a34a'}}>{assets.toLocaleString()} Ks</div></div>
@@ -325,7 +333,7 @@ return(
 <div style={{fontSize:16,color:'var(--text-3)'}}>+</div>
 <div style={{textAlign:'center'}}><div style={{fontSize:11,color:'var(--text-3)'}}>Equity</div><div style={{fontSize:16,fontWeight:700,color:'#6366f1'}}>{equity.toLocaleString()} Ks</div></div>
 <div style={{fontSize:16,color:'var(--text-3)'}}>+</div>
-<div style={{textAlign:'center'}}><div style={{fontSize:11,color:'var(--text-3)'}}>Net Profit</div><div style={{fontSize:16,fontWeight:700,color:netProfit>=0?'#4F6EF7':'#dc2626'}}>{netProfit.toLocaleString()} Ks</div></div>
+<div style={{textAlign:'center'}}><div style={{fontSize:11,color:'var(--text-3)'}}>Net Profit</div><div style={{fontSize:16,fontWeight:700,color:netProfit>=0?'#14b8a6':'#dc2626'}}>{netProfit.toLocaleString()} Ks</div></div>
 <div style={{marginLeft:'auto',fontSize:12,fontWeight:600,color:balanced?'#16a34a':'#dc2626'}}>{balanced?'✓ Balanced':'✗ Not Balanced'}</div>
 </div>
 </div>
@@ -347,10 +355,12 @@ return(
 const typeAccounts=accounts.filter(a=>a.type===t.type)
 if(typeAccounts.length===0)return null
 const typeTotal=totalByType(t.type)
+const openTotal=typeAccounts.reduce((s,a)=>s+Number(a.openingBalance||0),0)
 return(
 <div key={t.type} className="card" style={{overflow:'hidden'}}>
 <div onClick={()=>toggleExpand(t.type)} style={{padding:'12px 20px',display:'flex',alignItems:'center',gap:10,cursor:'pointer',background:t.bg,borderBottom:expanded[t.type]?`1px solid ${t.color}20`:'none'}}>
 {expanded[t.type]?<ChevronDown size={16} style={{color:t.color}}/>:<ChevronRight size={16} style={{color:t.color}}/>}
+<t.icon size={16} style={{color:t.color}}/>
 <span style={{fontWeight:700,color:t.color,fontSize:14}}>{t.type}</span>
 <span style={{fontSize:12,color:t.color,opacity:0.7}}>({typeAccounts.length} accounts)</span>
 <span style={{marginLeft:'auto',fontWeight:700,color:t.color,fontSize:14}}>{typeTotal.toLocaleString()} Ks</span>
@@ -400,6 +410,14 @@ return(
 )
 })}
 </tbody>
+<tfoot>
+<tr style={{background:t.bg}}>
+<td colSpan={4} style={{textAlign:'right',fontWeight:700,color:t.color,fontSize:12,textTransform:'uppercase',letterSpacing:'0.03em'}}>Total {t.type}</td>
+<td style={{textAlign:'right',fontWeight:700,color:t.color}}>{openTotal.toLocaleString()} Ks</td>
+<td style={{textAlign:'right',fontWeight:700,color:t.color}}>{typeTotal.toLocaleString()} Ks</td>
+<td></td>
+</tr>
+</tfoot>
 </table>
 )}
 </div>
@@ -407,6 +425,7 @@ return(
 })}
 </div>
 )}
+<div style={{textAlign:'center',fontSize:12,color:'var(--text-3)',padding:'16px 0 4px'}}>All balances are in Myanmar Kyat (Ks)</div>
 </Layout>
 )
 }
