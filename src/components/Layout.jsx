@@ -33,6 +33,8 @@ export default function Layout({ children, title }) {
   const [open, setOpen] = useState(false)
   const [companyId, setCompanyId] = useState(null)
   const [plan, setPlan] = useState('free')
+  const [cashBalance, setCashBalance] = useState(0)
+  const [acctCount, setAcctCount] = useState(0)
   const { planLabel } = usePlans()
   const location = useLocation()
   const navigate = useNavigate()
@@ -44,8 +46,15 @@ export default function Layout({ children, title }) {
       try {
         const snap = await getDocs(query(collection(db, 'companies'), where(`members.${auth.currentUser?.uid}`, '!=', null)))
         if (!snap.empty) {
-          setCompanyId(snap.docs[0].id)
+          const cid = snap.docs[0].id
+          setCompanyId(cid)
           setPlan(snap.docs[0].data().plan || 'free')
+          try {
+            const baSnap = await getDocs(collection(db, 'companies', cid, 'bankAccounts'))
+            const accts = baSnap.docs.map(d => d.data()).filter(a => a.isActive !== false)
+            setCashBalance(accts.reduce((s, a) => s + Number(a.currentBalance || a.openingBalance || 0), 0))
+            setAcctCount(accts.length)
+          } catch (e) { }
         }
       } catch (e) { }
     }
@@ -155,6 +164,11 @@ export default function Layout({ children, title }) {
         </nav>
 
         <div style={{ padding: 10, borderTop: '0.5px solid var(--border)' }}>
+          <div style={{ padding: 14, marginBottom: 8, borderRadius: 12, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginBottom: 4 }}>Cash Balance</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#fff', lineHeight: 1.1 }}>{Math.round(cashBalance).toLocaleString()} <span style={{ fontSize: 11, fontWeight: 500, color: 'rgba(255,255,255,0.5)' }}>Ks</span></div>
+            <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.4)', marginTop: 3 }}>{acctCount} account{acctCount !== 1 ? 's' : ''}</div>
+          </div>
           <div style={{ padding: '6px 8px', marginBottom: 6, fontSize: 11, color: 'var(--text-3)', textAlign: 'center' }}>
             Powered by <span style={{ fontWeight: 700, color: 'var(--primary)' }}>AnkoraX</span>
           </div>
