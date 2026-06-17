@@ -316,31 +316,6 @@ return(
 })}
 </div>
 
-{accounts.length>0&&(()=>{
-const assets=totalByType('Assets')
-const liabilities=totalByType('Liabilities')
-const equity=totalByType('Equity')
-const income=totalByType('Income')
-const expenses=totalByType('Expenses')
-const netProfit=income-expenses
-const balanced=Math.abs(assets-(liabilities+equity+netProfit))<1
-return(
-<div className="card" style={{padding:16,marginBottom:16,background:'rgba(20,184,166,0.05)',border:`0.5px solid ${balanced?'rgba(20,184,166,0.25)':'rgba(220,38,38,0.3)'}`}}>
-<div style={{fontSize:12,fontWeight:600,color:'var(--text-2)',marginBottom:10}}>Accounting Equation</div>
-<div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
-<div style={{textAlign:'center'}}><div style={{fontSize:11,color:'var(--text-3)'}}>Assets</div><div style={{fontSize:16,fontWeight:700,color:'#16a34a'}}>{assets.toLocaleString()} Ks</div></div>
-<div style={{fontSize:16,color:'var(--text-3)'}}>= </div>
-<div style={{textAlign:'center'}}><div style={{fontSize:11,color:'var(--text-3)'}}>Liabilities</div><div style={{fontSize:16,fontWeight:700,color:'#dc2626'}}>{liabilities.toLocaleString()} Ks</div></div>
-<div style={{fontSize:16,color:'var(--text-3)'}}>+</div>
-<div style={{textAlign:'center'}}><div style={{fontSize:11,color:'var(--text-3)'}}>Equity</div><div style={{fontSize:16,fontWeight:700,color:'#6366f1'}}>{equity.toLocaleString()} Ks</div></div>
-<div style={{fontSize:16,color:'var(--text-3)'}}>+</div>
-<div style={{textAlign:'center'}}><div style={{fontSize:11,color:'var(--text-3)'}}>Net Profit</div><div style={{fontSize:16,fontWeight:700,color:netProfit>=0?'#14b8a6':'#dc2626'}}>{netProfit.toLocaleString()} Ks</div></div>
-<div style={{marginLeft:'auto',fontSize:12,fontWeight:600,color:balanced?'#16a34a':'#dc2626'}}>{balanced?'✓ Balanced':'✗ Not Balanced'}</div>
-</div>
-</div>
-)
-})()}
-
 {accounts.length===0?(
 <div className="card" style={{padding:64,textAlign:'center',color:'var(--text-3)'}}>
 <BookOpen size={40} style={{margin:'0 auto 12px',opacity:0.3}}/>
@@ -382,21 +357,19 @@ return(
 </thead>
 <tbody>
 {typeAccounts.sort((a,b)=>(a.code||'').localeCompare(b.code||'')).map(a=>{
-const diff=Number(a.currentBalance||a.openingBalance||0)-Number(a.openingBalance||0)
 return(
 <tr key={a.id}>
 <td style={{fontFamily:'monospace',fontSize:12,color:'var(--text-3)'}}>{a.code}</td>
 <td style={{fontWeight:500}}>
 {a.name}
 {a.isDefault&&<span style={{fontSize:10,background:'#f1f5f9',color:'var(--text-3)',padding:'1px 6px',borderRadius:10,marginLeft:6}}>default</span>}
-{(a.bankAccountId||a.isBankAccount)&&<span style={{fontSize:10,background:'#dbeafe',color:'#1d4ed8',padding:'1px 6px',borderRadius:10,marginLeft:6}}>bank</span>}
+{(a.bankAccountId||a.isBankAccount)&&<span style={{fontSize:10,background:'#ccfbf1',color:'#0f766e',padding:'1px 6px',borderRadius:10,marginLeft:6}}>bank</span>}
 </td>
 <td style={{fontSize:12,color:'var(--text-2)'}}>{a.subType}</td>
 <td style={{fontSize:12,color:'var(--text-3)'}}>{a.description||'-'}</td>
 <td style={{textAlign:'right',fontSize:12,color:'var(--text-3)'}}>{Number(a.openingBalance||0).toLocaleString()} Ks</td>
 <td style={{textAlign:'right',fontWeight:600,color:t.color}}>
 {Number(a.currentBalance||a.openingBalance||0).toLocaleString()} Ks
-{diff!==0&&<div style={{fontSize:10,color:diff>0?'#16a34a':'#dc2626'}}>{diff>0?'+':''}{diff.toLocaleString()}</div>}
 </td>
 <td style={{textAlign:'center'}}>
 {a.isBankAccount?(
