@@ -36,10 +36,26 @@ export default function JournalEntries() {
       if (!snap.empty) {
         const cid = snap.docs[0].id
         setCompanyId(cid)
-        const [acSnap] = await Promise.all([
+        const [acSnap, baSnap] = await Promise.all([
           getDocs(collection(db, 'companies', cid, 'accounts')),
+          getDocs(collection(db, 'companies', cid, 'bankAccounts')),
         ])
-        setCoaAccounts(acSnap.docs.map(d => ({ id: d.id, ...d.data() })))
+        const coa = acSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+        const banks = baSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(b => b.isActive !== false)
+        let maxCode = 1100
+        coa.forEach(a => { const c = parseInt(a.code); if (!isNaN(c) && c > maxCode) maxCode = c })
+        const bankAsAccounts = banks.map((b, idx) => ({
+          id: 'bank_' + b.id,
+          bankId: b.id,
+          isBank: true,
+          name: b.name,
+          type: 'Assets',
+          subType: 'Cash & Bank',
+          code: String(maxCode + 1 + idx),
+          currentBalance: Number(b.currentBalance || b.openingBalance || 0),
+          openingBalance: Number(b.openingBalance || 0),
+        }))
+        setCoaAccounts([...coa, ...bankAsAccounts])
         const u = onSnapshot(collection(db, 'companies', cid, 'journalEntries'), snap => {
           setEntries(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.date || '').localeCompare(a.date || '')))
           setLoading(false)
@@ -118,7 +134,7 @@ export default function JournalEntries() {
         } else {
           newBal = line.type === 'credit' ? currentBal + Number(line.amount) : currentBal - Number(line.amount)
         }
-        await updateDoc(doc(db, 'companies', companyId, 'accounts', acc.id), {
+        await updateDoc(doc(db, 'companies', companyId, acc.isBank ? 'bankAccounts' : 'accounts', acc.isBank ? acc.bankId : acc.id), {
           currentBalance: newBal,
           updatedAt: serverTimestamp(),
         })
