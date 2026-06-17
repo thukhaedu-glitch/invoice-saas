@@ -2,13 +2,39 @@ import { useState, useEffect, useMemo } from 'react'
 import { db, auth } from '../firebase'
 import { collection, onSnapshot, getDocs, query, where } from 'firebase/firestore'
 import Layout from '../components/Layout'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { FileText, CheckCircle, Clock, AlertCircle, TrendingUp, TrendingDown, Wallet, Users, Briefcase, ArrowRight } from 'lucide-react'
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import { FileText, AlertCircle, TrendingUp, Wallet, Users, Briefcase, ArrowRight, ArrowUpRight, ArrowDownRight, Landmark, Receipt, BarChart3, FilePlus, FileCheck, DollarSign, Layers, CreditCard, ChevronRight, MoreVertical } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useRole } from '../hooks/useRole'
 
 const months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
 const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+// Teal accent palette (matches reference mockup)
+const TEAL = '#14b8a6'
+const TEAL_BG = 'rgba(20,184,166,0.10)'
+
+// Tiny inline SVG sparkline — no extra deps
+function Sparkline({ data = [], color = TEAL, width = 80, height = 30 }) {
+  const vals = data.length ? data : [0, 0]
+  const max = Math.max(...vals, 1)
+  const min = Math.min(...vals, 0)
+  const range = max - min || 1
+  const step = vals.length > 1 ? width / (vals.length - 1) : width
+  const pts = vals.map((v, i) => {
+    const x = i * step
+    const y = height - ((v - min) / range) * height
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  }).join(' ')
+  const lastX = (vals.length - 1) * step
+  const lastY = height - ((vals[vals.length - 1] - min) / range) * height
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ overflow: 'visible', display: 'block' }}>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={lastX} cy={lastY} r="2.6" fill={color} />
+    </svg>
+  )
+}
 
 export default function Dashboard() {
   const [dismissedBanners, setDismissedBanners] = useState(false)
@@ -103,10 +129,100 @@ export default function Dashboard() {
   const uniqueYears = [...new Set(invoices.map(i => getInvDate(i)?.slice(0, 4)).filter(Boolean))].sort().reverse()
   if (!uniqueYears.includes(new Date().getFullYear().toString())) uniqueYears.unshift(new Date().getFullYear().toString())
 
+  // ===== Redesign-only derived data (calc မထိ — display အတွက်ပဲ) =====
+  const refIdx = useMemo(() => {
+    if (filterYear === new Date().getFullYear().toString()) return new Date().getMonth()
+    let last = 0
+    chartData.forEach((d, i) => { if (d.revenue || d.expense) last = i })
+    return last
+  }, [chartData, filterYear])
+  const revSeries = chartData.map(d => d.revenue)
+  const expSeries = chartData.map(d => d.expense)
+  const profitSeries = chartData.map(d => d.revenue - d.expense)
+  const recvSeries = months.map(m => invoices.filter(i => getInvDate(i)?.startsWith(`${filterYear}-${m}`) && (i.status === 'pending' || i.status === 'partial')).reduce((s, i) => s + Number(i.remainingAmount || i.totalAmount || 0), 0))
+  const momPct = (arr) => {
+    const cur = arr[refIdx] || 0
+    const prev = refIdx > 0 ? (arr[refIdx - 1] || 0) : 0
+    if (!prev) return cur > 0 ? 100 : 0
+    return ((cur - prev) / prev) * 100
+  }
+
+  // Bank vs Credit Card split (Account Summary)
+  const isCard = a => /credit|card/i.test(`${a.type || ''} ${a.accountType || ''}`)
+  const bankTotal = bankAccounts.filter(a => !isCard(a)).reduce((s, a) => s + Number(a.currentBalance || a.openingBalance || 0), 0)
+  const cardTotal = bankAccounts.filter(a => isCard(a)).reduce((s, a) => s + Number(a.currentBalance || a.openingBalance || 0), 0)
+
+  // Invoice status counts — donut (priority: overdue > paid > draft > pending)
+  const classify = i => {
+    const od = i.status === 'overdue' || ((i.status === 'pending' || i.status === 'partial') && i.dueDate && i.dueDate < today)
+    if (od) return 'overdue'
+    if (i.status === 'paid' || i.status === 'partial') return 'paid'
+    if (i.status === 'draft') return 'draft'
+    return 'pending'
+  }
+  const statusCount = { paid: 0, pending: 0, overdue: 0, draft: 0 }
+  invoices.forEach(i => { const k = classify(i); if (statusCount[k] !== undefined) statusCount[k]++ })
+  const donutData = [
+    { name: 'Paid', value: statusCount.paid, color: TEAL },
+    { name: 'Pending', value: statusCount.pending, color: '#3b82f6' },
+    { name: 'Overdue', value: statusCount.overdue, color: '#f59e0b' },
+    { name: 'Draft', value: statusCount.draft, color: '#cbd5e1' },
+  ]
+  const donutTotal = donutData.reduce((s, d) => s + d.value, 0)
+  const donutNonZero = donutData.filter(d => d.value > 0)
+
+  // Recent transactions — invoices + bills, newest first
+  const recentTx = useMemo(() => {
+    const inv = invoices.map(i => ({
+      date: getInvDate(i), desc: `Invoice #${i.invoiceNumber || ''}`.trim(), party: i.clientName || '—',
+      type: 'Invoice', amount: Number(i.totalAmount || 0), status: classify(i),
+    }))
+    const bill = bills.map(b => ({
+      date: b.date || b.billDate || b.dueDate, desc: `Bill #${b.billNumber || ''}`.trim(), party: b.vendor || b.vendorName || '—',
+      type: 'Bill', amount: -Number(b.amount || 0),
+      status: b.status === 'paid' ? 'paid' : (b.dueDate && b.dueDate < today ? 'overdue' : 'pending'),
+    }))
+    return [...inv, ...bill].filter(t => t.date).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 6)
+  }, [invoices, bills])
+
+  const statusBadge = { paid: ['badge-success', '#16a34a', 'Paid'], pending: ['badge-warning', '#d97706', 'Pending'], overdue: ['badge-danger', '#dc2626', 'Overdue'], draft: ['badge-gray', '#9aa0b4', 'Draft'] }
+  const typeBadge = { Invoice: 'badge-info', Bill: 'badge-gray', Payment: 'badge-success' }
+
+  const statCards = [
+    { label: 'Total Revenue', value: netRevenue, icon: DollarSign, series: revSeries, delta: momPct(revSeries), invert: false },
+    { label: 'Total Expenses', value: totalExpenses, icon: Wallet, series: expSeries, delta: momPct(expSeries), invert: true },
+    { label: 'Net Profit', value: netProfit, icon: TrendingUp, series: profitSeries, delta: momPct(profitSeries), invert: false },
+    { label: 'Outstanding', value: totalReceivable, icon: Layers, series: recvSeries, delta: momPct(recvSeries), invert: false },
+  ]
+
+  const accountRows = [
+    { label: 'Bank Accounts', value: bankTotal, icon: Landmark, path: '/bank-accounts' },
+    { label: 'Credit Cards', value: cardTotal, icon: CreditCard, path: '/bank-accounts' },
+    { label: 'Accounts Receivable', value: totalReceivable, icon: Users, path: '/invoices' },
+    { label: 'Accounts Payable', value: totalLiabilities, icon: Receipt, path: '/bills' },
+  ]
+
+  const quickActions = [
+    { label: 'New Invoice', icon: FilePlus, path: '/create-invoice' },
+    { label: 'New Quotation', icon: FileCheck, path: '/create-quotation' },
+    { label: 'Add Expense', icon: Wallet, path: '/expenses' },
+    { label: 'Reports', icon: BarChart3, path: '/reports' },
+  ]
+
   if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>Loading...</div>
 
   return (
     <Layout title="Dashboard">
+      <style>{`
+        .dash-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px}
+        .dash-mid{display:grid;grid-template-columns:1.6fr 1.3fr 1fr;gap:16px;margin-bottom:16px}
+        .dash-bot{display:grid;grid-template-columns:2.4fr 1fr;gap:16px;margin-bottom:16px}
+        .dash-qa{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+        @media(max-width:1100px){.dash-mid{grid-template-columns:1fr 1fr}.dash-bot{grid-template-columns:1fr}}
+        @media(max-width:780px){.dash-stats{grid-template-columns:repeat(2,1fr)}.dash-mid{grid-template-columns:1fr}}
+        @media(max-width:480px){.dash-stats{grid-template-columns:1fr}}
+      `}</style>
+
       {/* Subscription expiring warning */}
       {(() => {
         const d = subInfo.end ? Math.ceil((new Date(subInfo.end + 'T23:59:59') - new Date()) / (1000 * 60 * 60 * 24)) : null
@@ -135,12 +251,12 @@ export default function Dashboard() {
         </div>
       )}
       {role === 'owner' && adminApproved.length > 0 && (
-        <div style={{ background: 'rgba(79,110,247,0.08)', border: '0.5px solid rgba(79,110,247,0.2)', borderRadius: 12, padding: '12px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ background: 'rgba(20,184,166,0.08)', border: '0.5px solid rgba(20,184,166,0.2)', borderRadius: 12, padding: '12px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <AlertCircle size={16} color="var(--primary)" />
-            <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--primary)' }}>{adminApproved.length} invoice{adminApproved.length > 1 ? 's' : ''} waiting for final approval</span>
+            <AlertCircle size={16} color={TEAL} />
+            <span style={{ fontSize: 13, fontWeight: 500, color: TEAL }}>{adminApproved.length} invoice{adminApproved.length > 1 ? 's' : ''} waiting for final approval</span>
           </div>
-          <button type="button" onClick={() => navigate('/invoices')} className="btn btn-primary" style={{ fontSize: 12, padding: '5px 12px' }}>Review Now</button>
+          <button type="button" onClick={() => navigate('/invoices')} className="btn" style={{ fontSize: 12, padding: '5px 12px', background: TEAL, color: '#fff' }}>Review Now</button>
         </div>
       )}
 
@@ -171,145 +287,217 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-1)' }}>Overview — {filterYear}</h3>
-        <select className="form-input" style={{ width: 'auto', fontSize: 12, padding: '5px 8px' }} value={filterYear} onChange={e => setFilterYear(e.target.value)}>
-          {uniqueYears.map(y => <option key={y} value={y}>{y}</option>)}
-        </select>
-      </div>
-
-      <div className="stats-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
-        {[
-          { label: 'Total Revenue', value: netRevenue, icon: TrendingUp, color: '#4F6EF7', bg: 'rgba(79,110,247,0.10)' },
-          { label: 'Total Expenses', value: totalExpenses, icon: TrendingDown, color: '#dc2626', bg: 'rgba(220,38,38,0.10)' },
-          { label: 'Net Profit', value: netProfit, icon: CheckCircle, color: netProfit >= 0 ? '#16a34a' : '#dc2626', bg: netProfit >= 0 ? 'rgba(22,163,74,0.10)' : 'rgba(220,38,38,0.10)' },
-          { label: 'Receivable', value: totalReceivable, icon: Clock, color: '#d97706', bg: 'rgba(217,119,6,0.10)' },
-          ...(totalLiabilities > 0 ? [{ label: 'Liabilities', value: totalLiabilities, icon: TrendingDown, color: '#dc2626', bg: 'rgba(220,38,38,0.10)' }] : []),
-          ...(totalRefund > 0 ? [{ label: 'Refunds', value: totalRefund, icon: TrendingDown, color: '#6366f1', bg: 'rgba(99,102,241,0.10)' }] : []),
-        ].map(({ label, value, icon: Icon, color, bg }) => (
-          <div key={label} className="card" style={{ padding: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-2)' }}>{label}</span>
-              <div style={{ width: 32, height: 32, borderRadius: 8, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Icon size={16} color={color} />
-              </div>
-            </div>
-            <div style={{ fontSize: 20, fontWeight: 700, color, marginBottom: 2 }}>{value.toLocaleString()} Ks</div>
-          </div>
-        ))}
-      </div>
-
-      {bankAccounts.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(180px,1fr))', gap: 12, marginBottom: 16 }}>
-          {bankAccounts.map(a => (
-            <div key={a.id} className="card" style={{ padding: 16, cursor: 'pointer' }} onClick={() => navigate('/bank-accounts')}>
-              <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 4 }}>{a.bankName || a.type}</div>
-              <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>{a.name}</div>
-              <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--primary)' }}>
-                {Number(a.currentBalance || a.openingBalance || 0).toLocaleString()}
-                <span style={{ fontSize: 11, color: 'var(--text-3)', marginLeft: 4 }}>{a.currency || 'MMK'}</span>
-              </div>
-            </div>
-          ))}
-          <div className="card" style={{ padding: 16, background: 'linear-gradient(135deg,#1a1d2e,#2d3260)', color: 'white', cursor: 'pointer' }} onClick={() => navigate('/bank-accounts')}>
-            <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Balance</div>
-            {Object.entries(balanceByCurrency).map(([cur, bal]) => (
-              <div key={cur} style={{ marginBottom: 4 }}>
-                <div style={{ fontSize: 11, opacity: 0.6 }}>{cur}</div>
-                <div style={{ fontSize: 16, fontWeight: 700 }}>{bal.toLocaleString()} <span style={{ fontSize: 11, opacity: 0.7 }}>{cur}</span></div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="card" style={{ padding: 20, marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
-          <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-1)' }}>Income vs Expense — {filterYear}{compareYear ? ` vs ${compareYear}` : ''}</div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Compare with:</span>
-            <select className="form-input" style={{ width: 'auto', fontSize: 12, padding: '4px 8px' }} value={compareYear} onChange={e => setCompareYear(e.target.value)}>
-              <option value="">None</option>
-              {uniqueYears.filter(y => y !== filterYear).map(y => <option key={y} value={y}>{y}</option>)}
-            </select>
-          </div>
-        </div>
-        <ResponsiveContainer width="100%" height={220}>
-          <LineChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-            <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#9aa0b4' }} axisLine={false} tickLine={false} />
-            <YAxis tickFormatter={fmtK} tick={{ fontSize: 10, fill: '#9aa0b4' }} axisLine={false} tickLine={false} width={45} />
-            <Tooltip formatter={(value, name) => [`${value.toLocaleString()} Ks`, name]} labelStyle={{ fontWeight: 600, color: '#1a1d2e' }} contentStyle={{ borderRadius: 10, border: '0.5px solid #e2e8f0', fontSize: 12 }} />
-            <Legend wrapperStyle={{ fontSize: 12 }} />
-            <Line type="monotone" dataKey="revenue" name={`Income ${filterYear}`} stroke="#4F6EF7" strokeWidth={2.5} dot={{ r: 3, fill: '#4F6EF7' }} activeDot={{ r: 5 }} />
-            <Line type="monotone" dataKey="expense" name={`Expense ${filterYear}`} stroke="#ef4444" strokeWidth={2.5} dot={{ r: 3, fill: '#ef4444' }} activeDot={{ r: 5 }} />
-            {compareYear && <Line type="monotone" dataKey="cRevenue" name={`Income ${compareYear}`} stroke="#4F6EF7" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 2 }} activeDot={{ r: 4 }} />}
-            {compareYear && <Line type="monotone" dataKey="cExpense" name={`Expense ${compareYear}`} stroke="#ef4444" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 2 }} activeDot={{ r: 4 }} />}
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-
-      <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-        <div className="card" style={{ padding: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-1)', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Users size={15} color="var(--primary)" />Top 5 Clients
-            </div>
-            <button type="button" onClick={() => navigate('/customers')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
-              View all<ArrowRight size={11} />
-            </button>
-          </div>
-          {top5Clients.length === 0 ? <div style={{ textAlign: 'center', color: 'var(--text-3)', fontSize: 12, padding: 20 }}>No data yet</div>
-            : top5Clients.map((c, i) => {
-              const maxAmt = top5Clients[0]?.amount || 1
-              return (
-                <div key={c.name} style={{ marginBottom: 12 }}>
-                  <div style={{ display: 'flex', justifycontent: 'space-between', fontSize: 13, marginBottom: 4 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ width: 18, height: 18, borderRadius: '50%', background: 'var(--primary-light)', color: 'var(--primary)', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifycontent: 'center' }}>{i + 1}</span>
-                      <span style={{ fontWeight: 500 }}>{c.name}</span>
-                    </div>
-                    <span style={{ fontWeight: 600, color: '#16a34a', fontSize: 12 }}>{c.amount.toLocaleString()} Ks</span>
-                  </div>
-                  <div style={{ height: 4, background: '#f1f5f9', borderRadius: 2 }}>
-                    <div style={{ height: 4, borderRadius: 2, background: 'var(--primary)', width: `${Math.round(c.amount / maxAmt * 100)}%`, transition: 'width 0.3s' }} />
-                  </div>
+      {/* Stat cards — icon (left) + value + MoM% + sparkline */}
+      <div className="dash-stats">
+        {statCards.map(({ label, value, icon: Icon, series, delta, invert }) => {
+          const up = delta >= 0
+          const good = invert ? !up : up
+          const deltaColor = good ? '#16a34a' : '#dc2626'
+          return (
+            <div key={label} className="card" style={{ padding: 18 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div style={{ width: 52, height: 52, borderRadius: '50%', background: TEAL_BG, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Icon size={22} color={TEAL} />
                 </div>
-              )
-            })}
-        </div>
-        <div className="card" style={{ padding: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifycontent: 'space-between', marginBottom: 16 }}>
-            <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-1)', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <CheckCircle size={15} color="#16a34a" />Recent Payments
-            </div>
-            <button type="button" onClick={() => navigate('/invoices')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
-              View all<ArrowRight size={11} />
-            </button>
-          </div>
-          {recentPayments.length === 0 ? <div style={{ textAlign: 'center', color: 'var(--text-3)', fontSize: 12, padding: 20 }}>No payments yet</div>
-            : recentPayments.map((p, i) => (
-              <div key={i} style={{ display: 'flex', justifycontent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '0.5px solid #f1f5f9' }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 12.5, color: 'var(--text-2)', marginBottom: 3 }}>{label}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-1)', lineHeight: 1.1, whiteSpace: 'nowrap' }}>{Math.round(value).toLocaleString()} <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-3)' }}>Ks</span></div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 14, gap: 8 }}>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)' }}>{p.clientName}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 1 }}>{p.invoiceNumber} · {p.date}</div>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 12.5, fontWeight: 600, color: deltaColor }}>
+                    {up ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}{Math.abs(delta).toFixed(1)}%
+                  </span>
+                  <div style={{ fontSize: 11, color: 'var(--text-3)' }}>vs last month</div>
                 </div>
-                <span style={{ fontWeight: 600, color: '#16a34a', fontSize: 13 }}>{Number(p.amount).toLocaleString()} Ks</span>
+                <Sparkline data={series} color={TEAL} />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Middle row: Revenue Overview + Invoice Status + Account Summary */}
+      <div className="dash-mid">
+        {/* Revenue Overview */}
+        <div className="card" style={{ padding: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-1)' }}>Revenue Overview</div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {compareYear && <span style={{ fontSize: 11, color: 'var(--text-3)' }}>vs {compareYear}</span>}
+              <select className="form-input" style={{ width: 'auto', fontSize: 12, padding: '5px 10px' }} value={filterYear} onChange={e => setFilterYear(e.target.value)}>
+                {uniqueYears.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+              <select className="form-input" style={{ width: 'auto', fontSize: 12, padding: '5px 10px' }} value={compareYear} onChange={e => setCompareYear(e.target.value)}>
+                <option value="">Compare…</option>
+                {uniqueYears.filter(y => y !== filterYear).map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 16, marginBottom: 8 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-2)' }}><span style={{ width: 14, height: 3, borderRadius: 2, background: TEAL }} />Revenue</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-2)' }}><span style={{ width: 14, height: 3, borderRadius: 2, background: '#5eead4' }} />Expenses</span>
+          </div>
+          <ResponsiveContainer width="100%" height={250}>
+            <AreaChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="gRevenue" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={TEAL} stopOpacity={0.30} />
+                  <stop offset="100%" stopColor={TEAL} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#eef1f6" vertical={false} />
+              <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#9aa0b4' }} axisLine={false} tickLine={false} />
+              <YAxis tickFormatter={fmtK} tick={{ fontSize: 10, fill: '#9aa0b4' }} axisLine={false} tickLine={false} width={48} />
+              <Tooltip formatter={(value, name) => [`${Number(value).toLocaleString()} Ks`, name]} labelStyle={{ fontWeight: 600, color: '#1a1d2e' }} contentStyle={{ borderRadius: 10, border: '0.5px solid #e2e8f0', fontSize: 12 }} />
+              <Area type="monotone" dataKey="revenue" name="Revenue" stroke={TEAL} strokeWidth={2.6} fill="url(#gRevenue)" dot={false} activeDot={{ r: 5 }} />
+              <Area type="monotone" dataKey="expense" name="Expenses" stroke="#5eead4" strokeWidth={2} strokeDasharray="5 4" fill="none" dot={false} activeDot={{ r: 4 }} />
+              {compareYear && <Area type="monotone" dataKey="cRevenue" name={`Revenue ${compareYear}`} stroke="#94a3b8" strokeWidth={1.6} strokeDasharray="2 3" fill="none" dot={false} />}
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Invoice Status */}
+        <div className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-1)', marginBottom: 12 }}>Invoice Status</div>
+          {donutTotal === 0 ? (
+            <div style={{ textAlign: 'center', color: 'var(--text-3)', fontSize: 12, padding: '48px 0' }}>No invoices yet</div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
+                <div style={{ position: 'relative', width: 150, height: 150, flexShrink: 0 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={donutNonZero} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={2} stroke="none">
+                        {donutNonZero.map((d, i) => <Cell key={i} fill={d.color} />)}
+                      </Pie>
+                      <Tooltip formatter={(value, name) => [`${value}`, name]} contentStyle={{ borderRadius: 10, border: '0.5px solid #e2e8f0', fontSize: 12 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                    <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--text-1)', lineHeight: 1 }}>{donutTotal}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-3)' }}>Total</div>
+                  </div>
+                </div>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {donutData.map(d => (
+                    <div key={d.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12.5 }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'var(--text-2)' }}>
+                        <span style={{ width: 9, height: 9, borderRadius: '50%', background: d.color }} />{d.name}
+                      </span>
+                      <span style={{ color: 'var(--text-2)' }}>{d.value} <span style={{ color: 'var(--text-3)' }}>({donutTotal ? Math.round(d.value / donutTotal * 100) : 0}%)</span></span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <button type="button" onClick={() => navigate('/invoices')} style={{ marginTop: 14, paddingTop: 12, borderTop: '0.5px solid #f1f5f9', background: 'none', border: 'none', cursor: 'pointer', color: TEAL, fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                View all invoices<ArrowRight size={13} />
+              </button>
+            </>
+          )}
+        </div>
+
+        {/* Account Summary */}
+        <div className="card" style={{ padding: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-1)' }}>Account Summary</div>
+            <MoreVertical size={16} color="var(--text-3)" />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {accountRows.map(({ label, value, icon: Icon, path }) => (
+              <div key={label} onClick={() => navigate(path)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0', borderBottom: '0.5px solid #f1f5f9', cursor: 'pointer' }}>
+                <span style={{ width: 38, height: 38, borderRadius: 10, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Icon size={17} color="#475569" />
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>{label}</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)' }}>{Math.round(value).toLocaleString()} <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-3)' }}>Ks</span></div>
+                </div>
+                <ChevronRight size={16} color="var(--text-3)" />
               </div>
             ))}
+          </div>
         </div>
       </div>
 
-      <div className="stats-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
+      {/* Bottom row: Recent Transactions + Quick Actions */}
+      <div className="dash-bot">
+        {/* Recent Transactions */}
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px' }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-1)' }}>Recent Transactions</div>
+            <button type="button" onClick={() => navigate('/invoices')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: TEAL, fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>View all<ArrowRight size={12} /></button>
+          </div>
+          {recentTx.length === 0 ? (
+            <div style={{ textAlign: 'center', color: 'var(--text-3)', fontSize: 12, padding: 28 }}>No transactions yet</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Description</th>
+                    <th>Customer / Vendor</th>
+                    <th>Type</th>
+                    <th style={{ textAlign: 'right' }}>Amount</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentTx.map((t, i) => {
+                    const [badgeCls, , statusText] = statusBadge[t.status] || statusBadge.pending
+                    return (
+                      <tr key={i}>
+                        <td style={{ color: 'var(--text-2)', whiteSpace: 'nowrap' }}>{t.date}</td>
+                        <td>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9 }}>
+                            <span style={{ width: 28, height: 28, borderRadius: '50%', background: TEAL_BG, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              <FileText size={14} color={TEAL} />
+                            </span>
+                            <span style={{ fontWeight: 500, color: 'var(--text-1)' }}>{t.desc}</span>
+                          </span>
+                        </td>
+                        <td style={{ color: 'var(--text-2)' }}>{t.party}</td>
+                        <td><span className={`badge ${typeBadge[t.type] || 'badge-gray'}`}>{t.type}</span></td>
+                        <td style={{ textAlign: 'right', fontWeight: 600, color: t.amount < 0 ? '#dc2626' : 'var(--text-1)', whiteSpace: 'nowrap' }}>{t.amount < 0 ? '−' : ''}{Math.abs(Math.round(t.amount)).toLocaleString()} Ks</td>
+                        <td><span className={`badge ${badgeCls}`}>{statusText}</span></td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Quick Actions */}
+        <div className="card" style={{ padding: 20 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-1)', marginBottom: 16 }}>Quick Actions</div>
+          <div className="dash-qa">
+            {quickActions.map(({ label, icon: Icon, path }) => (
+              <button key={label} type="button" onClick={() => navigate(path)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '18px 8px', borderRadius: 14, border: '0.5px solid var(--border)', background: '#f8fafc', cursor: 'pointer', transition: 'all 0.15s' }}
+                onMouseEnter={e => { e.currentTarget.style.background = TEAL_BG; e.currentTarget.style.borderColor = 'rgba(20,184,166,0.4)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = 'none' }}>
+                <Icon size={22} color={TEAL} />
+                <span style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--text-2)', textAlign: 'center' }}>{label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Entity counts */}
+      <div className="dash-stats" style={{ marginBottom: 0 }}>
         {[
-          { label: 'Invoices', count: invoices.length, icon: FileText, color: '#4F6EF7', path: '/invoices' },
-          { label: 'Customers', count: customers.length, icon: Users, color: '#16a34a', path: '/customers' },
-          { label: 'Expenses', count: expenses.length, icon: Wallet, color: '#dc2626', path: '/expenses' },
-          { label: 'Projects', count: projects.length, icon: Briefcase, color: '#8b5cf6', path: '/projects' },
-        ].map(({ label, count, icon: Icon, color, path }) => (
+          { label: 'Invoices', count: invoices.length, icon: FileText, path: '/invoices' },
+          { label: 'Customers', count: customers.length, icon: Users, path: '/customers' },
+          { label: 'Expenses', count: expenses.length, icon: Wallet, path: '/expenses' },
+          { label: 'Projects', count: projects.length, icon: Briefcase, path: '/projects' },
+        ].map(({ label, count, icon: Icon, path }) => (
           <div key={label} className="card" style={{ padding: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }} onClick={() => navigate(path)}>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: `${color}15`, display: 'flex', alignItems: 'center', justifycontent: 'center', flexShrink: 0 }}>
-              <Icon size={20} color={color} />
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: TEAL_BG, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Icon size={20} color={TEAL} />
             </div>
             <div>
               <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-1)' }}>{count}</div>
