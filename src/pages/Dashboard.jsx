@@ -3,7 +3,7 @@ import { db, auth } from '../firebase'
 import { collection, onSnapshot, getDocs, query, where } from 'firebase/firestore'
 import Layout from '../components/Layout'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
-import { FileText, AlertCircle, TrendingUp, Wallet, Users, Briefcase, ArrowRight, ArrowUpRight, ArrowDownRight, Landmark, Receipt, BarChart3, FilePlus, FileCheck, DollarSign, Layers, CreditCard, ChevronRight, MoreVertical } from 'lucide-react'
+import { FileText, AlertCircle, TrendingUp, Wallet, Users, ArrowRight, ArrowUpRight, ArrowDownRight, Landmark, Receipt, BarChart3, FilePlus, FileCheck, DollarSign, Layers, CreditCard, ChevronRight, MoreVertical, RotateCcw } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useRole } from '../hooks/useRole'
 
@@ -88,11 +88,18 @@ export default function Dashboard() {
   }, [])
 
   const getInvDate = inv => inv.date || (inv.createdAt?.seconds ? new Date(inv.createdAt.seconds * 1000).toISOString().split('T')[0] : null)
+  // Bill ကို expense အဖြစ် ရေတွက်ဖို့ — billDate အလိုက်
+  const getBillDate = b => b.billDate || b.date || b.dueDate || (b.createdAt?.seconds ? new Date(b.createdAt.seconds * 1000).toISOString().split('T')[0] : null)
   const totalRevenue = useMemo(() => invoices.filter(i => getInvDate(i)?.startsWith(filterYear) && (i.status === 'paid' || i.status === 'partial')).reduce((s, i) => s + Number(i.paidAmount || i.totalAmount || 0), 0), [invoices, filterYear])
   // Refund — refunded invoice တွေ (revenue ကနေ ဖြုတ်)
   const totalRefund = useMemo(() => invoices.filter(i => getInvDate(i)?.startsWith(filterYear) && i.status === 'refunded').reduce((s, i) => s + Number(i.paidAmount || i.totalAmount || 0), 0), [invoices, filterYear])
   const netRevenue = totalRevenue - totalRefund
-  const totalExpenses = useMemo(() => expenses.filter(e => e.date?.startsWith(filterYear)).reduce((s, e) => s + Number(e.amount || 0), 0), [expenses, filterYear])
+  // Total Expenses = expenses collection + vendor bills (amount အပြည့်)
+  const totalExpenses = useMemo(() => {
+    const exp = expenses.filter(e => e.date?.startsWith(filterYear)).reduce((s, e) => s + Number(e.amount || 0), 0)
+    const billExp = bills.filter(b => getBillDate(b)?.startsWith(filterYear)).reduce((s, b) => s + Number(b.amount || 0), 0)
+    return exp + billExp
+  }, [expenses, bills, filterYear])
   const netProfit = netRevenue - totalExpenses
   const totalReceivable = invoices.filter(i => i.status === 'pending' || i.status === 'partial').reduce((s, i) => s + Number(i.remainingAmount || i.totalAmount || 0), 0)
   // Liabilities — မပေးရသေးတဲ့ bills (Accounts Payable)
@@ -117,9 +124,11 @@ export default function Dashboard() {
     const mInvs = invoices.filter(i => getInvDate(i)?.startsWith(`${filterYear}-${m}`))
     const revenue = mInvs.filter(i => i.status === 'paid' || i.status === 'partial').reduce((s, i) => s + Number(i.paidAmount || i.totalAmount || 0), 0)
     const expense = expenses.filter(e => e.date?.startsWith(`${filterYear}-${m}`)).reduce((s, e) => s + Number(e.amount || 0), 0)
+      + bills.filter(b => getBillDate(b)?.startsWith(`${filterYear}-${m}`)).reduce((s, b) => s + Number(b.amount || 0), 0)
     const cInvs = compareYear ? invoices.filter(i => getInvDate(i)?.startsWith(`${compareYear}-${m}`)) : []
     const cRevenue = cInvs.filter(i => i.status === 'paid' || i.status === 'partial').reduce((s, i) => s + Number(i.paidAmount || i.totalAmount || 0), 0)
-    const cExpense = compareYear ? expenses.filter(e => e.date?.startsWith(`${compareYear}-${m}`)).reduce((s, e) => s + Number(e.amount || 0), 0) : 0
+    const cExpense = compareYear ? (expenses.filter(e => e.date?.startsWith(`${compareYear}-${m}`)).reduce((s, e) => s + Number(e.amount || 0), 0)
+      + bills.filter(b => getBillDate(b)?.startsWith(`${compareYear}-${m}`)).reduce((s, b) => s + Number(b.amount || 0), 0)) : 0
     return { month: monthNames[idx], revenue, expense, ...(compareYear ? { cRevenue, cExpense } : {}) }
   })
 
@@ -140,6 +149,7 @@ export default function Dashboard() {
   const expSeries = chartData.map(d => d.expense)
   const profitSeries = chartData.map(d => d.revenue - d.expense)
   const recvSeries = months.map(m => invoices.filter(i => getInvDate(i)?.startsWith(`${filterYear}-${m}`) && (i.status === 'pending' || i.status === 'partial')).reduce((s, i) => s + Number(i.remainingAmount || i.totalAmount || 0), 0))
+  const refundSeries = months.map(m => invoices.filter(i => getInvDate(i)?.startsWith(`${filterYear}-${m}`) && i.status === 'refunded').reduce((s, i) => s + Number(i.paidAmount || i.totalAmount || 0), 0))
   const momPct = (arr) => {
     const cur = arr[refIdx] || 0
     const prev = refIdx > 0 ? (arr[refIdx - 1] || 0) : 0
@@ -193,6 +203,7 @@ export default function Dashboard() {
     { label: 'Total Expenses', value: totalExpenses, icon: Wallet, series: expSeries, delta: momPct(expSeries), invert: true },
     { label: 'Net Profit', value: netProfit, icon: TrendingUp, series: profitSeries, delta: momPct(profitSeries), invert: false },
     { label: 'Outstanding', value: totalReceivable, icon: Layers, series: recvSeries, delta: momPct(recvSeries), invert: false },
+    { label: 'Refunds', value: totalRefund, icon: RotateCcw, series: refundSeries, delta: momPct(refundSeries), invert: true },
   ]
 
   const accountRows = [
@@ -214,13 +225,12 @@ export default function Dashboard() {
   return (
     <Layout title="Dashboard">
       <style>{`
-        .dash-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px}
+        .dash-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:16px;margin-bottom:16px}
         .dash-mid{display:grid;grid-template-columns:1.6fr 1.3fr 1fr;gap:16px;margin-bottom:16px}
         .dash-bot{display:grid;grid-template-columns:2.4fr 1fr;gap:16px;margin-bottom:16px}
         .dash-qa{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
         @media(max-width:1100px){.dash-mid{grid-template-columns:1fr 1fr}.dash-bot{grid-template-columns:1fr}}
-        @media(max-width:780px){.dash-stats{grid-template-columns:repeat(2,1fr)}.dash-mid{grid-template-columns:1fr}}
-        @media(max-width:480px){.dash-stats{grid-template-columns:1fr}}
+        @media(max-width:780px){.dash-mid{grid-template-columns:1fr}}
       `}</style>
 
       {/* Subscription expiring warning */}
@@ -485,26 +495,6 @@ export default function Dashboard() {
             ))}
           </div>
         </div>
-      </div>
-
-      {/* Entity counts */}
-      <div className="dash-stats" style={{ marginBottom: 0 }}>
-        {[
-          { label: 'Invoices', count: invoices.length, icon: FileText, path: '/invoices' },
-          { label: 'Customers', count: customers.length, icon: Users, path: '/customers' },
-          { label: 'Expenses', count: expenses.length, icon: Wallet, path: '/expenses' },
-          { label: 'Projects', count: projects.length, icon: Briefcase, path: '/projects' },
-        ].map(({ label, count, icon: Icon, path }) => (
-          <div key={label} className="card" style={{ padding: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }} onClick={() => navigate(path)}>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: TEAL_BG, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <Icon size={20} color={TEAL} />
-            </div>
-            <div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-1)' }}>{count}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-2)' }}>{label}</div>
-            </div>
-          </div>
-        ))}
       </div>
     </Layout>
   )
