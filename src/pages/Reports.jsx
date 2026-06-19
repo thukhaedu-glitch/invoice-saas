@@ -1,8 +1,11 @@
-import React,{useState,useEffect}from'react'
+import React,{useState,useEffect,useRef}from'react'
 import{db,auth}from'../firebase'
 import{collection,getDocs,query,where}from'firebase/firestore'
 import Layout from'../components/Layout'
-import{Download,FileText,TrendingUp,TrendingDown,BookOpen,Briefcase,Receipt}from'lucide-react'
+import{Download,FileText,TrendingUp,TrendingDown,BookOpen,Briefcase,Receipt,FileSpreadsheet}from'lucide-react'
+import*as XLSX from'xlsx'
+import{jsPDF}from'jspdf'
+import html2canvas from'html2canvas'
 
 const TABS=[
 {id:'pnl',label:'P&L'},
@@ -34,6 +37,9 @@ const[filterYear,setFilterYear]=useState(new Date().getFullYear().toString())
 const[filterMonth,setFilterMonth]=useState('')
 const[expandedMonth,setExpandedMonth]=useState(null)
 const[expandedTaxMonth,setExpandedTaxMonth]=useState(null)
+const[compareMode,setCompareMode]=useState(false)
+const[compareYear,setCompareYear]=useState('')
+const pnlRef=useRef(null)
 
 useEffect(()=>{
 const load=async()=>{
@@ -195,6 +201,87 @@ a.href=url;a.download=filename;a.click()
 URL.revokeObjectURL(url)
 }
 
+// ===== Income Statement (P&L) =====
+const buildStmt=(yr,mo)=>{
+const inP=d=>!!d&&d.startsWith(mo?`${yr}-${mo}`:`${yr}`)
+const rev=invoices.filter(i=>inP(getInvDate(i))&&(i.status==='paid'||i.status==='partial')).reduce((s,i)=>s+Number(i.paidAmount||i.totalAmount||0),0)
+const buckets={}
+expenses.filter(e=>inP(e.date)).forEach(e=>{const c=(e.category||'Other').trim();buckets[c]=(buckets[c]||0)+Number(e.amount||0)})
+bills.filter(b=>inP(b.billDate)&&(b.status==='paid'||b.status==='partial')).forEach(b=>{const c=(b.category||'Other').trim();buckets[c]=(buckets[c]||0)+Number(b.paidAmount||b.amount||0)})
+const isCogs=c=>/cogs|cost of goods|goods sold/i.test(c)
+const cogs=Object.entries(buckets).filter(([c])=>isCogs(c)).map(([name,amount])=>({name,amount})).sort((a,b)=>b.amount-a.amount)
+const opex=Object.entries(buckets).filter(([c])=>!isCogs(c)).map(([name,amount])=>({name,amount})).sort((a,b)=>b.amount-a.amount)
+const totalCogs=cogs.reduce((s,x)=>s+x.amount,0)
+const totalOpex=opex.reduce((s,x)=>s+x.amount,0)
+const gross=rev-totalCogs
+const net=gross-totalOpex
+return{rev,cogs,opex,totalCogs,totalOpex,gross,net}
+}
+const stmt=buildStmt(filterYear,filterMonth||null)
+const cmp=(compareMode&&compareYear)?buildStmt(compareYear,filterMonth||null):null
+const cmpAmt=(group,name)=>{if(!cmp)return null;const f=cmp[group].find(x=>x.name===name);return f?f.amount:0}
+const pnlPeriodLabel=filterMonth?`${monthNamesFull[parseInt(filterMonth)-1]} ${filterYear}`:`For the Year ${filterYear}`
+const curColLabel=filterMonth?`${monthNames[parseInt(filterMonth)-1]} ${filterYear}`:filterYear
+const cmpColLabel=filterMonth?`${monthNames[parseInt(filterMonth)-1]} ${compareYear}`:compareYear
+const fileTag=filterMonth?`${filterYear}-${filterMonth}`:filterYear
+
+// statement rows (shared by display + export)
+const stmtRows=()=>{
+const r=[]
+r.push({type:'section',label:'REVENUE'})
+r.push({type:'line',label:'Sales Revenue',amt:stmt.rev,camt:cmp?cmp.rev:null})
+r.push({type:'total',label:'Total Revenue',amt:stmt.rev,camt:cmp?cmp.rev:null,pos:true})
+if(stmt.cogs.length){
+r.push({type:'section',label:'COST OF GOODS SOLD'})
+stmt.cogs.forEach(c=>r.push({type:'line',label:c.name,amt:c.amount,camt:cmpAmt('cogs',c.name),neg:true}))
+r.push({type:'total',label:'Gross Profit',amt:stmt.gross,camt:cmp?cmp.gross:null,pos:true})
+}
+r.push({type:'section',label:'OPERATING EXPENSES'})
+if(!stmt.opex.length)r.push({type:'line',label:'(no expenses)',amt:0,camt:cmp?0:null})
+stmt.opex.forEach(c=>r.push({type:'line',label:c.name,amt:c.amount,camt:cmpAmt('opex',c.name),neg:true}))
+r.push({type:'total',label:'Total Operating Expenses',amt:stmt.totalOpex,camt:cmp?cmp.totalOpex:null,neg:true})
+r.push({type:'net',label:'NET INCOME',amt:stmt.net,camt:cmp?cmp.net:null})
+return r
+}
+const pnlPct=v=>stmt.rev>0?`${(v/stmt.rev*100).toFixed(2)}%`:'-'
+
+const exportPnLExcel=()=>{
+const aoa=[]
+aoa.push(['Profit & Loss (Income Statement)'])
+aoa.push([pnlPeriodLabel])
+aoa.push([])
+const head=['Particulars',`${curColLabel} (Ks)`]
+if(cmp)head.push(`${cmpColLabel} (Ks)`)
+head.push('% of Revenue')
+aoa.push(head)
+stmtRows().forEach(row=>{
+if(row.type==='section'){aoa.push([row.label]);return}
+const line=[row.label,Math.round(row.amt)]
+if(cmp)line.push(row.camt==null?'':Math.round(row.camt))
+line.push(stmt.rev>0?`${(row.amt/stmt.rev*100).toFixed(2)}%`:'')
+aoa.push(line)
+})
+aoa.push([])
+aoa.push(['All amounts are in Myanmar Kyat (Ks)'])
+const ws=XLSX.utils.aoa_to_sheet(aoa)
+ws['!cols']=[{wch:32},{wch:18},...(cmp?[{wch:18}]:[]),{wch:14}]
+const wb=XLSX.utils.book_new()
+XLSX.utils.book_append_sheet(wb,ws,'P&L')
+XLSX.writeFile(wb,`ProfitLoss_${fileTag}.xlsx`)
+}
+const exportPnLPDF=async()=>{
+if(!pnlRef.current)return
+try{
+const canvas=await html2canvas(pnlRef.current,{scale:2,backgroundColor:'#ffffff',useCORS:true})
+const img=canvas.toDataURL('image/png')
+const pdf=new jsPDF('p','mm','a4')
+const pw=pdf.internal.pageSize.getWidth()-20
+const ph=canvas.height*pw/canvas.width
+pdf.addImage(img,'PNG',10,10,pw,ph)
+pdf.save(`ProfitLoss_${fileTag}.pdf`)
+}catch(e){alert('PDF export failed: '+e.message)}
+}
+
 const th={padding:'10px 14px',textAlign:'left',fontSize:11,fontWeight:600,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'0.05em',borderBottom:'0.5px solid var(--border)',background:'#fafbff'}
 const td={padding:'10px 14px',fontSize:13,borderBottom:'0.5px solid #f1f5f9',color:'var(--text-1)'}
 const tdR={...td,textAlign:'right'}
@@ -248,147 +335,70 @@ color:activeTab===t.id?'#fff':'var(--text-2)',
 
 {/* P&L Tab */}
 {activeTab==='pnl'&&(
-<div className="card" style={{overflow:'hidden'}}>
-<div style={{padding:'16px 20px',borderBottom:'0.5px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-<div style={{fontWeight:600,fontSize:14,display:'flex',alignItems:'center',gap:8}}><FileText size={15}/>Profit & Loss — {filterYear}</div>
-<button type="button" onClick={()=>exportCSV(pnlMonths.map(m=>({Month:m.month,Revenue:m.revenue,'Cash Expenses':m.expenseCash,'Bill Expenses':m.expenseBills,'Total Expenses':m.expense,'Net Profit':m.profit})),`PnL_${filterYear}.csv`)} className="btn btn-ghost" style={{fontSize:12}}>
-<Download size={14}/>Export CSV
-</button>
+<div>
+<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:10,marginBottom:14}}>
+<div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+<label style={{display:'flex',alignItems:'center',gap:8,fontSize:13,color:'var(--text-2)',cursor:'pointer'}}>
+<input type="checkbox" checked={compareMode} onChange={e=>{const on=e.target.checked;setCompareMode(on);if(on&&!compareYear){const py=String(Number(filterYear)-1);setCompareYear(years.includes(py)?py:(years.find(y=>y!==filterYear)||py))}}}/>
+Compare with
+</label>
+{compareMode&&(
+<select className="form-input" style={{width:'auto',fontSize:12,padding:'4px 8px'}} value={compareYear} onChange={e=>setCompareYear(e.target.value)}>
+{years.filter(y=>y!==filterYear).map(y=><option key={y} value={y}>{y}</option>)}
+</select>
+)}
+<span style={{fontSize:12,color:'var(--text-3)'}}>{filterMonth?'(Monthly)':'(Yearly)'}</span>
+</div>
+<div style={{display:'flex',gap:8}}>
+<button type="button" onClick={exportPnLExcel} className="btn btn-ghost" style={{fontSize:12}}><FileSpreadsheet size={14}/>Excel</button>
+<button type="button" onClick={exportPnLPDF} className="btn btn-ghost" style={{fontSize:12}}><Download size={14}/>PDF</button>
+</div>
+</div>
+
+<div ref={pnlRef} className="card" style={{overflow:'hidden',padding:0}}>
+<div style={{padding:'16px 20px 12px'}}>
+<div style={{fontSize:16,fontWeight:700,color:'#0f172a'}}>Profit & Loss (Income Statement)</div>
+<div style={{fontSize:12,color:'var(--text-3)',marginTop:2}}>{pnlPeriodLabel}</div>
 </div>
 <table style={{width:'100%',borderCollapse:'collapse'}}>
-<thead><tr>
-<th style={th}>Month</th>
-<th style={{...th,textAlign:'right'}}>Revenue (Ks)</th>
-<th style={{...th,textAlign:'right'}}>Cash Exp (Ks)</th>
-<th style={{...th,textAlign:'right'}}>Bills Paid (Ks)</th>
-<th style={{...th,textAlign:'right'}}>Total Exp (Ks)</th>
-<th style={{...th,textAlign:'right'}}>Net Profit (Ks)</th>
-<th style={{...th,textAlign:'right'}}>Margin</th>
-</tr></thead>
+<thead>
+<tr style={{background:'#0f1f3d'}}>
+<th style={{padding:'11px 20px',textAlign:'left',fontSize:12,fontWeight:700,color:'#fff'}}>Particulars</th>
+<th style={{padding:'11px 20px',textAlign:'right',fontSize:11,fontWeight:700,color:'#fff',whiteSpace:'nowrap'}}>{curColLabel} (Ks)</th>
+{cmp&&<th style={{padding:'11px 20px',textAlign:'right',fontSize:11,fontWeight:700,color:'#cbd5e1',whiteSpace:'nowrap'}}>{cmpColLabel} (Ks)</th>}
+<th style={{padding:'11px 20px',textAlign:'right',fontSize:11,fontWeight:700,color:'#fff',whiteSpace:'nowrap'}}>% of Revenue</th>
+</tr>
+</thead>
 <tbody>
-{pnlMonths.length===0?(
-<tr><td colSpan={7} style={{...td,textAlign:'center',color:'var(--text-3)',padding:40}}>No data</td></tr>
-):pnlMonths.map(m=>{
-const isExpanded=expandedMonth===m.month
-const mInvs=invoices.filter(i=>getInvDate(i)?.startsWith(`${filterYear}-${m.mNum}`)&&(i.status==='paid'||i.status==='partial'))
-const mExps=expenses.filter(e=>e.date?.startsWith(`${filterYear}-${m.mNum}`))
-const mBills=bills.filter(b=>b.billDate?.startsWith(`${filterYear}-${m.mNum}`)&&(b.status==='paid'||b.status==='partial'))
+{stmtRows().map((row,idx)=>{
+const cols=cmp?4:3
+if(row.type==='section')return(
+<tr key={idx}><td colSpan={cols} style={{padding:'13px 20px 4px',fontSize:12,fontWeight:700,color:'#1d4ed8',textTransform:'uppercase',letterSpacing:'0.03em'}}>{row.label}</td></tr>
+)
+if(row.type==='net')return(
+<tr key={idx} style={{background:'#15803d'}}>
+<td style={{padding:'14px 20px',fontSize:14,fontWeight:700,color:'#fff'}}>{row.label}</td>
+<td style={{padding:'14px 20px',textAlign:'right',fontSize:14,fontWeight:700,color:'#fff'}}>{Math.round(row.amt).toLocaleString()} Ks</td>
+{cmp&&<td style={{padding:'14px 20px',textAlign:'right',fontSize:14,fontWeight:700,color:'#dcfce7'}}>{Math.round(row.camt).toLocaleString()} Ks</td>}
+<td style={{padding:'14px 20px',textAlign:'right',fontSize:13,fontWeight:700,color:'#fff'}}>{pnlPct(row.amt)}</td>
+</tr>
+)
+const isTotal=row.type==='total'
+const color=isTotal?(row.pos?'#16a34a':'#dc2626'):(row.neg?'#dc2626':'#1e293b')
+const bg=isTotal?(row.pos?'rgba(22,163,74,0.07)':'rgba(220,38,38,0.06)'):'transparent'
 return(
-<>
-<tr key={m.month} onClick={()=>setExpandedMonth(isExpanded?null:m.month)} style={{cursor:'pointer',background:isExpanded?'rgba(79,110,247,0.04)':'white'}}>
-<td style={{...td,fontWeight:500}}>
-<span style={{display:'inline-flex',alignItems:'center',gap:6}}>
-<span style={{fontSize:10,color:'var(--primary)'}}>{isExpanded?'▼':'▶'}</span>
-{m.month}
-</span>
-</td>
-<td style={{...tdR,color:'#4F6EF7'}}>{m.revenue.toLocaleString()}</td>
-<td style={{...tdR,color:'#dc2626'}}>{m.expenseCash.toLocaleString()}</td>
-<td style={{...tdR,color:'#d97706'}}>{m.expenseBills.toLocaleString()}</td>
-<td style={{...tdR,color:'#dc2626',fontWeight:600}}>{m.expense.toLocaleString()}</td>
-<td style={{...tdR,fontWeight:600,color:m.profit>=0?'#16a34a':'#dc2626'}}>{m.profit.toLocaleString()}</td>
-<td style={{...tdR,fontSize:12,color:m.profit>=0?'#16a34a':'#dc2626'}}>
-{m.revenue>0?`${Math.round(m.profit/m.revenue*100)}%`:'-'}
-</td>
+<tr key={idx} style={{background:bg,borderTop:isTotal?'1px solid #e9eef5':'none'}}>
+<td style={{padding:isTotal?'10px 20px':'8px 20px 8px 34px',fontSize:13,fontWeight:isTotal?700:400,color:isTotal?color:'var(--text-1)'}}>{row.label}</td>
+<td style={{padding:isTotal?'10px 20px':'8px 20px',textAlign:'right',fontSize:13,fontWeight:isTotal?700:500,color}}>{Math.round(row.amt).toLocaleString()}</td>
+{cmp&&<td style={{padding:isTotal?'10px 20px':'8px 20px',textAlign:'right',fontSize:13,fontWeight:isTotal?700:400,color:'var(--text-3)'}}>{row.camt==null?'-':Math.round(row.camt).toLocaleString()}</td>}
+<td style={{padding:isTotal?'10px 20px':'8px 20px',textAlign:'right',fontSize:12,color:'var(--text-3)'}}>{pnlPct(row.amt)}</td>
 </tr>
-{isExpanded&&(
-<tr key={m.month+'_detail'}>
-<td colSpan={7} style={{padding:0,background:'#f8fafc'}}>
-<div style={{padding:16}}>
-{mInvs.length>0&&(
-<div style={{marginBottom:12}}>
-<div style={{fontSize:11,fontWeight:600,color:'#4F6EF7',textTransform:'uppercase',marginBottom:8}}>Invoices ({mInvs.length})</div>
-<table style={{width:'100%',borderCollapse:'collapse',background:'white',borderRadius:8,overflow:'hidden'}}>
-<thead><tr style={{background:'rgba(79,110,247,0.06)'}}>
-<th style={{...th,padding:'7px 12px'}}>Number</th>
-<th style={{...th,padding:'7px 12px'}}>Client</th>
-<th style={{...th,padding:'7px 12px',textAlign:'right'}}>Amount</th>
-<th style={{...th,padding:'7px 12px',textAlign:'right'}}>Paid</th>
-<th style={{...th,padding:'7px 12px',textAlign:'center'}}>Status</th>
-</tr></thead>
-<tbody>
-{mInvs.map(i=>(
-<tr key={i.id}>
-<td style={{...td,padding:'7px 12px',fontFamily:'monospace',fontSize:11,color:'var(--primary)'}}>{i.invoiceNumber}</td>
-<td style={{...td,padding:'7px 12px',fontWeight:500}}>{i.clientName}</td>
-<td style={{...td,padding:'7px 12px',textAlign:'right'}}>{Number(i.totalAmount||0).toLocaleString()} Ks</td>
-<td style={{...td,padding:'7px 12px',textAlign:'right',color:'#16a34a',fontWeight:500}}>{Number(i.paidAmount||i.totalAmount||0).toLocaleString()} Ks</td>
-<td style={{...td,padding:'7px 12px',textAlign:'center'}}><span style={{background:i.status==='paid'?'#eaf3de':'#e6f1fb',color:i.status==='paid'?'#16a34a':'#2563eb',padding:'2px 8px',borderRadius:20,fontSize:10,fontWeight:500}}>{i.status}</span></td>
-</tr>
-))}
-</tbody>
-</table>
-</div>
-)}
-{mExps.length>0&&(
-<div style={{marginBottom:12}}>
-<div style={{fontSize:11,fontWeight:600,color:'#dc2626',textTransform:'uppercase',marginBottom:8}}>Cash Expenses ({mExps.length})</div>
-<table style={{width:'100%',borderCollapse:'collapse',background:'white',borderRadius:8,overflow:'hidden'}}>
-<thead><tr style={{background:'rgba(220,38,38,0.04)'}}>
-<th style={{...th,padding:'7px 12px'}}>Title</th>
-<th style={{...th,padding:'7px 12px'}}>Category</th>
-<th style={{...th,padding:'7px 12px'}}>Date</th>
-<th style={{...th,padding:'7px 12px',textAlign:'right'}}>Amount</th>
-</tr></thead>
-<tbody>
-{mExps.map(e=>(
-<tr key={e.id}>
-<td style={{...td,padding:'7px 12px',fontWeight:500}}>{e.title}</td>
-<td style={{...td,padding:'7px 12px'}}><span style={{background:'var(--primary-light)',color:'var(--primary)',padding:'2px 8px',borderRadius:20,fontSize:10}}>{e.category}</span></td>
-<td style={{...td,padding:'7px 12px',color:'var(--text-3)',fontSize:12}}>{e.date}</td>
-<td style={{...td,padding:'7px 12px',textAlign:'right',color:'#dc2626',fontWeight:500}}>{Number(e.amount||0).toLocaleString()} Ks</td>
-</tr>
-))}
-</tbody>
-</table>
-</div>
-)}
-{mBills.length>0&&(
-<div>
-<div style={{fontSize:11,fontWeight:600,color:'#d97706',textTransform:'uppercase',marginBottom:8}}>Bills Paid ({mBills.length})</div>
-<table style={{width:'100%',borderCollapse:'collapse',background:'white',borderRadius:8,overflow:'hidden'}}>
-<thead><tr style={{background:'rgba(217,119,6,0.04)'}}>
-<th style={{...th,padding:'7px 12px'}}>Bill</th>
-<th style={{...th,padding:'7px 12px'}}>Vendor</th>
-<th style={{...th,padding:'7px 12px'}}>Category</th>
-<th style={{...th,padding:'7px 12px',textAlign:'right'}}>Amount</th>
-<th style={{...th,padding:'7px 12px',textAlign:'center'}}>Status</th>
-</tr></thead>
-<tbody>
-{mBills.map(b=>(
-<tr key={b.id}>
-<td style={{...td,padding:'7px 12px',fontFamily:'monospace',fontSize:11,color:'#d97706'}}>{b.billNumber}</td>
-<td style={{...td,padding:'7px 12px',fontWeight:500}}>{b.vendor||'-'}</td>
-<td style={{...td,padding:'7px 12px'}}><span style={{background:'#faeeda',color:'#d97706',padding:'2px 8px',borderRadius:20,fontSize:10}}>{b.category}</span></td>
-<td style={{...td,padding:'7px 12px',textAlign:'right',color:'#d97706',fontWeight:500}}>{Number(b.paidAmount||b.amount||0).toLocaleString()} Ks</td>
-<td style={{...td,padding:'7px 12px',textAlign:'center'}}><span style={{background:'#eaf3de',color:'#16a34a',padding:'2px 8px',borderRadius:20,fontSize:10,fontWeight:500}}>{b.status}</span></td>
-</tr>
-))}
-</tbody>
-</table>
-</div>
-)}
-{mInvs.length===0&&mExps.length===0&&mBills.length===0&&<div style={{textAlign:'center',color:'var(--text-3)',fontSize:13,padding:20}}>No detailed records</div>}
-</div>
-</td>
-</tr>
-)}
-</>
 )
 })}
 </tbody>
-{pnlMonths.length>0&&(
-<tfoot><tr style={{background:'#f8fafc'}}>
-<td style={{...td,fontWeight:700}}>Total</td>
-<td style={{...tdR,fontWeight:700,color:'#4F6EF7'}}>{pnlMonths.reduce((s,m)=>s+m.revenue,0).toLocaleString()}</td>
-<td style={{...tdR,fontWeight:700,color:'#dc2626'}}>{pnlMonths.reduce((s,m)=>s+m.expenseCash,0).toLocaleString()}</td>
-<td style={{...tdR,fontWeight:700,color:'#d97706'}}>{pnlMonths.reduce((s,m)=>s+m.expenseBills,0).toLocaleString()}</td>
-<td style={{...tdR,fontWeight:700,color:'#dc2626'}}>{pnlMonths.reduce((s,m)=>s+m.expense,0).toLocaleString()}</td>
-<td style={{...tdR,fontWeight:700,color:netProfit>=0?'#16a34a':'#dc2626'}}>{netProfit.toLocaleString()}</td>
-<td style={{...tdR,fontWeight:700,color:netProfit>=0?'#16a34a':'#dc2626'}}>{totalRevenue>0?`${Math.round(netProfit/totalRevenue*100)}%`:'-'}</td>
-</tr></tfoot>
-)}
 </table>
+<div style={{padding:'10px 20px',fontSize:11,color:'var(--text-3)',fontStyle:'italic'}}>All amounts are in Myanmar Kyat (Ks)</div>
+</div>
 </div>
 )}
 
