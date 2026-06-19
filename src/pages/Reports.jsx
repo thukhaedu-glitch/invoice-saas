@@ -593,9 +593,9 @@ const num=a=>Number(a.currentBalance||a.openingBalance||0)
 const totalBankBalance=bankAccounts.reduce((s,a)=>s+num(a),0)
 const totalReceivable=invoices.filter(i=>i.status==='pending'||i.status==='partial').reduce((s,i)=>s+Number(i.remainingAmount||i.totalAmount||0),0)
 const totalPayable=bills.filter(b=>b.status==='unpaid'||b.status==='partial').reduce((s,b)=>s+Number(b.remainingAmount||b.amount||0),0)
-const coaNonBankAssets=coaAccounts.filter(a=>a.type==='Assets'&&!a.bankAccountId).reduce((s,a)=>s+num(a),0)
+const coaNonBankAssets=coaAccounts.filter(a=>a.type==='Assets'&&!a.bankAccountId&&!/receivable/i.test(a.name||'')).reduce((s,a)=>s+num(a),0)
 const totalAssets=hasCOA?coaNonBankAssets+totalBankBalance+totalReceivable:totalBankBalance+totalReceivable
-const coaLiabilities=coaAccounts.filter(a=>a.type==='Liabilities').reduce((s,a)=>s+num(a),0)
+const coaLiabilities=coaAccounts.filter(a=>a.type==='Liabilities'&&!/payable/i.test(a.name||'')).reduce((s,a)=>s+num(a),0)
 const totalLiabilities=hasCOA?coaLiabilities+totalPayable:totalPayable
 const totalEquity=coaAccounts.filter(a=>a.type==='Equity').reduce((s,a)=>s+num(a),0)
 const bsNetProfit=invoices.filter(i=>i.status==='paid'||i.status==='partial').reduce((s,i)=>s+Number(i.paidAmount||i.totalAmount||0),0)-expenses.reduce((s,e)=>s+Number(e.amount||0),0)-bills.filter(b=>b.status==='paid'||b.status==='partial').reduce((s,b)=>s+Number(b.paidAmount||b.amount||0),0)
@@ -606,7 +606,7 @@ const byCode=(a,b)=>(a.code||'').localeCompare(b.code||'')
 const ncA=(n,s)=>/equipment|vehicle|machinery|building|property|fixed|deprecia|long.?term|non.?current/i.test(`${n} ${s||''}`)
 const ncL=(n,s)=>/long.?term|non.?current|mortgage/i.test(`${n} ${s||''}`)
 const assetItems=[...coaAccounts.filter(a=>a.type==='Assets'&&!a.bankAccountId&&!/receivable/i.test(a.name||'')).sort(byCode).map(a=>({name:a.name,amount:num(a),sub:a.subType})),...bankAccounts.map(a=>({name:a.name+(a.bankName?` (${a.bankName})`:''),amount:num(a),sub:'Cash & Bank'})),...(totalReceivable>0?[{name:'Accounts Receivable',amount:totalReceivable,sub:'Accounts Receivable'}]:[])]
-const liabItems=[...coaAccounts.filter(a=>a.type==='Liabilities').sort(byCode).map(a=>({name:a.name,amount:num(a),sub:a.subType})),...(totalPayable>0?[{name:'Accounts Payable (Unpaid Bills)',amount:totalPayable,sub:'Accounts Payable'}]:[])]
+const liabItems=[...coaAccounts.filter(a=>a.type==='Liabilities'&&!/payable/i.test(a.name||'')).sort(byCode).map(a=>({name:a.name,amount:num(a),sub:a.subType})),{name:'Accounts Payable',amount:totalPayable,sub:'Accounts Payable'}]
 const equityItems=[...coaAccounts.filter(a=>a.type==='Equity').sort(byCode).map(a=>({name:a.name,amount:num(a),sub:a.subType})),{name:'Retained Earnings (Net Profit)',amount:bsNetProfit,sub:'Equity'}]
 const curA=assetItems.filter(x=>!ncA(x.name,x.sub)),ncAItems=assetItems.filter(x=>ncA(x.name,x.sub))
 const curL=liabItems.filter(x=>!ncL(x.name,x.sub)),ncLItems=liabItems.filter(x=>ncL(x.name,x.sub))
