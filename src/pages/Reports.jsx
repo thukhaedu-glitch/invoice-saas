@@ -23,6 +23,19 @@ const monthNamesFull=['January','February','March','April','May','June','July','
 const monthNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const months=['01','02','03','04','05','06','07','08','09','10','11','12']
 
+function BSRow({label,amount,pct,bold,color,indent,bg,big}){
+return(
+<div style={{display:'flex',alignItems:'center',padding:big?'12px 16px':'7px 16px',background:bg||'transparent',borderBottom:bg?'none':'1px solid #f1f5f9'}}>
+<span style={{flex:1,fontSize:big?14:13,fontWeight:bold?700:400,color:color||'var(--text-1)',paddingLeft:indent?14:0}}>{label}</span>
+<span style={{width:100,textAlign:'right',fontSize:big?14:13,fontWeight:bold?700:500,color:color||(amount<0?'#dc2626':'#1e293b')}}>{Math.round(amount).toLocaleString()}</span>
+<span style={{width:66,textAlign:'right',fontSize:big?12:11,fontWeight:bold?700:400,color:color||'var(--text-3)'}}>{pct}</span>
+</div>
+)
+}
+function BSSubHead({label,color,bg}){
+return<div style={{padding:'9px 16px 4px',fontSize:11,fontWeight:700,color,textTransform:'uppercase',letterSpacing:'0.03em',background:bg||'#f8fafc'}}>{label}</div>
+}
+
 export default function Reports(){
 const[companyId,setCompanyId]=useState(null)
 const[invoices,setInvoices]=useState([])
@@ -39,7 +52,9 @@ const[expandedMonth,setExpandedMonth]=useState(null)
 const[expandedTaxMonth,setExpandedTaxMonth]=useState(null)
 const[compareMode,setCompareMode]=useState(false)
 const[compareYear,setCompareYear]=useState('')
+const[companyName,setCompanyName]=useState('')
 const pnlRef=useRef(null)
+const bsRef=useRef(null)
 
 useEffect(()=>{
 const load=async()=>{
@@ -47,6 +62,7 @@ const snap=await getDocs(query(collection(db,'companies'),where(`members.${auth.
 if(!snap.empty){
 const cid=snap.docs[0].id
 setCompanyId(cid)
+setCompanyName(snap.docs[0].data().companyName||snap.docs[0].data().name||snap.docs[0].data().businessName||'')
 const[invSnap,expSnap,prjSnap,baSnap,billSnap,acSnap,jeSnap]=await Promise.all([
 getDocs(collection(db,'companies',cid,'invoices')),
 getDocs(collection(db,'companies',cid,'expenses')),
@@ -573,172 +589,109 @@ return(
 {/* Balance Sheet Tab */}
 {activeTab==='balance'&&(()=>{
 const hasCOA=coaAccounts.length>0
-
-const totalBankBalance=bankAccounts.reduce((s,a)=>s+Number(a.currentBalance||a.openingBalance||0),0)
+const num=a=>Number(a.currentBalance||a.openingBalance||0)
+const totalBankBalance=bankAccounts.reduce((s,a)=>s+num(a),0)
 const totalReceivable=invoices.filter(i=>i.status==='pending'||i.status==='partial').reduce((s,i)=>s+Number(i.remainingAmount||i.totalAmount||0),0)
 const totalPayable=bills.filter(b=>b.status==='unpaid'||b.status==='partial').reduce((s,b)=>s+Number(b.remainingAmount||b.amount||0),0)
-
-// COA accounts ထဲ bankAccountId နဲ့ link ဖြစ်ထားတာ ရှိ/မရှိ
-const linkedBankIds=new Set(coaAccounts.filter(a=>a.bankAccountId).map(a=>a.bankAccountId))
-// COA Assets (bank မဟုတ်တဲ့ — Cash in Hand, Receivable စသည်)
-const coaNonBankAssets=coaAccounts.filter(a=>a.type==='Assets'&&!a.bankAccountId).reduce((s,a)=>s+Number(a.currentBalance||a.openingBalance||0),0)
-// bank balance — COA မှာ link ဖြစ်ထားတာ + မ link တာ အကုန်
-const allBankBalance=totalBankBalance
-
-// Assets — COA ရှိရင် COA non-bank + bank balance + receivable
-const totalAssets=hasCOA
-?coaNonBankAssets+allBankBalance+totalReceivable
-:totalBankBalance+totalReceivable
-
-// Liabilities — COA Liabilities + unpaid bills
-const coaLiabilities=coaAccounts.filter(a=>a.type==='Liabilities').reduce((s,a)=>s+Number(a.currentBalance||a.openingBalance||0),0)
+const coaNonBankAssets=coaAccounts.filter(a=>a.type==='Assets'&&!a.bankAccountId).reduce((s,a)=>s+num(a),0)
+const totalAssets=hasCOA?coaNonBankAssets+totalBankBalance+totalReceivable:totalBankBalance+totalReceivable
+const coaLiabilities=coaAccounts.filter(a=>a.type==='Liabilities').reduce((s,a)=>s+num(a),0)
 const totalLiabilities=hasCOA?coaLiabilities+totalPayable:totalPayable
-
-// Equity — COA ကနေ
-const totalEquity=coaAccounts.filter(a=>a.type==='Equity').reduce((s,a)=>s+Number(a.currentBalance||a.openingBalance||0),0)
-
-// Net Profit — always invoice/expense/bills data သုံး (most accurate)
-const bsNetProfit=invoices.filter(i=>i.status==='paid'||i.status==='partial').reduce((s,i)=>s+Number(i.paidAmount||i.totalAmount||0),0)
--expenses.reduce((s,e)=>s+Number(e.amount||0),0)
--bills.filter(b=>b.status==='paid'||b.status==='partial').reduce((s,b)=>s+Number(b.paidAmount||b.amount||0),0)
-
+const totalEquity=coaAccounts.filter(a=>a.type==='Equity').reduce((s,a)=>s+num(a),0)
+const bsNetProfit=invoices.filter(i=>i.status==='paid'||i.status==='partial').reduce((s,i)=>s+Number(i.paidAmount||i.totalAmount||0),0)-expenses.reduce((s,e)=>s+Number(e.amount||0),0)-bills.filter(b=>b.status==='paid'||b.status==='partial').reduce((s,b)=>s+Number(b.paidAmount||b.amount||0),0)
 const totalEquityAndProfit=totalEquity+bsNetProfit
-const isBalanced=Math.abs(totalAssets-(totalLiabilities+totalEquityAndProfit))<1
-
+const totalLE=totalLiabilities+totalEquityAndProfit
+const isBalanced=Math.abs(totalAssets-totalLE)<1
+const byCode=(a,b)=>(a.code||'').localeCompare(b.code||'')
+const ncA=(n,s)=>/equipment|vehicle|machinery|building|property|fixed|deprecia|long.?term|non.?current/i.test(`${n} ${s||''}`)
+const ncL=(n,s)=>/long.?term|non.?current|mortgage/i.test(`${n} ${s||''}`)
+const assetItems=[...coaAccounts.filter(a=>a.type==='Assets'&&!a.bankAccountId&&!/receivable/i.test(a.name||'')).sort(byCode).map(a=>({name:a.name,amount:num(a),sub:a.subType})),...bankAccounts.map(a=>({name:a.name+(a.bankName?` (${a.bankName})`:''),amount:num(a),sub:'Cash & Bank'})),...(totalReceivable>0?[{name:'Accounts Receivable',amount:totalReceivable,sub:'Accounts Receivable'}]:[])]
+const liabItems=[...coaAccounts.filter(a=>a.type==='Liabilities').sort(byCode).map(a=>({name:a.name,amount:num(a),sub:a.subType})),...(totalPayable>0?[{name:'Accounts Payable (Unpaid Bills)',amount:totalPayable,sub:'Accounts Payable'}]:[])]
+const equityItems=[...coaAccounts.filter(a=>a.type==='Equity').sort(byCode).map(a=>({name:a.name,amount:num(a),sub:a.subType})),{name:'Retained Earnings (Net Profit)',amount:bsNetProfit,sub:'Equity'}]
+const curA=assetItems.filter(x=>!ncA(x.name,x.sub)),ncAItems=assetItems.filter(x=>ncA(x.name,x.sub))
+const curL=liabItems.filter(x=>!ncL(x.name,x.sub)),ncLItems=liabItems.filter(x=>ncL(x.name,x.sub))
+const sum=arr=>arr.reduce((s,x)=>s+x.amount,0)
+const pctA=v=>totalAssets?`${(v/totalAssets*100).toFixed(2)}%`:'-'
+const asAt=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'})
+const exportBSExcel=()=>{
+const aoa=[['Balance Sheet (Statement of Financial Position)'],['As at '+asAt],[],['ASSETS','Amount (Ks)','% of Total Assets']]
+const grp=(items,head,subTot)=>{if(!items.length)return;aoa.push([head]);items.forEach(x=>aoa.push(['  '+x.name,Math.round(x.amount),pctA(x.amount)]));aoa.push([subTot,Math.round(sum(items)),pctA(sum(items))])}
+grp(curA,'CURRENT ASSETS','Total Current Assets')
+grp(ncAItems,'NON-CURRENT ASSETS','Total Non-Current Assets')
+aoa.push(['TOTAL ASSETS',Math.round(totalAssets),'100.00%'],[])
+aoa.push(['LIABILITIES & EQUITY','Amount (Ks)','% of Total Assets'])
+grp(curL,'CURRENT LIABILITIES','Total Current Liabilities')
+grp(ncLItems,'NON-CURRENT LIABILITIES','Total Non-Current Liabilities')
+aoa.push(['TOTAL LIABILITIES',Math.round(totalLiabilities),pctA(totalLiabilities)],['EQUITY'])
+equityItems.forEach(x=>aoa.push(['  '+x.name,Math.round(x.amount),pctA(x.amount)]))
+aoa.push(['TOTAL EQUITY',Math.round(totalEquityAndProfit),pctA(totalEquityAndProfit)])
+aoa.push(['TOTAL LIABILITIES & EQUITY',Math.round(totalLE),pctA(totalLE)])
+const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=[{wch:36},{wch:16},{wch:16}]
+const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Balance Sheet');XLSX.writeFile(wb,`BalanceSheet_${filterYear}.xlsx`)
+}
+const exportBSPDF=async()=>{if(!bsRef.current)return;try{const c=await html2canvas(bsRef.current,{scale:2,backgroundColor:'#ffffff',useCORS:true});const img=c.toDataURL('image/png');const pdf=new jsPDF('l','mm','a4');const pw=pdf.internal.pageSize.getWidth()-20;const ph=c.height*pw/c.width;pdf.addImage(img,'PNG',10,10,pw,ph);pdf.save(`BalanceSheet_${filterYear}.pdf`)}catch(e){alert('PDF failed: '+e.message)}}
 return(
-<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
-
-{/* Assets */}
-<div className="card" style={{overflow:'hidden'}}>
-<div style={{padding:'16px 20px',borderBottom:'0.5px solid var(--border)',background:'rgba(79,110,247,0.04)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-<div style={{fontWeight:700,fontSize:14,color:'#4F6EF7'}}>Assets</div>
-{hasCOA&&<span style={{fontSize:11,background:'rgba(79,110,247,0.1)',color:'var(--primary)',padding:'2px 8px',borderRadius:20}}>From COA</span>}
+<div>
+<div style={{display:'flex',justifyContent:'flex-end',gap:8,marginBottom:14}}>
+<button type="button" onClick={exportBSExcel} className="btn btn-ghost" style={{fontSize:12}}><FileSpreadsheet size={14}/>Excel</button>
+<button type="button" onClick={exportBSPDF} className="btn btn-ghost" style={{fontSize:12}}><Download size={14}/>PDF</button>
 </div>
-<div style={{padding:20}}>
-{hasCOA?(
-<>
-{coaAccounts.filter(a=>a.type==='Assets'&&!a.bankAccountId).sort((a,b)=>(a.code||'').localeCompare(b.code||'')).map(a=>(
-<div key={a.id} style={{display:'flex',justifyContent:'space-between',padding:'8px 0',borderBottom:'0.5px solid #f1f5f9'}}>
-<span style={{fontSize:13,color:'var(--text-2)'}}>{a.code} — {a.name}</span>
-<span style={{fontSize:13,fontWeight:600,color:Number(a.currentBalance||a.openingBalance||0)>=0?'#16a34a':'#dc2626'}}>{Number(a.currentBalance||a.openingBalance||0).toLocaleString()} Ks</span>
+<div ref={bsRef} className="card" style={{padding:'22px 22px 16px'}}>
+<div style={{textAlign:'center',marginBottom:18}}>
+{companyName&&<div style={{fontSize:17,fontWeight:700,color:'#0f172a'}}>{companyName}</div>}
+<div style={{fontSize:13,color:'var(--text-2)'}}>Balance Sheet (Statement of Financial Position)</div>
+<div style={{fontSize:12,fontWeight:600,color:'#2563eb',marginTop:2}}>As at {asAt}</div>
 </div>
-))}
-{bankAccounts.map(a=>(
-<div key={a.id} style={{display:'flex',justifyContent:'space-between',padding:'8px 0',borderBottom:'0.5px solid #f1f5f9'}}>
-<span style={{fontSize:13,color:'var(--text-2)'}}>🏦 {a.name}{a.bankName?` (${a.bankName})`:''}</span>
-<span style={{fontSize:13,fontWeight:600,color:'#16a34a'}}>{Number(a.currentBalance||a.openingBalance||0).toLocaleString()} Ks</span>
+<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:18}} className="form-grid-2">
+<div style={{border:'1px solid #e9eef5',borderRadius:8,overflow:'hidden'}}>
+<div style={{display:'flex',alignItems:'center',gap:8,background:'#eff4ff',borderTop:'3px solid #2563eb',padding:'11px 16px'}}>
+<Briefcase size={16} style={{color:'#2563eb'}}/>
+<span style={{fontWeight:700,fontSize:14,color:'#1e3a8a',flex:1}}>ASSETS</span>
+<span style={{width:100,textAlign:'right',fontSize:10,fontWeight:700,color:'#2563eb'}}>Amount (Ks)</span>
+<span style={{width:66,textAlign:'right',fontSize:10,fontWeight:700,color:'#2563eb'}}>% of Total</span>
 </div>
-))}
-{totalReceivable>0&&(
-<div style={{display:'flex',justifyContent:'space-between',padding:'8px 0',borderBottom:'0.5px solid #f1f5f9'}}>
-<span style={{fontSize:13,color:'var(--text-2)'}}>Accounts Receivable</span>
-<span style={{fontSize:13,fontWeight:600,color:'#d97706'}}>{totalReceivable.toLocaleString()} Ks</span>
+{curA.length>0&&<><BSSubHead label="Current Assets" color="#2563eb"/>{curA.map((x,i)=><BSRow key={'ca'+i} label={x.name} amount={x.amount} pct={pctA(x.amount)} indent/>)}<BSRow label="Total Current Assets" amount={sum(curA)} pct={pctA(sum(curA))} bold color="#2563eb" bg="#eff4ff"/></>}
+{ncAItems.length>0&&<><BSSubHead label="Non-Current Assets" color="#2563eb"/>{ncAItems.map((x,i)=><BSRow key={'nca'+i} label={x.name} amount={x.amount} pct={pctA(x.amount)} indent/>)}<BSRow label="Total Non-Current Assets" amount={sum(ncAItems)} pct={pctA(sum(ncAItems))} bold color="#2563eb" bg="#eff4ff"/></>}
+<div style={{display:'flex',alignItems:'center',padding:'13px 16px',background:'#1e40af'}}>
+<span style={{flex:1,fontSize:14,fontWeight:700,color:'#fff'}}>TOTAL ASSETS</span>
+<span style={{width:100,textAlign:'right',fontSize:14,fontWeight:700,color:'#fff'}}>{Math.round(totalAssets).toLocaleString()}</span>
+<span style={{width:66,textAlign:'right',fontSize:12,fontWeight:700,color:'#fff'}}>100.00%</span>
 </div>
-)}
-</>
-):(
-<>
-<div style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'0.5px solid #f1f5f9'}}>
-<span style={{fontSize:13,color:'var(--text-2)'}}>Cash & Bank Accounts</span>
-<span style={{fontSize:13,fontWeight:600,color:'#16a34a'}}>{totalBankBalance.toLocaleString()} Ks</span>
 </div>
-{bankAccounts.map(a=>(
-<div key={a.id} style={{display:'flex',justifyContent:'space-between',padding:'6px 0 6px 16px',borderBottom:'0.5px solid #f8fafc'}}>
-<span style={{fontSize:12,color:'var(--text-3)'}}>↳ {a.name}{a.bankName?` (${a.bankName})`:''}</span>
-<span style={{fontSize:12,color:'#16a34a'}}>{Number(a.currentBalance||a.openingBalance||0).toLocaleString()} {a.currency||'MMK'}</span>
+<div style={{border:'1px solid #e9eef5',borderRadius:8,overflow:'hidden'}}>
+<div style={{display:'flex',alignItems:'center',gap:8,background:'#fef2f2',borderTop:'3px solid #dc2626',padding:'11px 16px'}}>
+<Receipt size={16} style={{color:'#dc2626'}}/>
+<span style={{fontWeight:700,fontSize:14,color:'#991b1b',flex:1}}>LIABILITIES & EQUITY</span>
+<span style={{width:100,textAlign:'right',fontSize:10,fontWeight:700,color:'#dc2626'}}>Amount (Ks)</span>
+<span style={{width:66,textAlign:'right',fontSize:10,fontWeight:700,color:'#dc2626'}}>% of Total</span>
 </div>
-))}
-<div style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'0.5px solid #f1f5f9',marginTop:4}}>
-<span style={{fontSize:13,color:'var(--text-2)'}}>Accounts Receivable</span>
-<span style={{fontSize:13,fontWeight:600,color:'#d97706'}}>{totalReceivable.toLocaleString()} Ks</span>
-</div>
-</>
-)}
-<div style={{display:'flex',justifyContent:'space-between',padding:'12px 0',marginTop:4,borderTop:'1.5px solid #e2e8f0'}}>
-<span style={{fontSize:14,fontWeight:700}}>Total Assets</span>
-<span style={{fontSize:14,fontWeight:700,color:'#4F6EF7'}}>{totalAssets.toLocaleString()} Ks</span>
+{curL.length>0&&<><BSSubHead label="Current Liabilities" color="#dc2626" bg="#fef2f2"/>{curL.map((x,i)=><BSRow key={'cl'+i} label={x.name} amount={x.amount} pct={pctA(x.amount)} indent/>)}<BSRow label="Total Current Liabilities" amount={sum(curL)} pct={pctA(sum(curL))} bold color="#dc2626" bg="#fef2f2"/></>}
+{ncLItems.length>0&&<><BSSubHead label="Non-Current Liabilities" color="#dc2626" bg="#fef2f2"/>{ncLItems.map((x,i)=><BSRow key={'ncl'+i} label={x.name} amount={x.amount} pct={pctA(x.amount)} indent/>)}<BSRow label="Total Non-Current Liabilities" amount={sum(ncLItems)} pct={pctA(sum(ncLItems))} bold color="#dc2626" bg="#fef2f2"/></>}
+<BSRow label="TOTAL LIABILITIES" amount={totalLiabilities} pct={pctA(totalLiabilities)} bold color="#dc2626" bg="#fde8e8"/>
+<BSSubHead label="Equity" color="#16a34a" bg="#f0fdf4"/>
+{equityItems.map((x,i)=><BSRow key={'eq'+i} label={x.name} amount={x.amount} pct={pctA(x.amount)} indent/>)}
+<BSRow label="Total Equity" amount={totalEquityAndProfit} pct={pctA(totalEquityAndProfit)} bold color="#16a34a" bg="#f0fdf4"/>
+<div style={{display:'flex',alignItems:'center',padding:'13px 16px',background:'#1e40af'}}>
+<span style={{flex:1,fontSize:14,fontWeight:700,color:'#fff'}}>TOTAL LIABILITIES & EQUITY</span>
+<span style={{width:100,textAlign:'right',fontSize:14,fontWeight:700,color:'#fff'}}>{Math.round(totalLE).toLocaleString()}</span>
+<span style={{width:66,textAlign:'right',fontSize:12,fontWeight:700,color:'#fff'}}>{pctA(totalLE)}</span>
 </div>
 </div>
 </div>
-
-<div style={{display:'flex',flexDirection:'column',gap:16}}>
-{/* Liabilities */}
-<div className="card" style={{overflow:'hidden'}}>
-<div style={{padding:'16px 20px',borderBottom:'0.5px solid var(--border)',background:'rgba(220,38,38,0.04)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-<div style={{fontWeight:700,fontSize:14,color:'#dc2626'}}>Liabilities</div>
+<div style={{marginTop:16,padding:'14px 16px',borderRadius:8,background:isBalanced?'#f0fdf4':'#fef2f2',border:`1px solid ${isBalanced?'#bbf7d0':'#fecaca'}`,display:'flex',alignItems:'center',gap:16,flexWrap:'wrap'}}>
+<div style={{display:'flex',alignItems:'center',gap:8}}>
+<span style={{width:26,height:26,borderRadius:'50%',background:isBalanced?'#16a34a':'#dc2626',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,flexShrink:0}}>{isBalanced?'✓':'✗'}</span>
+<div><div style={{fontSize:12,fontWeight:700,color:'#0f172a'}}>Balance Verification</div><div style={{fontSize:11,color:'var(--text-3)'}}>Total Assets = Total Liabilities + Total Equity</div></div>
 </div>
-<div style={{padding:20}}>
-{hasCOA&&coaAccounts.filter(a=>a.type==='Liabilities').map(a=>(
-<div key={a.id} style={{display:'flex',justifyContent:'space-between',padding:'8px 0',borderBottom:'0.5px solid #f1f5f9'}}>
-<span style={{fontSize:13,color:'var(--text-2)'}}>{a.code} — {a.name}</span>
-<span style={{fontSize:13,fontWeight:600,color:'#dc2626'}}>{Number(a.currentBalance||a.openingBalance||0).toLocaleString()} Ks</span>
-</div>
-))}
-{/* Unpaid bills always show */}
-<div style={{display:'flex',justifyContent:'space-between',padding:'8px 0',borderBottom:'0.5px solid #f1f5f9'}}>
-<span style={{fontSize:13,color:'var(--text-2)'}}>Accounts Payable (Unpaid Bills)</span>
-<span style={{fontSize:13,fontWeight:600,color:'#dc2626'}}>{totalPayable.toLocaleString()} Ks</span>
-</div>
-{bills.filter(b=>b.status==='unpaid'||b.status==='partial').map(b=>(
-<div key={b.id} style={{display:'flex',justifyContent:'space-between',padding:'6px 0 6px 16px',borderBottom:'0.5px solid #f8fafc'}}>
-<span style={{fontSize:12,color:'var(--text-3)'}}>↳ {b.title}{b.vendor?` (${b.vendor})`:''}</span>
-<span style={{fontSize:12,color:'#dc2626'}}>{Number(b.remainingAmount||b.amount||0).toLocaleString()} Ks</span>
-</div>
-))}
-<div style={{display:'flex',justifyContent:'space-between',padding:'12px 0',marginTop:4,borderTop:'1.5px solid #e2e8f0'}}>
-<span style={{fontSize:14,fontWeight:700}}>Total Liabilities</span>
-<span style={{fontSize:14,fontWeight:700,color:'#dc2626'}}>{totalLiabilities.toLocaleString()} Ks</span>
+<div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:14,flexWrap:'wrap'}}>
+<div style={{textAlign:'center'}}><div style={{fontSize:10,color:'var(--text-3)'}}>TOTAL ASSETS</div><div style={{fontSize:13,fontWeight:700,color:'#2563eb'}}>{Math.round(totalAssets).toLocaleString()} Ks</div></div>
+<span style={{fontWeight:700,color:'var(--text-3)'}}>=</span>
+<div style={{textAlign:'center'}}><div style={{fontSize:10,color:'var(--text-3)'}}>TOTAL LIABILITIES</div><div style={{fontSize:13,fontWeight:700,color:'#dc2626'}}>{Math.round(totalLiabilities).toLocaleString()} Ks</div></div>
+<span style={{fontWeight:700,color:'var(--text-3)'}}>+</span>
+<div style={{textAlign:'center'}}><div style={{fontSize:10,color:'var(--text-3)'}}>TOTAL EQUITY</div><div style={{fontSize:13,fontWeight:700,color:'#16a34a'}}>{Math.round(totalEquityAndProfit).toLocaleString()} Ks</div></div>
 </div>
 </div>
-</div>
-
-{/* Equity */}
-<div className="card" style={{overflow:'hidden'}}>
-<div style={{padding:'16px 20px',borderBottom:'0.5px solid var(--border)',background:'rgba(22,163,74,0.04)'}}>
-<div style={{fontWeight:700,fontSize:14,color:'#16a34a'}}>Equity</div>
-</div>
-<div style={{padding:20}}>
-{coaAccounts.filter(a=>a.type==='Equity').map(a=>(
-<div key={a.id} style={{display:'flex',justifyContent:'space-between',padding:'8px 0',borderBottom:'0.5px solid #f1f5f9'}}>
-<span style={{fontSize:13,color:'var(--text-2)'}}>{a.code} — {a.name}</span>
-<span style={{fontSize:13,fontWeight:600,color:'#6366f1'}}>{Number(a.currentBalance||a.openingBalance||0).toLocaleString()} Ks</span>
-</div>
-))}
-<div style={{display:'flex',justifyContent:'space-between',padding:'8px 0',borderBottom:'0.5px solid #f1f5f9'}}>
-<span style={{fontSize:13,color:'var(--text-2)'}}>Net Profit (Revenue - Expenses)</span>
-<span style={{fontSize:13,fontWeight:600,color:bsNetProfit>=0?'#16a34a':'#dc2626'}}>{bsNetProfit.toLocaleString()} Ks</span>
-</div>
-<div style={{display:'flex',justifyContent:'space-between',padding:'12px 0',marginTop:4,borderTop:'1.5px solid #e2e8f0'}}>
-<span style={{fontSize:14,fontWeight:700}}>Total Equity</span>
-<span style={{fontSize:14,fontWeight:700,color:totalEquityAndProfit>=0?'#16a34a':'#dc2626'}}>{totalEquityAndProfit.toLocaleString()} Ks</span>
-</div>
-</div>
-</div>
-</div>
-
-{/* Accounting Equation */}
-<div className="card" style={{gridColumn:'1/-1',padding:20,background:isBalanced?'rgba(22,163,74,0.04)':'rgba(220,38,38,0.04)',border:`0.5px solid ${isBalanced?'rgba(22,163,74,0.2)':'rgba(220,38,38,0.2)'}`}}>
-<div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:16,flexWrap:'wrap'}}>
-<div style={{textAlign:'center'}}>
-<div style={{fontSize:11,color:'var(--text-3)',marginBottom:4}}>Total Assets</div>
-<div style={{fontSize:20,fontWeight:700,color:'#4F6EF7'}}>{totalAssets.toLocaleString()} Ks</div>
-</div>
-<div style={{fontSize:20,color:'var(--text-3)'}}>=</div>
-<div style={{textAlign:'center'}}>
-<div style={{fontSize:11,color:'var(--text-3)',marginBottom:4}}>Liabilities</div>
-<div style={{fontSize:20,fontWeight:700,color:'#dc2626'}}>{totalLiabilities.toLocaleString()} Ks</div>
-</div>
-<div style={{fontSize:20,color:'var(--text-3)'}}>+</div>
-<div style={{textAlign:'center'}}>
-<div style={{fontSize:11,color:'var(--text-3)',marginBottom:4}}>Equity + Net Profit</div>
-<div style={{fontSize:20,fontWeight:700,color:totalEquityAndProfit>=0?'#16a34a':'#dc2626'}}>{totalEquityAndProfit.toLocaleString()} Ks</div>
-</div>
-<div style={{marginLeft:'auto'}}>
-<span style={{fontSize:13,fontWeight:700,color:isBalanced?'#16a34a':'#dc2626'}}>
-{isBalanced?'✓ Balanced':'✗ Not Balanced'}
-</span>
-</div>
-</div>
+{!isBalanced&&<div style={{marginTop:8,fontSize:11,color:'#b45309',fontStyle:'italic'}}>Difference: {Math.round(totalAssets-totalLE).toLocaleString()} Ks — books not fully balanced (asset-side entries may be missing).</div>}
 </div>
 </div>
 )
