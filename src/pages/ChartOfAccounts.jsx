@@ -309,7 +309,7 @@ return(
 <div style={{minWidth:0}}>
 <div style={{fontSize:11,fontWeight:700,color:t.color,textTransform:'uppercase',letterSpacing:'0.04em'}}>{t.type}</div>
 <div style={{fontSize:11,color:'var(--text-3)'}}>{count} Account{count!==1?'s':''}</div>
-<div style={{fontSize:18,fontWeight:700,color:'#1e293b',marginTop:2,whiteSpace:'nowrap'}}>{total.toLocaleString()} Ks</div>
+<div style={{fontSize:18,fontWeight:700,color:t.color,marginTop:2,whiteSpace:'nowrap'}}>{total.toLocaleString()} Ks</div>
 </div>
 </div>
 )
@@ -333,13 +333,12 @@ if(typeAccounts.length===0)return null
 const typeTotal=totalByType(t.type)
 const openTotal=typeAccounts.reduce((s,a)=>s+Number(a.openingBalance||0),0)
 return(
-<div key={t.type} className="card" style={{overflow:'hidden',borderRadius:8}}>
-<div onClick={()=>toggleExpand(t.type)} style={{padding:'11px 18px',display:'flex',alignItems:'center',gap:10,cursor:'pointer',background:'#f8fafc',borderLeft:`3px solid ${t.color}`,borderBottom:'1px solid #e9eef5'}}>
+<div key={t.type} className="card" style={{overflow:'hidden',borderRadius:8,borderTop:`3px solid ${t.color}`}}>
+<div onClick={()=>toggleExpand(t.type)} style={{padding:'11px 18px',display:'flex',alignItems:'center',gap:10,cursor:'pointer',background:'#fafbfc',borderBottom:'1px solid #eef2f7'}}>
 {expanded[t.type]?<ChevronDown size={16} style={{color:'var(--text-3)'}}/>:<ChevronRight size={16} style={{color:'var(--text-3)'}}/>}
 <t.icon size={16} style={{color:t.color}}/>
 <span style={{fontWeight:700,color:t.color,fontSize:13.5}}>{t.type}</span>
 <span style={{fontSize:12,color:'var(--text-3)'}}>({typeAccounts.length} accounts)</span>
-<span style={{marginLeft:'auto',fontWeight:700,color:'#1e293b',fontSize:14}}>{typeTotal.toLocaleString()} Ks</span>
 </div>
 {expanded[t.type]&&(
 <div style={{overflowX:'auto'}}>
@@ -386,11 +385,11 @@ return(
 })}
 </tbody>
 <tfoot>
-<tr style={{background:t.color}}>
-<td colSpan={4} style={{textAlign:'right',fontWeight:700,color:'#fff',fontSize:12,textTransform:'uppercase',letterSpacing:'0.03em'}}>Total {t.type}</td>
-<td style={{textAlign:'right',fontWeight:700,color:'#fff'}}>{openTotal.toLocaleString()} Ks</td>
-<td style={{textAlign:'right',fontWeight:700,color:'#fff'}}>{typeTotal.toLocaleString()} Ks</td>
-<td style={{background:t.color}}></td>
+<tr style={{background:t.bg}}>
+<td colSpan={4} style={{textAlign:'right',fontWeight:700,color:t.color,fontSize:12,textTransform:'uppercase',letterSpacing:'0.03em'}}>Total {t.type}</td>
+<td style={{textAlign:'right',fontWeight:700,color:t.color}}>{openTotal.toLocaleString()} Ks</td>
+<td style={{textAlign:'right',fontWeight:700,color:t.color}}>{typeTotal.toLocaleString()} Ks</td>
+<td style={{background:t.bg}}></td>
 </tr>
 </tfoot>
 </table>
