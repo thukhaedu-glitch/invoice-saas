@@ -99,17 +99,25 @@ img.src=url
 
 const imageUrlToDataUrl=async url=>{
 if(!url)return null
+return new Promise(resolve=>{
+const img=new Image()
+img.crossOrigin='anonymous'
+img.onload=()=>{
 try{
-const response=await fetch(url)
-if(!response.ok)return null
-const blob=await response.blob()
-return await new Promise((resolve,reject)=>{
-const reader=new FileReader()
-reader.onload=()=>resolve(reader.result)
-reader.onerror=reject
-reader.readAsDataURL(blob)
+const maxSize=1200
+const scale=Math.min(1,maxSize/Math.max(img.naturalWidth||1,img.naturalHeight||1))
+const canvas=document.createElement('canvas')
+canvas.width=Math.max(1,Math.round(img.naturalWidth*scale))
+canvas.height=Math.max(1,Math.round(img.naturalHeight*scale))
+const ctx=canvas.getContext('2d')
+ctx.clearRect(0,0,canvas.width,canvas.height)
+ctx.drawImage(img,0,0,canvas.width,canvas.height)
+resolve(canvas.toDataURL('image/png'))
+}catch(_){resolve(null)}
+}
+img.onerror=()=>resolve(null)
+img.src=url
 })
-}catch(_){return null}
 }
 
 const handleDownloadPDF=async()=>{
@@ -141,15 +149,23 @@ setColor(color)
 pdf.text(String(value??''),x,yy,{align,maxWidth})
 }
 const dateValue=invoice.date||(invoice.createdAt?.seconds?new Date(invoice.createdAt.seconds*1000).toLocaleDateString():'-')
+const logoData=await imageUrlToDataUrl(settings.logoUrl)
 
 // Header
 pdf.setFillColor(settings.template==='minimal'?'#ffffff':primary)
 pdf.rect(0,0,pageWidth,68,'F')
 const headerColor=settings.template==='minimal'?'#1a1d2e':'#ffffff'
-text(company?.name||'Company',margin,15,{size:17,style:'bold',color:headerColor})
+let companyX=margin
+if(logoData){
+pdf.setFillColor('#ffffff')
+pdf.roundedRect(margin,7,18,18,2,2,'F')
+pdf.addImage(logoData,'PNG',margin+1,8,16,16,undefined,'FAST')
+companyX=margin+23
+}
+text(company?.name||'Company',companyX,15,{size:17,style:'bold',color:headerColor,maxWidth:105})
 let companyY=21
 ;[settings.companyAddress,settings.companyPhone,settings.companyEmail,settings.companyWebsite,settings.trnNumber?`TRN: ${settings.trnNumber}`:''].filter(Boolean).forEach(v=>{
-text(v,margin,companyY,{size:7,color:headerColor})
+text(v,companyX,companyY,{size:7,color:headerColor,maxWidth:105})
 companyY+=4
 })
 text('INVOICE',pageWidth-margin,15,{size:19,style:'bold',color:headerColor,align:'right'})
