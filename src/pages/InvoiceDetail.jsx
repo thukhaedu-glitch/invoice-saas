@@ -97,6 +97,21 @@ img.src=url
 })
 }
 
+const imageUrlToDataUrl=async url=>{
+if(!url)return null
+try{
+const response=await fetch(url)
+if(!response.ok)return null
+const blob=await response.blob()
+return await new Promise((resolve,reject)=>{
+const reader=new FileReader()
+reader.onload=()=>resolve(reader.result)
+reader.onerror=reject
+reader.readAsDataURL(blob)
+})
+}catch(_){return null}
+}
+
 const handleDownloadPDF=async()=>{
 setDownloading(true)
 try{
@@ -232,15 +247,23 @@ y+=noteLines.length*4+4
 ensureSpace(35)
 text('AUTHORIZED SIGNATURES',margin,y,{size:7,style:'bold',color:'#64748b'})
 y+=19
+const[staffSigData,adminSigData,ownerSigData]=await Promise.all([
+imageUrlToDataUrl(staffSig),
+hasAdminApproval?imageUrlToDataUrl(adminSig):null,
+hasOwnerApproval?imageUrlToDataUrl(ownerSig):null,
+])
+if(staffSigData)pdf.addImage(staffSigData,margin,y-15,28,13,undefined,'FAST')
 line(margin,y,75,y,'#1a1d2e',0.35)
 text('PREPARED BY',margin,y+5,{size:6.5,style:'bold',color:'#64748b'})
 text(staffName||'Staff',margin,y+10,{size:7.5})
 if(hasAdminApproval){
+if(adminSigData)pdf.addImage(adminSigData,80,y-15,28,13,undefined,'FAST')
 line(80,y,135,y,'#1a1d2e',0.35)
 text('APPROVED BY',80,y+5,{size:6.5,style:'bold',color:'#64748b'})
 text(adminName||'Admin',80,y+10,{size:7.5})
 }
 if(hasOwnerApproval){
+if(ownerSigData)pdf.addImage(ownerSigData,140,y-15,28,13,undefined,'FAST')
 line(140,y,pageWidth-margin,y,'#1a1d2e',0.35)
 text('DIRECTOR APPROVED',140,y+5,{size:6.5,style:'bold',color:'#64748b'})
 text(ownerName||'Director',140,y+10,{size:7.5})
