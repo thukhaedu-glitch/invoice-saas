@@ -180,6 +180,25 @@ setColor(color)
 const output=Array.isArray(value)?value.map(v=>String(v)):String(value??'')
 pdf.text(output,x,yy,{align,maxWidth,lineHeightFactor:1.25})
 }
+const addImageContained=async(source,x,yy,maxWidth,maxHeight)=>{
+if(!source)return false
+const dimensions=await withTimeout(new Promise(resolve=>{
+if(source instanceof HTMLCanvasElement){resolve({width:source.width,height:source.height});return}
+if(source instanceof HTMLImageElement&&source.naturalWidth){resolve({width:source.naturalWidth,height:source.naturalHeight});return}
+const img=new Image()
+img.onload=()=>resolve({width:img.naturalWidth,height:img.naturalHeight})
+img.onerror=()=>resolve(null)
+img.src=source
+}),2000)
+if(!dimensions?.width||!dimensions?.height)return false
+const scale=Math.min(maxWidth/dimensions.width,maxHeight/dimensions.height)
+const width=dimensions.width*scale
+const height=dimensions.height*scale
+const drawX=x+(maxWidth-width)/2
+const drawY=yy+(maxHeight-height)/2
+pdf.addImage(source,'PNG',drawX,drawY,width,height,undefined,'FAST')
+return true
+}
 const dateValue=invoice.date||(invoice.createdAt?.seconds?new Date(invoice.createdAt.seconds*1000).toLocaleDateString():'-')
 const logoData=await withTimeout(imageUrlToDataUrl(settings.logoUrl))
 
@@ -191,7 +210,7 @@ let companyX=margin
 if(logoData){
 pdf.setFillColor('#ffffff')
 pdf.roundedRect(margin,7,18,18,2,2,'F')
-pdf.addImage(logoData,'PNG',margin+1,8,16,16,undefined,'FAST')
+await addImageContained(logoData,margin+1,8,16,16)
 companyX=margin+23
 }
 text(company?.name||'Company',companyX,15,{size:17,style:'bold',color:headerColor,maxWidth:105})
@@ -306,13 +325,13 @@ hasOwnerApproval?withTimeout(signatureToDataUrl(invoice.ownerApprovedBy,ownerSig
 const addSignatureImage=async(data,role,x)=>{
 try{
 if(data){
-pdf.addImage(data,'PNG',x,y-15,28,13,undefined,'FAST')
+await addImageContained(data,x,y-16,32,14)
 return
 }
 const renderedImage=document.querySelector(`img[data-signature-role="${role}"]`)
 if(renderedImage?.complete&&renderedImage.naturalWidth>0){
 const canvas=await withTimeout(html2canvas(renderedImage,{scale:4,useCORS:true,backgroundColor:null,logging:false}))
-if(canvas)pdf.addImage(canvas.toDataURL('image/png'),'PNG',x,y-15,28,13,undefined,'FAST')
+if(canvas)await addImageContained(canvas,x,y-16,32,14)
 }
 }catch(e){console.warn(`Could not add ${role} signature to PDF`,e)}
 }
