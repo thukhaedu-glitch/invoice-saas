@@ -1,8 +1,9 @@
 import{useEffect,useState}from'react'
 import{useParams}from'react-router-dom'
 import{db}from'../firebase'
-import{collection,getDocs,query,where,doc,getDoc}from'firebase/firestore'
+import{doc,getDoc}from'firebase/firestore'
 import{CheckCircle,XCircle,Clock,FileText,Building2}from'lucide-react'
+import{verificationId}from'../utils/publicVerification'
 
 export default function Verify(){
 const{companyId,code}=useParams()
@@ -16,23 +17,12 @@ const[notFound,setNotFound]=useState(false)
 useEffect(()=>{
 const load=async()=>{
 try{
-const[compSnap,sSnap]=await Promise.all([
-getDoc(doc(db,'companies',companyId)),
-getDoc(doc(db,'companies',companyId,'_config','invoiceSettings'))
-])
-if(compSnap.exists())setCompany(compSnap.data())
-if(sSnap.exists())setSettings(sSnap.data())
-
-const invSnap=await getDocs(query(collection(db,'companies',companyId,'invoices'),where('securityCode','==',code)))
-if(!invSnap.empty){setInvoice({id:invSnap.docs[0].id,...invSnap.docs[0].data()});setDocType('invoice');setLoading(false);return}
-
-const quoSnap=await getDocs(query(collection(db,'companies',companyId,'quotations'),where('securityCode','==',code)))
-if(!quoSnap.empty){setInvoice({id:quoSnap.docs[0].id,...quoSnap.docs[0].data()});setDocType('quotation');setLoading(false);return}
-
-const conSnap=await getDocs(query(collection(db,'companies',companyId,'contracts'),where('securityCode','==',code)))
-if(!conSnap.empty){setInvoice({id:conSnap.docs[0].id,...conSnap.docs[0].data()});setDocType('contract');setLoading(false);return}
-
-setNotFound(true)
+const publicSnap=await getDoc(doc(db,'publicVerifications',verificationId(companyId,code)))
+if(!publicSnap.exists()){setNotFound(true);setLoading(false);return}
+const data=publicSnap.data()
+setInvoice(data)
+setDocType(data.documentType||'invoice')
+setCompany({name:data.companyName||''})
 }catch(e){console.error(e);setNotFound(true)}
 setLoading(false)
 }
