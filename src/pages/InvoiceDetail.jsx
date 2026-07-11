@@ -256,32 +256,31 @@ const logoBackground=settings.template==='minimal'?'#ffffff':primary
 const logoData=await withTimeout(flattenImageOnBackground(transparentLogoData,logoBackground))
 
 // Header
+const headerOffset=logoData?10:0
 pdf.setFillColor(settings.template==='minimal'?'#ffffff':primary)
-pdf.rect(0,0,pageWidth,68,'F')
+pdf.rect(0,0,pageWidth,68+headerOffset,'F')
 const headerColor=settings.template==='minimal'?'#1a1d2e':'#ffffff'
-let companyX=margin
 if(logoData){
-await addImageContained(logoData,margin,16,16,16)
-companyX=margin+22
+await addImageContained(logoData,margin,6,16,12)
 }
-text(company?.name||'Company',companyX,15,{size:17,style:'bold',color:headerColor,maxWidth:105})
-let companyY=21
+text(company?.name||'Company',margin,15+headerOffset,{size:17,style:'bold',color:headerColor,maxWidth:105})
+let companyY=21+headerOffset
 ;[settings.companyAddress,settings.companyPhone,settings.companyEmail,settings.companyWebsite,settings.trnNumber?`TRN: ${settings.trnNumber}`:''].filter(Boolean).forEach(v=>{
-text(v,companyX,companyY,{size:7,color:headerColor,maxWidth:105})
+text(v,margin,companyY,{size:7,color:headerColor,maxWidth:105})
 companyY+=4
 })
 text('INVOICE',pageWidth-margin,15,{size:19,style:'bold',color:headerColor,align:'right'})
 text(`#${invoice.invoiceNumber||'-'}`,pageWidth-margin,21,{size:8,color:headerColor,align:'right'})
 text((s==='pending_approval'?'Needs Approval':s).toUpperCase(),pageWidth-margin,27,{size:7,style:'bold',color:headerColor,align:'right'})
-line(margin,44,pageWidth-margin,44,settings.template==='minimal'?'#e2e8f0':'#ffffff',0.15)
-text('BILL TO',margin,51,{size:6.5,style:'bold',color:headerColor})
-text(invoice.clientName||'-',margin,57,{size:10,style:'bold',color:headerColor})
-text([invoice.clientEmail,invoice.clientPhone,invoice.clientAddress].filter(Boolean).join(' | '),margin,63,{size:6.5,color:headerColor,maxWidth:120})
-text('DATE',pageWidth-margin,51,{size:6.5,style:'bold',color:headerColor,align:'right'})
-text(dateValue,pageWidth-margin,57,{size:8,color:headerColor,align:'right'})
+line(margin,44+headerOffset,pageWidth-margin,44+headerOffset,settings.template==='minimal'?'#e2e8f0':'#ffffff',0.15)
+text('BILL TO',margin,51+headerOffset,{size:6.5,style:'bold',color:headerColor})
+text(invoice.clientName||'-',margin,57+headerOffset,{size:10,style:'bold',color:headerColor})
+text([invoice.clientEmail,invoice.clientPhone,invoice.clientAddress].filter(Boolean).join(' | '),margin,63+headerOffset,{size:6.5,color:headerColor,maxWidth:120})
+text('DATE',pageWidth-margin,51+headerOffset,{size:6.5,style:'bold',color:headerColor,align:'right'})
+text(dateValue,pageWidth-margin,57+headerOffset,{size:8,color:headerColor,align:'right'})
 
 // Items table
-y=79
+y=79+headerOffset
 text('DESCRIPTION',margin,y,{size:7,style:'bold',color:primary})
 text('QTY',142,y,{size:7,style:'bold',color:primary,align:'right'})
 text('RATE',168,y,{size:7,style:'bold',color:primary,align:'right'})
