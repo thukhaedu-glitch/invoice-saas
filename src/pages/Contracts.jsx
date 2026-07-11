@@ -8,6 +8,7 @@ import html2canvas from'html2canvas'
 import jsPDF from'jspdf'
 import{useRole}from'../hooks/useRole'
 import{sendInvoiceReminder}from'../utils/emailService'
+import{syncPublicVerifications}from'../utils/publicVerification'
 
 const STATUS=['draft','active','expired','cancelled']
 const statusColor={draft:'#64748b',active:'#16a34a',expired:'#d97706',cancelled:'#dc2626'}
@@ -135,7 +136,9 @@ paymentMethods:sd.paymentMethods?.map(m=>`${m.bankName}: ${m.accountNo} (${m.acc
 })
 }
 onSnapshot(collection(db,'companies',cid,'contracts'),snap=>{
-setContracts(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0)))
+const docs=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0))
+setContracts(docs)
+syncPublicVerifications(cid,cData.name||'',docs,'contract').catch(console.error)
 setLoading(false)
 })
 }
