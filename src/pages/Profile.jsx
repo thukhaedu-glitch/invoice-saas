@@ -32,6 +32,9 @@ const[pwError,setPwError]=useState('')
 const[savingPw,setSavingPw]=useState(false)
 const[myRole,setMyRole]=useState('staff')
 const[copied,setCopied]=useState(false)
+const[editingCompanyName,setEditingCompanyName]=useState(false)
+const[companyNameDraft,setCompanyNameDraft]=useState('')
+const[savingCompanyName,setSavingCompanyName]=useState(false)
 
 useEffect(()=>{
 const load=async()=>{
@@ -42,6 +45,7 @@ const cid=snap.docs[0].id
 const cData=snap.docs[0].data()
 setCompanyId(cid)
 setCompany({name:cData.name||'',plan:cData.plan||'free',inviteCode:cData.inviteCode||''})
+setCompanyNameDraft(cData.name||'')
 const role=cData.members?.[user.uid]||'staff'
 setMyRole(role)
 setManagedBy(cData.managedBy||{})
@@ -177,6 +181,29 @@ setCopied(true)
 setTimeout(()=>setCopied(false),2000)
 }
 
+const handleCompanyNameSave=async()=>{
+const nextName=companyNameDraft.trim()
+if(myRole!=='owner'){alert('Only the owner can edit the company name');return}
+if(!nextName){alert('Company name is required');return}
+if(!companyId||savingCompanyName)return
+setSavingCompanyName(true)
+try{
+// Re-check the persisted role immediately before updating.
+const companyRef=doc(db,'companies',companyId)
+const cSnap=await getDoc(companyRef)
+if(!cSnap.exists()||cSnap.data().members?.[auth.currentUser.uid]!=='owner'){
+setMyRole(cSnap.exists()?cSnap.data().members?.[auth.currentUser.uid]||'staff':'staff')
+throw new Error('Only the owner can edit the company name')
+}
+await updateDoc(companyRef,{name:nextName})
+setCompany(c=>({...c,name:nextName}))
+setCompanyNameDraft(nextName)
+setEditingCompanyName(false)
+alert('Company name updated!')
+}catch(e){alert(e.message)}
+setSavingCompanyName(false)
+}
+
 const roleColor={owner:'#4F6EF7',admin:'#16a34a',staff:'#d97706'}
 const roleBg={owner:'rgba(79,110,247,0.1)',admin:'rgba(22,163,74,0.1)',staff:'rgba(217,119,6,0.1)'}
 const adminMembers=members.filter(m=>m.role==='admin')
@@ -288,8 +315,33 @@ return(
 
 {/* Company */}
 <Section title="Company" icon={Building2}>
+{myRole==='owner'?(
+<div style={{padding:'8px 0',borderBottom:'0.5px solid #f1f5f9'}}>
+<label style={{fontSize:12,color:'var(--text-2)',display:'block',marginBottom:6}}>Company Name</label>
+{editingCompanyName?(
+<div style={{display:'flex',gap:8,alignItems:'center'}}>
+<input className="form-input" value={companyNameDraft} onChange={e=>setCompanyNameDraft(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')handleCompanyNameSave();if(e.key==='Escape'){setCompanyNameDraft(company.name);setEditingCompanyName(false)}}} placeholder="Company name" autoFocus/>
+<button type="button" onClick={handleCompanyNameSave} disabled={savingCompanyName||!companyNameDraft.trim()} className="btn btn-primary" style={{whiteSpace:'nowrap'}}>
+<Save size={14}/>{savingCompanyName?'Saving...':'Save'}
+</button>
+<button type="button" onClick={()=>{setCompanyNameDraft(company.name);setEditingCompanyName(false)}} disabled={savingCompanyName} className="btn btn-ghost">Cancel</button>
+</div>
+):(
+<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12}}>
+<span style={{fontSize:13,fontWeight:500}}>{company.name||'-'}</span>
+<button type="button" onClick={()=>setEditingCompanyName(true)} className="btn btn-ghost" style={{fontSize:12,padding:'5px 9px'}}>
+<PenLine size={13}/>Edit
+</button>
+</div>
+)}
+</div>
+):(
+<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom:'0.5px solid #f1f5f9'}}>
+<span style={{fontSize:13,color:'var(--text-2)'}}>Company Name</span>
+<span style={{fontSize:13,fontWeight:500}}>{company.name||'-'}</span>
+</div>
+)}
 {[
-{label:'Company Name',value:company.name},
 {label:'My Role',value:<span style={{background:roleBg[myRole]||'#f1f5f9',color:roleColor[myRole]||'#64748b',padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:600,textTransform:'capitalize'}}>{myRole}</span>},
 {label:'Plan',value:planLabel(company.plan)},
 {label:'Email',value:auth.currentUser?.email},
