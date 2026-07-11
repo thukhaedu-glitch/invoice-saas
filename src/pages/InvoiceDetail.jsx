@@ -144,7 +144,7 @@ const dateValue=invoice.date||(invoice.createdAt?.seconds?new Date(invoice.creat
 
 // Header
 pdf.setFillColor(settings.template==='minimal'?'#ffffff':primary)
-pdf.rect(0,0,pageWidth,58,'F')
+pdf.rect(0,0,pageWidth,68,'F')
 const headerColor=settings.template==='minimal'?'#1a1d2e':'#ffffff'
 text(company?.name||'Company',margin,15,{size:17,style:'bold',color:headerColor})
 let companyY=21
@@ -155,15 +155,15 @@ companyY+=4
 text('INVOICE',pageWidth-margin,15,{size:19,style:'bold',color:headerColor,align:'right'})
 text(`#${invoice.invoiceNumber||'-'}`,pageWidth-margin,21,{size:8,color:headerColor,align:'right'})
 text((s==='pending_approval'?'Needs Approval':s).toUpperCase(),pageWidth-margin,27,{size:7,style:'bold',color:headerColor,align:'right'})
-line(margin,37,pageWidth-margin,37,settings.template==='minimal'?'#e2e8f0':'#ffffff',0.15)
-text('BILL TO',margin,43,{size:6.5,style:'bold',color:headerColor})
-text(invoice.clientName||'-',margin,49,{size:10,style:'bold',color:headerColor})
-text([invoice.clientEmail,invoice.clientPhone,invoice.clientAddress].filter(Boolean).join(' | '),margin,54,{size:6.5,color:headerColor,maxWidth:120})
-text('DATE',pageWidth-margin,43,{size:6.5,style:'bold',color:headerColor,align:'right'})
-text(dateValue,pageWidth-margin,49,{size:8,color:headerColor,align:'right'})
+line(margin,44,pageWidth-margin,44,settings.template==='minimal'?'#e2e8f0':'#ffffff',0.15)
+text('BILL TO',margin,51,{size:6.5,style:'bold',color:headerColor})
+text(invoice.clientName||'-',margin,57,{size:10,style:'bold',color:headerColor})
+text([invoice.clientEmail,invoice.clientPhone,invoice.clientAddress].filter(Boolean).join(' | '),margin,63,{size:6.5,color:headerColor,maxWidth:120})
+text('DATE',pageWidth-margin,51,{size:6.5,style:'bold',color:headerColor,align:'right'})
+text(dateValue,pageWidth-margin,57,{size:8,color:headerColor,align:'right'})
 
 // Items table
-y=69
+y=79
 text('DESCRIPTION',margin,y,{size:7,style:'bold',color:primary})
 text('QTY',142,y,{size:7,style:'bold',color:primary,align:'right'})
 text('RATE',168,y,{size:7,style:'bold',color:primary,align:'right'})
