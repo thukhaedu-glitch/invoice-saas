@@ -102,6 +102,14 @@ const imageUrlToDataUrl=async url=>{
 if(!url)return null
 return new Promise(resolve=>{
 const img=new Image()
+let settled=false
+const finish=value=>{
+if(settled)return
+settled=true
+clearTimeout(timer)
+resolve(value)
+}
+const timer=setTimeout(()=>finish(null),4000)
 img.crossOrigin='anonymous'
 img.onload=()=>{
 try{
@@ -113,10 +121,10 @@ canvas.height=Math.max(1,Math.round(img.naturalHeight*scale))
 const ctx=canvas.getContext('2d')
 ctx.clearRect(0,0,canvas.width,canvas.height)
 ctx.drawImage(img,0,0,canvas.width,canvas.height)
-resolve(canvas.toDataURL('image/png'))
-}catch(_){resolve(null)}
+finish(canvas.toDataURL('image/png'))
+}catch(_){finish(null)}
 }
-img.onerror=()=>resolve(null)
+img.onerror=()=>finish(null)
 img.src=url
 })
 }
@@ -124,7 +132,10 @@ img.src=url
 const signatureToDataUrl=async(uid,fallbackUrl)=>{
 if(uid){
 try{
-const bytes=await getBytes(storageRef(storage,`signatures/${uid}`))
+const bytes=await Promise.race([
+getBytes(storageRef(storage,`signatures/${uid}`)),
+new Promise((_,reject)=>setTimeout(()=>reject(new Error('Signature load timed out')),4000)),
+])
 const objectUrl=URL.createObjectURL(new Blob([bytes]))
 const data=await imageUrlToDataUrl(objectUrl)
 URL.revokeObjectURL(objectUrl)
@@ -133,6 +144,11 @@ if(data)return data
 }
 return imageUrlToDataUrl(fallbackUrl)
 }
+
+const withTimeout=(promise,ms=5000)=>Promise.race([
+promise,
+new Promise(resolve=>setTimeout(()=>resolve(null),ms)),
+])
 
 const handleDownloadPDF=async()=>{
 setDownloading(true)
@@ -164,7 +180,7 @@ const output=Array.isArray(value)?value.map(v=>String(v)):String(value??'')
 pdf.text(output,x,yy,{align,maxWidth,lineHeightFactor:1.25})
 }
 const dateValue=invoice.date||(invoice.createdAt?.seconds?new Date(invoice.createdAt.seconds*1000).toLocaleDateString():'-')
-const logoData=await imageUrlToDataUrl(settings.logoUrl)
+const logoData=await withTimeout(imageUrlToDataUrl(settings.logoUrl))
 
 // Header
 pdf.setFillColor(settings.template==='minimal'?'#ffffff':primary)
@@ -282,9 +298,9 @@ ensureSpace(35)
 text('AUTHORIZED SIGNATURES',margin,y,{size:7,style:'bold',color:'#64748b'})
 y+=19
 const[staffSigData,adminSigData,ownerSigData]=await Promise.all([
-signatureToDataUrl(invoice.createdBy,staffSig),
-hasAdminApproval?signatureToDataUrl(invoice.approvedBy,adminSig):null,
-hasOwnerApproval?signatureToDataUrl(invoice.ownerApprovedBy,ownerSig):null,
+withTimeout(signatureToDataUrl(invoice.createdBy,staffSig)),
+hasAdminApproval?withTimeout(signatureToDataUrl(invoice.approvedBy,adminSig)):null,
+hasOwnerApproval?withTimeout(signatureToDataUrl(invoice.ownerApprovedBy,ownerSig)):null,
 ])
 if(staffSigData)pdf.addImage(staffSigData,margin,y-15,28,13,undefined,'FAST')
 line(margin,y,75,y,'#1a1d2e',0.35)
@@ -323,7 +339,7 @@ text('Scan to verify',pageWidth-margin-11,y+24,{size:6,color:'#64748b',align:'ce
 pdf.setProperties({title:`Invoice ${invoice.invoiceNumber||''}`,subject:'Invoice',creator:'Ankora-X'})
 pdf.save(`${invoice.invoiceNumber||'invoice'}.pdf`)
 }catch(e){console.error(e);alert(`PDF generation failed: ${e.message}`)}
-setDownloading(false)
+finally{setDownloading(false)}
 }
 
 if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh'}}>Loading...</div>
