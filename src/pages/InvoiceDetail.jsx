@@ -1,7 +1,8 @@
 import{useEffect,useState,useRef}from'react'
 import{useParams,useNavigate}from'react-router-dom'
-import{db,auth}from'../firebase'
+import{db,auth,storage}from'../firebase'
 import{doc,getDoc,getDocs,collection,query,where}from'firebase/firestore'
+import{ref as storageRef,getBytes}from'firebase/storage'
 import{ArrowLeft,Printer,Download}from'lucide-react'
 import{QRCodeSVG}from'qrcode.react'
 import jsPDF from'jspdf'
@@ -118,6 +119,19 @@ resolve(canvas.toDataURL('image/png'))
 img.onerror=()=>resolve(null)
 img.src=url
 })
+}
+
+const signatureToDataUrl=async(uid,fallbackUrl)=>{
+if(uid){
+try{
+const bytes=await getBytes(storageRef(storage,`signatures/${uid}`))
+const objectUrl=URL.createObjectURL(new Blob([bytes]))
+const data=await imageUrlToDataUrl(objectUrl)
+URL.revokeObjectURL(objectUrl)
+if(data)return data
+}catch(e){console.warn('Could not load signature bytes',e)}
+}
+return imageUrlToDataUrl(fallbackUrl)
 }
 
 const handleDownloadPDF=async()=>{
@@ -268,9 +282,9 @@ ensureSpace(35)
 text('AUTHORIZED SIGNATURES',margin,y,{size:7,style:'bold',color:'#64748b'})
 y+=19
 const[staffSigData,adminSigData,ownerSigData]=await Promise.all([
-imageUrlToDataUrl(staffSig),
-hasAdminApproval?imageUrlToDataUrl(adminSig):null,
-hasOwnerApproval?imageUrlToDataUrl(ownerSig):null,
+signatureToDataUrl(invoice.createdBy,staffSig),
+hasAdminApproval?signatureToDataUrl(invoice.approvedBy,adminSig):null,
+hasOwnerApproval?signatureToDataUrl(invoice.ownerApprovedBy,ownerSig):null,
 ])
 if(staffSigData)pdf.addImage(staffSigData,margin,y-15,28,13,undefined,'FAST')
 line(margin,y,75,y,'#1a1d2e',0.35)
