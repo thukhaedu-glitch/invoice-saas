@@ -159,6 +159,27 @@ img.src=dataUrl
 })
 }
 
+const flattenImageOnBackground=async(dataUrl,backgroundColor)=>{
+if(!dataUrl)return null
+return new Promise(resolve=>{
+const img=new Image()
+img.onload=()=>{
+try{
+const canvas=document.createElement('canvas')
+canvas.width=img.naturalWidth
+canvas.height=img.naturalHeight
+const ctx=canvas.getContext('2d')
+ctx.fillStyle=backgroundColor
+ctx.fillRect(0,0,canvas.width,canvas.height)
+ctx.drawImage(img,0,0)
+resolve(canvas.toDataURL('image/png'))
+}catch(_){resolve(dataUrl)}
+}
+img.onerror=()=>resolve(dataUrl)
+img.src=dataUrl
+})
+}
+
 const signatureToDataUrl=async(uid,fallbackUrl)=>{
 if(uid){
 try{
@@ -230,7 +251,9 @@ return true
 }
 const dateValue=invoice.date||(invoice.createdAt?.seconds?new Date(invoice.createdAt.seconds*1000).toLocaleDateString():'-')
 const rawLogoData=await withTimeout(imageUrlToDataUrl(settings.logoUrl))
-const logoData=await withTimeout(removeWhiteBackground(rawLogoData))
+const transparentLogoData=await withTimeout(removeWhiteBackground(rawLogoData))
+const logoBackground=settings.template==='minimal'?'#ffffff':primary
+const logoData=await withTimeout(flattenImageOnBackground(transparentLogoData,logoBackground))
 
 // Header
 pdf.setFillColor(settings.template==='minimal'?'#ffffff':primary)
