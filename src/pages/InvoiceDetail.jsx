@@ -208,10 +208,8 @@ pdf.rect(0,0,pageWidth,68,'F')
 const headerColor=settings.template==='minimal'?'#1a1d2e':'#ffffff'
 let companyX=margin
 if(logoData){
-pdf.setFillColor('#ffffff')
-pdf.roundedRect(margin,7,18,18,2,2,'F')
-await addImageContained(logoData,margin+1,8,16,16)
-companyX=margin+23
+await addImageContained(logoData,margin,16,16,16)
+companyX=margin+22
 }
 text(company?.name||'Company',companyX,15,{size:17,style:'bold',color:headerColor,maxWidth:105})
 let companyY=21
