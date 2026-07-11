@@ -5,7 +5,6 @@ import{doc,getDoc,getDocs,collection,query,where}from'firebase/firestore'
 import{ArrowLeft,Printer,Download}from'lucide-react'
 import{QRCodeSVG}from'qrcode.react'
 import jsPDF from'jspdf'
-import html2canvas from'html2canvas'
 
 export default function InvoiceDetail(){
 const{id}=useParams()
@@ -76,18 +75,197 @@ load()
 
 const handlePrint=()=>window.print()
 
+const qrToPng=async()=>{
+const svg=document.querySelector('[data-invoice-qr] svg')
+if(!svg)return null
+const source=new XMLSerializer().serializeToString(svg)
+const url=`data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(source)))}`
+return new Promise((resolve,reject)=>{
+const img=new Image()
+img.onload=()=>{
+const canvas=document.createElement('canvas')
+canvas.width=600
+canvas.height=600
+const ctx=canvas.getContext('2d')
+ctx.fillStyle='#ffffff'
+ctx.fillRect(0,0,600,600)
+ctx.drawImage(img,0,0,600,600)
+resolve(canvas.toDataURL('image/png'))
+}
+img.onerror=reject
+img.src=url
+})
+}
+
 const handleDownloadPDF=async()=>{
 setDownloading(true)
 try{
-const el=printRef.current
-const canvas=await html2canvas(el,{scale:2,useCORS:true,backgroundColor:'#ffffff'})
-const imgData=canvas.toDataURL('image/png')
 const pdf=new jsPDF('p','mm','a4')
-const pdfWidth=pdf.internal.pageSize.getWidth()
-const pdfHeight=(canvas.height*pdfWidth)/canvas.width
-pdf.addImage(imgData,'PNG',0,0,pdfWidth,pdfHeight)
+const pageWidth=210
+const pageHeight=297
+const margin=14
+const contentWidth=pageWidth-margin*2
+const primary=settings.primaryColor||'#4F6EF7'
+let y=0
+
+const setColor=hex=>pdf.setTextColor(hex)
+const line=(x1,y1,x2,y2,color='#e2e8f0',width=0.2)=>{
+pdf.setDrawColor(color)
+pdf.setLineWidth(width)
+pdf.line(x1,y1,x2,y2)
+}
+const ensureSpace=height=>{
+if(y+height<=pageHeight-16)return
+pdf.addPage()
+y=16
+}
+const text=(value,x,yy,{size=9,style='normal',color='#1a1d2e',align='left',maxWidth}={})=>{
+pdf.setFont('helvetica',style)
+pdf.setFontSize(size)
+setColor(color)
+pdf.text(String(value??''),x,yy,{align,maxWidth})
+}
+const dateValue=invoice.date||(invoice.createdAt?.seconds?new Date(invoice.createdAt.seconds*1000).toLocaleDateString():'-')
+
+// Header
+pdf.setFillColor(settings.template==='minimal'?'#ffffff':primary)
+pdf.rect(0,0,pageWidth,58,'F')
+const headerColor=settings.template==='minimal'?'#1a1d2e':'#ffffff'
+text(company?.name||'Company',margin,15,{size:17,style:'bold',color:headerColor})
+let companyY=21
+;[settings.companyAddress,settings.companyPhone,settings.companyEmail,settings.companyWebsite,settings.trnNumber?`TRN: ${settings.trnNumber}`:''].filter(Boolean).forEach(v=>{
+text(v,margin,companyY,{size:7,color:headerColor})
+companyY+=4
+})
+text('INVOICE',pageWidth-margin,15,{size:19,style:'bold',color:headerColor,align:'right'})
+text(`#${invoice.invoiceNumber||'-'}`,pageWidth-margin,21,{size:8,color:headerColor,align:'right'})
+text((s==='pending_approval'?'Needs Approval':s).toUpperCase(),pageWidth-margin,27,{size:7,style:'bold',color:headerColor,align:'right'})
+line(margin,37,pageWidth-margin,37,settings.template==='minimal'?'#e2e8f0':'#ffffff',0.15)
+text('BILL TO',margin,43,{size:6.5,style:'bold',color:headerColor})
+text(invoice.clientName||'-',margin,49,{size:10,style:'bold',color:headerColor})
+text([invoice.clientEmail,invoice.clientPhone,invoice.clientAddress].filter(Boolean).join(' | '),margin,54,{size:6.5,color:headerColor,maxWidth:120})
+text('DATE',pageWidth-margin,43,{size:6.5,style:'bold',color:headerColor,align:'right'})
+text(dateValue,pageWidth-margin,49,{size:8,color:headerColor,align:'right'})
+
+// Items table
+y=69
+text('DESCRIPTION',margin,y,{size:7,style:'bold',color:primary})
+text('QTY',142,y,{size:7,style:'bold',color:primary,align:'right'})
+text('RATE',168,y,{size:7,style:'bold',color:primary,align:'right'})
+text('TOTAL',pageWidth-margin,y,{size:7,style:'bold',color:primary,align:'right'})
+y+=3
+line(margin,y,pageWidth-margin,y,primary,0.6)
+y+=6
+items.forEach(item=>{
+const description=String(item.desc||item.description||'-')
+const descLines=pdf.splitTextToSize(description,105)
+const rowHeight=Math.max(8,descLines.length*4.2+3)
+ensureSpace(rowHeight+4)
+text(descLines,margin,y,{size:8})
+text(item.qty||1,142,y,{size:8,color:'#64748b',align:'right'})
+text(`${Number(item.price||item.rate||0).toLocaleString()} Ks`,168,y,{size:8,color:'#64748b',align:'right'})
+text(`${Number((item.qty||1)*(item.price||item.rate||0)).toLocaleString()} Ks`,pageWidth-margin,y,{size:8,style:'bold',align:'right'})
+y+=rowHeight
+line(margin,y-3,pageWidth-margin,y-3,'#edf0f4',0.15)
+})
+
+// Totals
+ensureSpace(27)
+y+=3
+const totalsX=142
+text('Subtotal',totalsX,y,{size:8,color:'#64748b'})
+text(`${subtotal.toLocaleString()} Ks`,pageWidth-margin,y,{size:8,align:'right'})
+y+=6
+if(Number(invoice.discount||0)>0){
+text('Discount',totalsX,y,{size:8,color:'#64748b'})
+text(`-${Number(invoice.discount).toLocaleString()} Ks`,pageWidth-margin,y,{size:8,color:'#dc2626',align:'right'})
+y+=6
+}
+if(Number(invoice.taxRate||0)>0){
+text(`Tax (${invoice.taxRate}%)`,totalsX,y,{size:8,color:'#64748b'})
+text(`+${Math.round(subtotal*invoice.taxRate/100).toLocaleString()} Ks`,pageWidth-margin,y,{size:8,align:'right'})
+y+=6
+}
+line(totalsX,y-2,pageWidth-margin,y-2,primary,0.6)
+text('Total',totalsX,y+4,{size:10,style:'bold'})
+text(`${Number(invoice.totalAmount||0).toLocaleString()} Ks`,pageWidth-margin,y+4,{size:10,style:'bold',color:primary,align:'right'})
+y+=13
+
+// Payment methods
+if(settings.paymentMethods?.length){
+ensureSpace(14+settings.paymentMethods.length*7)
+text('PAYMENT METHODS',margin,y,{size:7,style:'bold',color:'#64748b'})
+y+=5
+text('BANK NAME',margin,y,{size:6.5,style:'bold',color:primary})
+text('ACCOUNT NO.',80,y,{size:6.5,style:'bold',color:primary})
+text('ACCOUNT NAME',140,y,{size:6.5,style:'bold',color:primary})
+y+=3
+line(margin,y,pageWidth-margin,y,'#dfe5ee',0.2)
+y+=5
+settings.paymentMethods.forEach(m=>{
+text(m.bankName||'-',margin,y,{size:7.5})
+text(m.accountNo||'-',80,y,{size:7.5,color:'#64748b'})
+text(m.accountName||'-',140,y,{size:7.5,color:'#64748b'})
+y+=7
+})
+}
+
+if(settings.paymentTerms){
+ensureSpace(15)
+line(margin,y-2,pageWidth-margin,y-2,'#edf0f4',0.15)
+text('PAYMENT TERMS',margin,y+4,{size:6.5,style:'bold',color:'#64748b'})
+const terms=pdf.splitTextToSize(settings.paymentTerms,145)
+text(terms,45,y+4,{size:7,color:'#64748b'})
+y+=Math.max(12,terms.length*4)
+}
+
+if(invoice.note){
+const noteLines=pdf.splitTextToSize(invoice.note,contentWidth)
+ensureSpace(10+noteLines.length*4)
+text('NOTE',margin,y,{size:6.5,style:'bold',color:'#64748b'})
+y+=5
+text(noteLines,margin,y,{size:7.5,color:'#64748b'})
+y+=noteLines.length*4+4
+}
+
+// Signature labels remain vector text; uploaded signatures stay image assets on screen/print.
+ensureSpace(35)
+text('AUTHORIZED SIGNATURES',margin,y,{size:7,style:'bold',color:'#64748b'})
+y+=19
+line(margin,y,75,y,'#1a1d2e',0.35)
+text('PREPARED BY',margin,y+5,{size:6.5,style:'bold',color:'#64748b'})
+text(staffName||'Staff',margin,y+10,{size:7.5})
+if(hasAdminApproval){
+line(80,y,135,y,'#1a1d2e',0.35)
+text('APPROVED BY',80,y+5,{size:6.5,style:'bold',color:'#64748b'})
+text(adminName||'Admin',80,y+10,{size:7.5})
+}
+if(hasOwnerApproval){
+line(140,y,pageWidth-margin,y,'#1a1d2e',0.35)
+text('DIRECTOR APPROVED',140,y+5,{size:6.5,style:'bold',color:'#64748b'})
+text(ownerName||'Director',140,y+10,{size:7.5})
+}
+y+=18
+
+// Footer and QR are kept within the printable page area.
+ensureSpace(31)
+pdf.setFillColor('#f8fafc')
+pdf.rect(0,y-4,pageWidth,35,'F')
+text(settings.footerText||'Thank you for your business!',margin,y+3,{size:7.5,color:'#64748b'})
+text('This invoice is system-generated and does not require a physical seal.',margin,y+8,{size:6.5,color:'#94a3b8'})
+text('Verify authenticity by scanning the QR code.',margin,y+12,{size:6.5,color:'#94a3b8'})
+text('System developed by Ankora-X',margin,y+16,{size:6.5,color:'#94a3b8'})
+if(settings.showQR){
+const qr=await qrToPng()
+if(qr){
+pdf.addImage(qr,'PNG',pageWidth-margin-22,y-1,22,22,undefined,'FAST')
+text('Scan to verify',pageWidth-margin-11,y+24,{size:6,color:'#64748b',align:'center'})
+}
+}
+
+pdf.setProperties({title:`Invoice ${invoice.invoiceNumber||''}`,subject:'Invoice',creator:'Ankora-X'})
 pdf.save(`${invoice.invoiceNumber||'invoice'}.pdf`)
-}catch(e){console.error(e)}
+}catch(e){console.error(e);alert(`PDF generation failed: ${e.message}`)}
 setDownloading(false)
 }
 
@@ -365,7 +543,7 @@ body{background:white!important;margin:0}
 <div style={{fontSize:10,color:'#9aa0b4'}}>System developed by Ankora-X</div>
 </div>
 {settings.showQR&&(
-<div style={{textAlign:'center',flexShrink:0}}>
+<div data-invoice-qr style={{textAlign:'center',flexShrink:0}}>
 <QRCodeSVG value={verifyUrl} size={70} fgColor={pc}/>
 <div style={{fontSize:10,color:'#9aa0b4',marginTop:4}}>Scan to verify</div>
 </div>
