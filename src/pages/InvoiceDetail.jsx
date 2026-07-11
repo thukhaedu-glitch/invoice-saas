@@ -146,7 +146,8 @@ const text=(value,x,yy,{size=9,style='normal',color='#1a1d2e',align='left',maxWi
 pdf.setFont('helvetica',style)
 pdf.setFontSize(size)
 setColor(color)
-pdf.text(String(value??''),x,yy,{align,maxWidth})
+const output=Array.isArray(value)?value.map(v=>String(v)):String(value??'')
+pdf.text(output,x,yy,{align,maxWidth,lineHeightFactor:1.25})
 }
 const dateValue=invoice.date||(invoice.createdAt?.seconds?new Date(invoice.createdAt.seconds*1000).toLocaleDateString():'-')
 const logoData=await imageUrlToDataUrl(settings.logoUrl)
@@ -242,12 +243,15 @@ y+=7
 }
 
 if(settings.paymentTerms){
-ensureSpace(15)
+pdf.setFont('helvetica','normal')
+pdf.setFontSize(7)
+const terms=pdf.splitTextToSize(settings.paymentTerms,145)
+const termsHeight=Math.max(5,terms.length*3.8)
+ensureSpace(termsHeight+14)
 line(margin,y-2,pageWidth-margin,y-2,'#edf0f4',0.15)
 text('PAYMENT TERMS',margin,y+4,{size:6.5,style:'bold',color:'#64748b'})
-const terms=pdf.splitTextToSize(settings.paymentTerms,145)
 text(terms,45,y+4,{size:7,color:'#64748b'})
-y+=Math.max(12,terms.length*4)
+y+=termsHeight+10
 }
 
 if(invoice.note){
