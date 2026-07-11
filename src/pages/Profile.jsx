@@ -16,6 +16,29 @@ const Section=({title,icon:Icon,children})=>(
 </div>
 )
 
+const signatureFileToDataUrl=file=>new Promise((resolve,reject)=>{
+const reader=new FileReader()
+reader.onerror=reject
+reader.onload=()=>{
+const img=new Image()
+img.onerror=reject
+img.onload=()=>{
+const maxWidth=1000
+const maxHeight=400
+const scale=Math.min(1,maxWidth/img.naturalWidth,maxHeight/img.naturalHeight)
+const canvas=document.createElement('canvas')
+canvas.width=Math.max(1,Math.round(img.naturalWidth*scale))
+canvas.height=Math.max(1,Math.round(img.naturalHeight*scale))
+const ctx=canvas.getContext('2d')
+ctx.clearRect(0,0,canvas.width,canvas.height)
+ctx.drawImage(img,0,0,canvas.width,canvas.height)
+resolve(canvas.toDataURL('image/png'))
+}
+img.src=reader.result
+}
+reader.readAsDataURL(file)
+})
+
 export default function Profile(){
 const{getLimit,planLabel}=usePlans()
 const[companyId,setCompanyId]=useState(null)
@@ -23,7 +46,7 @@ const[saving,setSaving]=useState(false)
 const[uploadingAvatar,setUploadingAvatar]=useState(false)
 const[uploadingSignature,setUploadingSignature]=useState(false)
 const[pwModal,setPwModal]=useState(false)
-const[profile,setProfile]=useState({displayName:'',avatarUrl:'',signatureUrl:'',phone:'',role:'staff'})
+const[profile,setProfile]=useState({displayName:'',avatarUrl:'',signatureUrl:'',signatureDataUrl:'',phone:'',role:'staff'})
 const[company,setCompany]=useState({name:'',plan:'free',inviteCode:''})
 const[members,setMembers]=useState([])
 const[managedBy,setManagedBy]=useState({})
@@ -90,11 +113,12 @@ const file=e.target.files[0]
 if(!file)return
 setUploadingSignature(true)
 try{
+const signatureDataUrl=await signatureFileToDataUrl(file)
 const storageRef=ref(storage,`signatures/${auth.currentUser.uid}`)
 await uploadBytes(storageRef,file)
 const url=await getDownloadURL(storageRef)
-setProfile(p=>({...p,signatureUrl:url}))
-await setDoc(doc(db,'users',auth.currentUser.uid),{signatureUrl:url},{merge:true})
+setProfile(p=>({...p,signatureUrl:url,signatureDataUrl}))
+await setDoc(doc(db,'users',auth.currentUser.uid),{signatureUrl:url,signatureDataUrl},{merge:true})
 alert('Signature saved!')
 }catch(err){console.error(err)}
 setUploadingSignature(false)
@@ -102,8 +126,8 @@ setUploadingSignature(false)
 
 const handleRemoveSignature=async()=>{
 if(!confirm('Remove signature?'))return
-setProfile(p=>({...p,signatureUrl:''}))
-await setDoc(doc(db,'users',auth.currentUser.uid),{signatureUrl:''},{merge:true})
+setProfile(p=>({...p,signatureUrl:'',signatureDataUrl:''}))
+await setDoc(doc(db,'users',auth.currentUser.uid),{signatureUrl:'',signatureDataUrl:''},{merge:true})
 }
 
 const save=async()=>{
