@@ -49,21 +49,21 @@ if(invData.createdBy){
 const s=await getDoc(doc(db,'users',invData.createdBy))
 if(s.exists()){
 setStaffName(s.data().displayName||s.data().email||'Staff')
-setStaffSig(s.data().signatureUrl||'')
+setStaffSig(s.data().signatureDataUrl||s.data().signatureUrl||'')
 }
 }
 if(invData.approvedBy){
 const s=await getDoc(doc(db,'users',invData.approvedBy))
 if(s.exists()){
 setAdminName(s.data().displayName||s.data().email||'Admin')
-setAdminSig(s.data().signatureUrl||'')
+setAdminSig(s.data().signatureDataUrl||s.data().signatureUrl||'')
 }
 }
 if(invData.ownerApprovedBy){
 const s=await getDoc(doc(db,'users',invData.ownerApprovedBy))
 if(s.exists()){
 setOwnerName(s.data().displayName||s.data().email||'Owner')
-setOwnerSig(s.data().signatureUrl||'')
+setOwnerSig(s.data().signatureDataUrl||s.data().signatureUrl||'')
 }
 }
 }
