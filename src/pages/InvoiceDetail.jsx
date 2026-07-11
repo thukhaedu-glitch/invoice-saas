@@ -130,6 +130,35 @@ img.src=url
 })
 }
 
+const removeWhiteBackground=async dataUrl=>{
+if(!dataUrl)return null
+return new Promise(resolve=>{
+const img=new Image()
+img.onload=()=>{
+try{
+const canvas=document.createElement('canvas')
+canvas.width=img.naturalWidth
+canvas.height=img.naturalHeight
+const ctx=canvas.getContext('2d',{willReadFrequently:true})
+ctx.drawImage(img,0,0)
+const imageData=ctx.getImageData(0,0,canvas.width,canvas.height)
+const pixels=imageData.data
+for(let i=0;i<pixels.length;i+=4){
+const r=pixels[i],g=pixels[i+1],b=pixels[i+2]
+if(r>235&&g>235&&b>235){
+const average=(r+g+b)/3
+pixels[i+3]=Math.round(pixels[i+3]*Math.max(0,(255-average)/20))
+}
+}
+ctx.putImageData(imageData,0,0)
+resolve(canvas.toDataURL('image/png'))
+}catch(_){resolve(dataUrl)}
+}
+img.onerror=()=>resolve(dataUrl)
+img.src=dataUrl
+})
+}
+
 const signatureToDataUrl=async(uid,fallbackUrl)=>{
 if(uid){
 try{
@@ -200,7 +229,8 @@ pdf.addImage(source,'PNG',drawX,drawY,width,height,undefined,'FAST')
 return true
 }
 const dateValue=invoice.date||(invoice.createdAt?.seconds?new Date(invoice.createdAt.seconds*1000).toLocaleDateString():'-')
-const logoData=await withTimeout(imageUrlToDataUrl(settings.logoUrl))
+const rawLogoData=await withTimeout(imageUrlToDataUrl(settings.logoUrl))
+const logoData=await withTimeout(removeWhiteBackground(rawLogoData))
 
 // Header
 pdf.setFillColor(settings.template==='minimal'?'#ffffff':primary)
