@@ -6,6 +6,7 @@ import{ref as storageRef,getBytes}from'firebase/storage'
 import{ArrowLeft,Printer,Download}from'lucide-react'
 import{QRCodeSVG}from'qrcode.react'
 import jsPDF from'jspdf'
+import html2canvas from'html2canvas'
 
 export default function InvoiceDetail(){
 const{id}=useParams()
@@ -302,18 +303,31 @@ withTimeout(signatureToDataUrl(invoice.createdBy,staffSig)),
 hasAdminApproval?withTimeout(signatureToDataUrl(invoice.approvedBy,adminSig)):null,
 hasOwnerApproval?withTimeout(signatureToDataUrl(invoice.ownerApprovedBy,ownerSig)):null,
 ])
-if(staffSigData)pdf.addImage(staffSigData,margin,y-15,28,13,undefined,'FAST')
+const addSignatureImage=async(data,role,x)=>{
+try{
+if(data){
+pdf.addImage(data,'PNG',x,y-15,28,13,undefined,'FAST')
+return
+}
+const renderedImage=document.querySelector(`img[data-signature-role="${role}"]`)
+if(renderedImage?.complete&&renderedImage.naturalWidth>0){
+const canvas=await withTimeout(html2canvas(renderedImage,{scale:4,useCORS:true,backgroundColor:null,logging:false}))
+if(canvas)pdf.addImage(canvas.toDataURL('image/png'),'PNG',x,y-15,28,13,undefined,'FAST')
+}
+}catch(e){console.warn(`Could not add ${role} signature to PDF`,e)}
+}
+await addSignatureImage(staffSigData,'staff',margin)
 line(margin,y,75,y,'#1a1d2e',0.35)
 text('PREPARED BY',margin,y+5,{size:6.5,style:'bold',color:'#64748b'})
 text(staffName||'Staff',margin,y+10,{size:7.5})
 if(hasAdminApproval){
-if(adminSigData)pdf.addImage(adminSigData,80,y-15,28,13,undefined,'FAST')
+await addSignatureImage(adminSigData,'admin',80)
 line(80,y,135,y,'#1a1d2e',0.35)
 text('APPROVED BY',80,y+5,{size:6.5,style:'bold',color:'#64748b'})
 text(adminName||'Admin',80,y+10,{size:7.5})
 }
 if(hasOwnerApproval){
-if(ownerSigData)pdf.addImage(ownerSigData,140,y-15,28,13,undefined,'FAST')
+await addSignatureImage(ownerSigData,'owner',140)
 line(140,y,pageWidth-margin,y,'#1a1d2e',0.35)
 text('DIRECTOR APPROVED',140,y+5,{size:6.5,style:'bold',color:'#64748b'})
 text(ownerName||'Director',140,y+10,{size:7.5})
@@ -563,7 +577,7 @@ body{background:white!important;margin:0}
 <div>
 <div style={{height:64,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',paddingBottom:4}}>
 {staffSig?(
-<img src={staffSig} style={{height:56,objectFit:'contain',maxWidth:'100%'}} alt="signature"/>
+<img src={staffSig} data-signature-role="staff" style={{height:56,objectFit:'contain',maxWidth:'100%'}} alt="signature"/>
 ):(
 <span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{staffName||'—'}</span>
 )}
@@ -578,7 +592,7 @@ body{background:white!important;margin:0}
 <div>
 <div style={{height:64,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',paddingBottom:4}}>
 {adminSig?(
-<img src={adminSig} style={{height:56,objectFit:'contain',maxWidth:'100%'}} alt="signature"/>
+<img src={adminSig} data-signature-role="admin" style={{height:56,objectFit:'contain',maxWidth:'100%'}} alt="signature"/>
 ):(
 <span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{adminName||'—'}</span>
 )}
@@ -594,7 +608,7 @@ body{background:white!important;margin:0}
 <div>
 <div style={{height:64,borderBottom:'1.5px solid #1a1d2e',marginBottom:8,display:'flex',alignItems:'flex-end',paddingBottom:4}}>
 {ownerSig?(
-<img src={ownerSig} style={{height:56,objectFit:'contain',maxWidth:'100%'}} alt="signature"/>
+<img src={ownerSig} data-signature-role="owner" style={{height:56,objectFit:'contain',maxWidth:'100%'}} alt="signature"/>
 ):(
 <span style={{fontSize:12,color:'#64748b',fontStyle:'italic'}}>{ownerName||'—'}</span>
 )}
