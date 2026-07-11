@@ -8,6 +8,7 @@ import { sendInvoiceReminder } from '../utils/emailService'
 import { useRole } from '../hooks/useRole'
 import ConfirmPassword from '../components/ConfirmPassword'
 import { logAction } from '../utils/auditLog'
+import { syncPublicVerifications } from '../utils/publicVerification'
 import React from 'react'
 
 const months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
@@ -53,6 +54,7 @@ export default function Invoices() {
           const cid = snap.docs[0].id
           setCompanyId(cid)
           const cData = snap.docs[0].data()
+          const publicCompanyName = cData.name || ''
           setManagedBy(cData.managedBy || {})
           const [sSnap, baSnap] = await Promise.all([
             getDoc(doc(db, 'companies', cid, '_config', 'invoiceSettings')),
@@ -76,7 +78,9 @@ export default function Invoices() {
           }
           setBankAccounts(baSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(a => a.isActive !== false))
           const u = onSnapshot(collection(db, 'companies', cid, 'invoices'), snap => {
-            setInvoices(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)))
+            const docs = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+            setInvoices(docs)
+            syncPublicVerifications(cid, publicCompanyName, docs, 'invoice').catch(console.error)
             setLoading(false)
           })
           return u
