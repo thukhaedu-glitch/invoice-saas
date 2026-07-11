@@ -6,6 +6,7 @@ import{FileCheck,Plus,Edit,Trash2,CopyPlus,Link,Printer,FileText,Search,X}from'l
 import{useNavigate}from'react-router-dom'
 import{useRole}from'../hooks/useRole'
 import ConfirmPassword from'../components/ConfirmPassword'
+import{syncPublicVerifications}from'../utils/publicVerification'
 
 const months=['01','02','03','04','05','06','07','08','09','10','11','12']
 const monthNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
@@ -28,9 +29,12 @@ try{
 const snap=await getDocs(query(collection(db,'companies'),where(`members.${auth.currentUser.uid}`,'!=',null)))
 if(!snap.empty){
 const cid=snap.docs[0].id
+const companyName=snap.docs[0].data().name||''
 setCompanyId(cid)
 const u=onSnapshot(collection(db,'companies',cid,'quotations'),snap=>{
-setQuotations(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0)))
+const docs=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0))
+setQuotations(docs)
+syncPublicVerifications(cid,companyName,docs,'quotation').catch(console.error)
 setLoading(false)
 })
 return u
