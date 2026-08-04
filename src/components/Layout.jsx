@@ -4,6 +4,7 @@ import { signOut } from 'firebase/auth'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { FileText, FileCheck, ScrollText, Users, Wallet, Briefcase, BarChart2, User, Settings, LogOut, Menu, X, BookOpen, Landmark, LayoutDashboard, Receipt, GitCompare, BookMarked, PieChart, Shield, Crown } from 'lucide-react'
 import { getDocs, collection, query, where } from 'firebase/firestore'
+import { useCurrency } from '../hooks/useCurrency'
 import { usePlans } from '../hooks/usePlans'
 import Notifications from './Notifications'
 import LanguageSwitcher from './LanguageSwitcher'
@@ -35,6 +36,7 @@ export default function Layout({ children, title }) {
   const [plan, setPlan] = useState('free')
   const [cashBalance, setCashBalance] = useState(0)
   const [acctCount, setAcctCount] = useState(0)
+  const currency = useCurrency(companyId)
   const { planLabel } = usePlans()
   const location = useLocation()
   const navigate = useNavigate()
@@ -166,7 +168,7 @@ export default function Layout({ children, title }) {
         <div style={{ padding: 10, borderTop: '0.5px solid var(--border)' }}>
           <div style={{ padding: 14, marginBottom: 8, borderRadius: 12, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginBottom: 4 }}>Cash Balance</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#fff', lineHeight: 1.1 }}>{Math.round(cashBalance).toLocaleString()} <span style={{ fontSize: 11, fontWeight: 500, color: 'rgba(255,255,255,0.5)' }}>Ks</span></div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#fff', lineHeight: 1.1 }}>{Math.round(cashBalance).toLocaleString()} <span style={{ fontSize: 11, fontWeight: 500, color: 'rgba(255,255,255,0.5)' }}>{currency.symbol}</span></div>
             <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.4)', marginTop: 3 }}>{acctCount} account{acctCount !== 1 ? 's' : ''}</div>
           </div>
           <div style={{ padding: '6px 8px', marginBottom: 6, fontSize: 11, color: 'var(--text-3)', textAlign: 'center' }}>
