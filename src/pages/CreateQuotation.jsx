@@ -103,6 +103,8 @@ setSaving(true)
 try{
 await addDoc(collection(db,'companies',companyId,'quotations'),{
 ...form,items,
+currencyCode: currency.code,
+currencySymbol: currency.symbol,
 discount:Number(form.discount),
 taxRate:Number(form.taxRate),
 totalAmount:total,
