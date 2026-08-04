@@ -6,6 +6,7 @@ import{QRCodeSVG}from'qrcode.react'
 import html2canvas from'html2canvas'
 import jsPDF from'jspdf'
 import{ArrowLeft,Printer,Download,FileText}from'lucide-react'
+import{resolveCurrency}from'../hooks/useCurrency'
 
 export default function QuotationDetail(){
 const{id}=useParams()
@@ -112,6 +113,8 @@ const subtotal=quotation.items?.reduce((s,i)=>s+Number(i.qty||1)*Number(i.price|
 const tax=subtotal*(Number(quotation.taxRate||0)/100)
 const total=quotation.totalAmount||subtotal-Number(quotation.discount||0)+tax
 const primaryColor=settings.primaryColor||'#4F6EF7'
+const currency=resolveCurrency(settings)
+const money=value=>`${Number(value||0).toLocaleString()} ${currency.symbol}`
 const hasAdminApproval=!!quotation.approvedBy||!!quotation.adminApprovedBy
 const hasOwnerApproval=!!quotation.ownerApprovedBy
 
@@ -215,8 +218,8 @@ body{background:white!important;margin:0}
 {item.imageUrl&&<img src={item.imageUrl} style={{height:48,width:48,objectFit:'cover',borderRadius:4,marginTop:4}}/>}
 </td>
 <td style={{padding:'10px 12px',textAlign:'center',fontSize:13,borderBottom:'0.5px solid #f1f5f9'}}>{item.qty}</td>
-<td style={{padding:'10px 12px',textAlign:'right',fontSize:13,borderBottom:'0.5px solid #f1f5f9'}}>{Number(item.price||0).toLocaleString()} Ks</td>
-<td style={{padding:'10px 12px',textAlign:'right',fontSize:13,fontWeight:500,borderBottom:'0.5px solid #f1f5f9'}}>{(Number(item.qty||1)*Number(item.price||0)).toLocaleString()} Ks</td>
+<td style={{padding:'10px 12px',textAlign:'right',fontSize:13,borderBottom:'0.5px solid #f1f5f9'}}>{money(item.price)}</td>
+<td style={{padding:'10px 12px',textAlign:'right',fontSize:13,fontWeight:500,borderBottom:'0.5px solid #f1f5f9'}}>{money(Number(item.qty||1)*Number(item.price||0))}</td>
 </tr>
 ))}
 </tbody>
@@ -227,16 +230,16 @@ body{background:white!important;margin:0}
 <div style={{padding:'0 40px 24px',display:'flex',justifyContent:'flex-end'}}>
 <div style={{width:240}}>
 {[
-{label:'Subtotal',value:`${subtotal.toLocaleString()} Ks`},
-...(quotation.discount>0?[{label:'Discount',value:`-${Number(quotation.discount).toLocaleString()} Ks`,color:'#dc2626'}]:[]),
-...(quotation.taxRate>0?[{label:`Tax (${quotation.taxRate}%)`,value:`+${Math.round(tax).toLocaleString()} Ks`}]:[]),
+{label:'Subtotal',value:money(subtotal)},
+...(quotation.discount>0?[{label:'Discount',value:`-${money(quotation.discount)}`,color:'#dc2626'}]:[]),
+...(quotation.taxRate>0?[{label:`Tax (${quotation.taxRate}%)`,value:`+${money(Math.round(tax))}`}]:[]),
 ].map(({label,value,color})=>(
 <div key={label} style={{display:'flex',justifyContent:'space-between',padding:'4px 0',fontSize:13,color:color||'#64748b'}}>
 <span>{label}</span><span>{value}</span>
 </div>
 ))}
 <div style={{display:'flex',justifyContent:'space-between',padding:'10px 12px',background:primaryColor,borderRadius:8,marginTop:8,color:'white',fontWeight:700,fontSize:15}}>
-<span>Total</span><span>{Number(total).toLocaleString()} Ks</span>
+<span>Total</span><span>{money(total)}</span>
 </div>
 </div>
 </div>
