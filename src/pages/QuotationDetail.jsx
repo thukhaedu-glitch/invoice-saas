@@ -113,7 +113,7 @@ const subtotal=quotation.items?.reduce((s,i)=>s+Number(i.qty||1)*Number(i.price|
 const tax=subtotal*(Number(quotation.taxRate||0)/100)
 const total=quotation.totalAmount||subtotal-Number(quotation.discount||0)+tax
 const primaryColor=settings.primaryColor||'#4F6EF7'
-const currency=resolveCurrency(settings)
+const currency = { code: 'AED', symbol: 'AED' }
 const money=value=>`${Number(value||0).toLocaleString()} ${currency.symbol}`
 const hasAdminApproval=!!quotation.approvedBy||!!quotation.adminApprovedBy
 const hasOwnerApproval=!!quotation.ownerApprovedBy
