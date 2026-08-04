@@ -6,6 +6,7 @@ import{useNavigate}from'react-router-dom'
 import Layout from'../components/Layout'
 import{Plus,Trash2,Save,ArrowLeft,Image,X}from'lucide-react'
 import{usePlans}from'../hooks/usePlans'
+import{useCurrency}from'../hooks/useCurrency'
 
 export default function CreateQuotation(){
 const navigate=useNavigate()
@@ -24,6 +25,8 @@ validUntil:'',
 note:'',discount:0,taxRate:0,
 })
 const[items,setItems]=useState([{desc:'',qty:1,price:0,imageUrl:''}])
+const currency=useCurrency(companyId)
+const money=value=>`${Number(value||0).toLocaleString()} ${currency.symbol}`
 
 useEffect(()=>{
 const load=async()=>{
@@ -169,7 +172,7 @@ return(
 <input className="form-input" type="number" value={item.qty} onChange={e=>updateItem(i,'qty',e.target.value)} style={{textAlign:'center'}} placeholder="Qty"/>
 <input className="form-input" type="number" value={item.price} onChange={e=>updateItem(i,'price',e.target.value)} style={{textAlign:'right'}} placeholder="Price"/>
 <div className="form-input" style={{display:'flex',alignItems:'center',justifyContent:'flex-end',fontWeight:500,background:'white'}}>
-{(item.qty*item.price).toLocaleString()} Ks
+{money(item.qty*item.price)}
 </div>
 <button type="button" onClick={()=>items.length>1&&setItems(items.filter((_,j)=>j!==i))} style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)',display:'flex',alignItems:'center',justifyContent:'center'}}>
 <Trash2 size={15}/>
@@ -209,7 +212,7 @@ return(
 </div>
 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
 <div>
-<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Discount (Ks)</label>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Discount ({currency.symbol})</label>
 <input className="form-input" type="number" value={form.discount} onChange={e=>setForm(f=>({...f,discount:e.target.value}))} style={{textAlign:'right'}}/>
 </div>
 <div>
@@ -227,10 +230,10 @@ return(
 <div style={{fontWeight:700,fontSize:16,color:'var(--text-1)',marginTop:8}}>Total</div>
 </div>
 <div style={{textAlign:'right',minWidth:120}}>
-<div style={{marginBottom:4}}>{subtotal.toLocaleString()} Ks</div>
-<div style={{color:'var(--danger)',marginBottom:4}}>-{Number(form.discount).toLocaleString()} Ks</div>
-{form.taxRate>0&&<div style={{marginBottom:4}}>+{tax.toLocaleString()} Ks</div>}
-<div style={{fontWeight:700,fontSize:16,marginTop:8}}>{total.toLocaleString()} Ks</div>
+<div style={{marginBottom:4}}>{money(subtotal)}</div>
+<div style={{color:'var(--danger)',marginBottom:4}}>-{money(form.discount)}</div>
+{form.taxRate>0&&<div style={{marginBottom:4}}>+{money(tax)}</div>}
+<div style={{fontWeight:700,fontSize:16,marginTop:8}}>{money(total)}</div>
 </div>
 </div>
 </div>
