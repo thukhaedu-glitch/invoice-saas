@@ -7,12 +7,15 @@ import{useNavigate}from'react-router-dom'
 import{useRole}from'../hooks/useRole'
 import ConfirmPassword from'../components/ConfirmPassword'
 import{syncPublicVerifications}from'../utils/publicVerification'
+import{useCurrency}from'../hooks/useCurrency'
 
 const months=['01','02','03','04','05','06','07','08','09','10','11','12']
 const monthNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
 export default function Quotations(){
 const[companyId,setCompanyId]=useState(null)
+const currency=useCurrency(companyId)
+const money=value=>`${Number(value||0).toLocaleString()} ${currency.symbol}`
 const[quotations,setQuotations]=useState([])
 const[loading,setLoading]=useState(true)
 const[search,setSearch]=useState('')
@@ -128,7 +131,7 @@ return(
 </div>
 <div className="card" style={{padding:16}}>
 <div style={{fontSize:12,fontWeight:500,color:'var(--text-2)',marginBottom:8}}>Total Value</div>
-<div style={{fontSize:20,fontWeight:700,color:'#16a34a'}}>{totalAmt.toLocaleString()} Ks</div>
+<div style={{fontSize:20,fontWeight:700,color:'#16a34a'}}>{money(totalAmt)}</div>
 </div>
 </div>
 
@@ -182,7 +185,7 @@ return(
 <tr key={item.id}>
 <td style={{color:'var(--primary)',fontFamily:'monospace',fontWeight:500,fontSize:12}}>{item.quotationNumber}</td>
 <td style={{fontWeight:500}}>{item.clientName}</td>
-<td style={{textAlign:'right',fontWeight:500}}>{Number(item.totalAmount||0).toLocaleString()} Ks</td>
+<td style={{textAlign:'right',fontWeight:500}}>{money(item.totalAmount||0)}</td>
 <td style={{color:'var(--text-3)',fontSize:12}}>{getDate(item)||'-'}</td>
 <td style={{textAlign:'center'}}>
 <div style={{display:'flex',gap:4,justifyContent:'center',alignItems:'center'}}>
