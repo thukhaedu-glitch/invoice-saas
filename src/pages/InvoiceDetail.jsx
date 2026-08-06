@@ -7,6 +7,7 @@ import{ArrowLeft,Printer,Download}from'lucide-react'
 import{QRCodeSVG}from'qrcode.react'
 import jsPDF from'jspdf'
 import html2canvas from'html2canvas'
+import{resolveCurrency}from'../hooks/useCurrency'
 
 export default function InvoiceDetail(){
 const{id}=useParams()
@@ -29,6 +30,9 @@ const[adminSig,setAdminSig]=useState('')
 const[ownerSig,setOwnerSig]=useState('')
 const[loading,setLoading]=useState(true)
 const[downloading,setDownloading]=useState(false)
+
+const currency=invoice?.currencySymbol?{code:invoice.currencyCode||'MMK',symbol:invoice.currencySymbol}:resolveCurrency(settings)
+const money=v=>`${Number(v||0).toLocaleString()} ${currency.symbol}`
 
 useEffect(()=>{
 const load=async()=>{
@@ -295,8 +299,8 @@ const rowHeight=Math.max(8,descLines.length*4.2+3)
 ensureSpace(rowHeight+4)
 text(descLines,margin,y,{size:8})
 text(item.qty||1,142,y,{size:8,color:'#64748b',align:'right'})
-text(`${Number(item.price||item.rate||0).toLocaleString()} Ks`,168,y,{size:8,color:'#64748b',align:'right'})
-text(`${Number((item.qty||1)*(item.price||item.rate||0)).toLocaleString()} Ks`,pageWidth-margin,y,{size:8,style:'bold',align:'right'})
+text(money(item.price||item.rate||0),168,y,{size:8,color:'#64748b',align:'right'})
+text(money((item.qty||1)*(item.price||item.rate||0)),pageWidth-margin,y,{size:8,style:'bold',align:'right'})
 y+=rowHeight
 line(margin,y-3,pageWidth-margin,y-3,'#edf0f4',0.15)
 })
@@ -306,21 +310,21 @@ ensureSpace(27)
 y+=3
 const totalsX=142
 text('Subtotal',totalsX,y,{size:8,color:'#64748b'})
-text(`${subtotal.toLocaleString()} Ks`,pageWidth-margin,y,{size:8,align:'right'})
+text(money(subtotal),pageWidth-margin,y,{size:8,align:'right'})
 y+=6
 if(Number(invoice.discount||0)>0){
 text('Discount',totalsX,y,{size:8,color:'#64748b'})
-text(`-${Number(invoice.discount).toLocaleString()} Ks`,pageWidth-margin,y,{size:8,color:'#dc2626',align:'right'})
+text(`-${money(invoice.discount)}`,pageWidth-margin,y,{size:8,color:'#dc2626',align:'right'})
 y+=6
 }
 if(Number(invoice.taxRate||0)>0){
 text(`Tax (${invoice.taxRate}%)`,totalsX,y,{size:8,color:'#64748b'})
-text(`+${Math.round(subtotal*invoice.taxRate/100).toLocaleString()} Ks`,pageWidth-margin,y,{size:8,align:'right'})
+text(`+${money(Math.round(subtotal*invoice.taxRate/100))}`,pageWidth-margin,y,{size:8,align:'right'})
 y+=6
 }
 line(totalsX,y-2,pageWidth-margin,y-2,primary,0.6)
 text('Total',totalsX,y+4,{size:10,style:'bold'})
-text(`${Number(invoice.totalAmount||0).toLocaleString()} Ks`,pageWidth-margin,y+4,{size:10,style:'bold',color:primary,align:'right'})
+text(money(invoice.totalAmount||0),pageWidth-margin,y+4,{size:10,style:'bold',color:primary,align:'right'})
 y+=13
 
 // Payment methods
@@ -531,8 +535,8 @@ body{background:white!important;margin:0}
 {item.imageUrl&&<img src={item.imageUrl} style={{height:60,width:60,objectFit:'cover',borderRadius:6,marginTop:6,border:'0.5px solid #e2e8f0'}}/>}
 </td>
 <td style={{padding:'10px 8px',textAlign:'center',color:'#64748b',verticalAlign:'top'}}>{item.qty||1}</td>
-<td style={{padding:'10px 8px',textAlign:'right',color:'#64748b',verticalAlign:'top'}}>{Number(item.price||0).toLocaleString()} Ks</td>
-<td style={{padding:'10px 0',textAlign:'right',fontWeight:500,color:'#1a1d2e',verticalAlign:'top'}}>{Number((item.qty||1)*(item.price||0)).toLocaleString()} Ks</td>
+<td style={{padding:'10px 8px',textAlign:'right',color:'#64748b',verticalAlign:'top'}}>{money(item.price||0)}</td>
+<td style={{padding:'10px 0',textAlign:'right',fontWeight:500,color:'#1a1d2e',verticalAlign:'top'}}>{money((item.qty||1)*(item.price||0))}</td>
 </tr>
 ))}
 </tbody>
@@ -543,9 +547,9 @@ body{background:white!important;margin:0}
 <div style={{padding:'24px 40px',borderBottom:'0.5px solid #f1f5f9',display:'flex',justifyContent:'flex-end'}}>
 <div style={{minWidth:220,maxWidth:260}}>
 {[
-{label:'Subtotal',value:`${subtotal.toLocaleString()} Ks`},
-...(Number(invoice.discount||0)>0?[{label:'Discount',value:`-${Number(invoice.discount).toLocaleString()} Ks`,color:'#dc2626'}]:[]),
-...(Number(invoice.taxRate||0)>0?[{label:`Tax (${invoice.taxRate}%)`,value:`+${Math.round(subtotal*invoice.taxRate/100).toLocaleString()} Ks`}]:[]),
+{label:'Subtotal',value:money(subtotal)},
+...(Number(invoice.discount||0)>0?[{label:'Discount',value:`-${money(invoice.discount)}`,color:'#dc2626'}]:[]),
+...(Number(invoice.taxRate||0)>0?[{label:`Tax (${invoice.taxRate}%)`,value:`+${money(Math.round(subtotal*invoice.taxRate/100))}`}]:[]),
 ].map(({label,value,color})=>(
 <div key={label} style={{display:'flex',justifyContent:'space-between',padding:'5px 0',fontSize:13}}>
 <span style={{color:'#9aa0b4'}}>{label}</span>
@@ -554,7 +558,7 @@ body{background:white!important;margin:0}
 ))}
 <div style={{display:'flex',justifyContent:'space-between',padding:'10px 0 4px',fontSize:16,fontWeight:700,borderTop:`2px solid ${pc}`,marginTop:6}}>
 <span style={{color:'#1a1d2e'}}>Total</span>
-<span style={{color:pc}}>{Number(invoice.totalAmount||0).toLocaleString()} Ks</span>
+<span style={{color:pc}}>{money(invoice.totalAmount||0)}</span>
 </div>
 </div>
 </div>
@@ -619,19 +623,19 @@ body{background:white!important;margin:0}
 <td style={{padding:'7px 0',color:'#1a1d2e',fontWeight:500}}>{p.date||'-'}</td>
 <td style={{padding:'7px 8px',color:'#64748b'}}>{p.method||'-'}</td>
 <td style={{padding:'7px 8px',color:'#64748b'}}>{p.note||'-'}</td>
-<td style={{padding:'7px 0',textAlign:'right',fontWeight:600,color:'#16a34a'}}>{Number(p.amount||0).toLocaleString()} Ks</td>
+<td style={{padding:'7px 0',textAlign:'right',fontWeight:600,color:'#16a34a'}}>{money(p.amount||0)}</td>
 </tr>
 ))}
 </tbody>
 </table>
 <div style={{display:'flex',justifyContent:'space-between',padding:'10px 0 4px',marginTop:8,borderTop:`1px solid ${pc}30`,fontSize:13}}>
 <span style={{color:'#9aa0b4'}}>Total Paid</span>
-<span style={{fontWeight:700,color:'#16a34a'}}>{Number(invoice.paidAmount||0).toLocaleString()} Ks</span>
+<span style={{fontWeight:700,color:'#16a34a'}}>{money(invoice.paidAmount||0)}</span>
 </div>
 {Number(invoice.remainingAmount||0)>0&&(
 <div style={{display:'flex',justifyContent:'space-between',padding:'4px 0',fontSize:13}}>
 <span style={{color:'#9aa0b4'}}>Remaining</span>
-<span style={{fontWeight:700,color:'#d97706'}}>{Number(invoice.remainingAmount||0).toLocaleString()} Ks</span>
+<span style={{fontWeight:700,color:'#d97706'}}>{money(invoice.remainingAmount||0)}</span>
 </div>
 )}
 </div>
