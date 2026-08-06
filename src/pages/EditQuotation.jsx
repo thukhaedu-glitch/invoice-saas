@@ -5,6 +5,7 @@ import{ref,uploadBytes,getDownloadURL}from'firebase/storage'
 import{useNavigate,useParams}from'react-router-dom'
 import Layout from'../components/Layout'
 import{Plus,Trash2,Save,ArrowLeft,Image,X}from'lucide-react'
+import{resolveCurrency}from'../hooks/useCurrency'
 
 export default function EditQuotation(){
 const{id}=useParams()
@@ -14,6 +15,9 @@ const[customers,setCustomers]=useState([])
 const[saving,setSaving]=useState(false)
 const[uploadingIdx,setUploadingIdx]=useState(null)
 const[loading,setLoading]=useState(true)
+const[docCurrency,setDocCurrency]=useState(null)
+const currency=docCurrency||{code:'MMK',symbol:'Ks'}
+const money=value=>`${Number(value||0).toLocaleString()} ${currency.symbol}`
 const[form,setForm]=useState({
 clientName:'',clientEmail:'',clientPhone:'',clientAddress:'',
 quotationNumber:'',date:'',validUntil:'',
@@ -42,6 +46,7 @@ validUntil:q.validUntil||'',note:q.note||'',
 discount:q.discount||0,taxRate:q.taxRate||0,
 })
 setItems(q.items||[{desc:'',qty:1,price:0,imageUrl:''}])
+if(q.currencySymbol)setDocCurrency({code:q.currencyCode||'MMK',symbol:q.currencySymbol})
 }
 }
 setLoading(false)
@@ -88,11 +93,18 @@ const save=async()=>{
 if(!form.clientName||items.some(i=>!i.desc)){alert('Please fill required fields');return}
 setSaving(true)
 try{
+let finalCurrency=docCurrency
+if(!finalCurrency){
+const sSnap=await getDoc(doc(db,'companies',companyId,'_config','invoiceSettings'))
+finalCurrency=sSnap.exists()?resolveCurrency(sSnap.data()):{code:'MMK',symbol:'Ks'}
+}
 await updateDoc(doc(db,'companies',companyId,'quotations',id),{
 ...form,items,
 discount:Number(form.discount),
 taxRate:Number(form.taxRate),
 totalAmount:total,
+currencyCode:finalCurrency.code,
+currencySymbol:finalCurrency.symbol,
 updatedAt:serverTimestamp(),
 })
 navigate('/?tab=quotation')
@@ -158,7 +170,7 @@ return(
 <input className="form-input" type="number" value={item.qty} onChange={e=>updateItem(i,'qty',e.target.value)} style={{textAlign:'center'}}/>
 <input className="form-input" type="number" value={item.price} onChange={e=>updateItem(i,'price',e.target.value)} style={{textAlign:'right'}}/>
 <div className="form-input" style={{display:'flex',alignItems:'center',justifyContent:'flex-end',fontWeight:500,background:'white'}}>
-{(Number(item.qty||1)*Number(item.price||0)).toLocaleString()} Ks
+{money(Number(item.qty||1)*Number(item.price||0))}
 </div>
 <button type="button" onClick={()=>items.length>1&&setItems(items.filter((_,j)=>j!==i))} style={{background:'none',border:'none',cursor:'pointer',color:'var(--danger)',display:'flex',alignItems:'center',justifyContent:'center'}}>
 <Trash2 size={15}/>
@@ -197,7 +209,7 @@ return(
 </div>
 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
 <div>
-<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Discount (Ks)</label>
+<label style={{fontSize:12,fontWeight:500,color:'var(--text-2)',display:'block',marginBottom:4}}>Discount ({currency.symbol})</label>
 <input className="form-input" type="number" value={form.discount} onChange={e=>setForm(f=>({...f,discount:e.target.value}))} style={{textAlign:'right'}}/>
 </div>
 <div>
@@ -215,10 +227,10 @@ return(
 <div style={{fontWeight:700,fontSize:16,color:'var(--text-1)',marginTop:8}}>Total</div>
 </div>
 <div style={{textAlign:'right',minWidth:120}}>
-<div style={{marginBottom:4}}>{subtotal.toLocaleString()} Ks</div>
-<div style={{color:'var(--danger)',marginBottom:4}}>-{Number(form.discount).toLocaleString()} Ks</div>
-{form.taxRate>0&&<div style={{marginBottom:4}}>+{Math.round(tax).toLocaleString()} Ks</div>}
-<div style={{fontWeight:700,fontSize:16,marginTop:8}}>{Math.round(total).toLocaleString()} Ks</div>
+<div style={{marginBottom:4}}>{money(subtotal)}</div>
+<div style={{color:'var(--danger)',marginBottom:4}}>-{money(form.discount)}</div>
+{form.taxRate>0&&<div style={{marginBottom:4}}>+{money(Math.round(tax))}</div>}
+<div style={{fontWeight:700,fontSize:16,marginTop:8}}>{money(Math.round(total))}</div>
 </div>
 </div>
 </div>
