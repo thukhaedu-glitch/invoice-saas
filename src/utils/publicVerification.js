@@ -33,6 +33,8 @@ discount:Number(source.discount||0),
 taxRate:Number(source.taxRate||0),
 totalAmount:Number(source.totalAmount||0),
 value:Number(source.value||0),
+currencyCode:source.currencyCode||'MMK',
+currencySymbol:source.currencySymbol||'Ks',
 updatedAt:new Date().toISOString(),
 }
 await setDoc(doc(db,'publicVerifications',verificationId(companyId,source.securityCode)),data,{merge:true})
