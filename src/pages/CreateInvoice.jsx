@@ -7,11 +7,14 @@ import { Plus, Trash2, Save, ArrowLeft, Image, X, RefreshCcw } from 'lucide-reac
 import { collection, addDoc, getDocs, query, where, serverTimestamp, getDoc, doc } from 'firebase/firestore'
 import { logAction } from '../utils/auditLog'
 import { usePlans } from '../hooks/usePlans'
+import { useCurrency } from '../hooks/useCurrency'
 
 export default function CreateInvoice() {
   const navigate = useNavigate()
   const { canAdd, getLimit, planLabel } = usePlans()
   const [companyId, setCompanyId] = useState(null)
+  const currency = useCurrency(companyId)
+  const money = value => `${Number(value || 0).toLocaleString()} ${currency.symbol}`
   const [plan, setPlan] = useState('free')
   const [docCount, setDocCount] = useState(0)
   const [customers, setCustomers] = useState([])
@@ -115,6 +118,8 @@ export default function CreateInvoice() {
         discount: Number(form.discount),
         taxRate: Number(form.taxRate),
         totalAmount: total,
+        currencyCode: currency.code,
+        currencySymbol: currency.symbol,
         status,
         payments: [],
         securityCode: 'SEC-' + Math.random().toString(36).substring(2, 8).toUpperCase(),
@@ -126,12 +131,12 @@ export default function CreateInvoice() {
 
       await logAction(companyId, {
         action: 'create', module: 'invoices',
-        description: `Created invoice: ${form.invoiceNumber} — ${form.clientName} — ${total.toLocaleString()} Ks`,
+        description: `Created invoice: ${form.invoiceNumber} — ${form.clientName} — ${money(total)}`,
         metadata: { invoiceId: docRef.id, invoiceNumber: form.invoiceNumber, amount: total, status },
       })
 
       if (needsApproval) {
-        alert(`Invoice created! Amount ${total.toLocaleString()} Ks exceeds threshold — Owner approval required.`)
+        alert(`Invoice created! Amount ${money(total)} exceeds threshold — Owner approval required.`)
       }
       navigate('/')
     } catch (e) { alert(e.message) }
@@ -203,12 +208,12 @@ export default function CreateInvoice() {
                 <input className="form-input" value={item.desc} onChange={e => updateItem(i, 'desc', e.target.value)} placeholder="Description *" />
                 <input className="form-input" type="number" value={item.qty} onChange={e => updateItem(i, 'qty', e.target.value)} style={{ textAlign: 'center' }} placeholder="Qty" />
                 <input className="form-input" type="number" value={item.price} onChange={e => updateItem(i, 'price', e.target.value)} style={{ textAlign: 'right' }} placeholder="Price" />
-                <div className="form-input item-total" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', fontWeight: 500, background: 'white' }}>{(item.qty * item.price).toLocaleString()} Ks</div>
+                <div className="form-input item-total" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', fontWeight: 500, background: 'white' }}>{money(item.qty * item.price)}</div>
                 <button type="button" onClick={() => items.length > 1 && setItems(items.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Trash2 size={15} />
                 </button>
               </div>
-              <div className="mobile-item-total" style={{ display: 'none', fontSize: 12, fontWeight: 600, color: 'var(--primary)', textAlign: 'right', marginBottom: 6 }}>Total: {(item.qty * item.price).toLocaleString()} Ks</div>
+              <div className="mobile-item-total" style={{ display: 'none', fontSize: 12, fontWeight: 600, color: 'var(--primary)', textAlign: 'right', marginBottom: 6 }}>Total: {money(item.qty * item.price)}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 {item.imageUrl ? (
                   <div style={{ position: 'relative', display: 'inline-block' }}>
@@ -243,7 +248,7 @@ export default function CreateInvoice() {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               <div>
-                <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-2)', display: 'block', marginBottom: 4 }}>Discount (Ks)</label>
+                <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-2)', display: 'block', marginBottom: 4 }}>Discount ({currency.symbol})</label>
                 <input className="form-input" type="number" value={form.discount} onChange={e => setForm(f => ({ ...f, discount: e.target.value }))} style={{ textAlign: 'right' }} />
               </div>
               <div>
@@ -261,10 +266,10 @@ export default function CreateInvoice() {
                 <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-1)', marginTop: 8 }}>Total</div>
               </div>
               <div style={{ textAlign: 'right', minWidth: 120 }}>
-                <div style={{ marginBottom: 4 }}>{subtotal.toLocaleString()} Ks</div>
-                <div style={{ color: 'var(--danger)', marginBottom: 4 }}>-{Number(form.discount).toLocaleString()} Ks</div>
-                {form.taxRate > 0 && <div style={{ marginBottom: 4 }}>+{tax.toLocaleString()} Ks</div>}
-                <div style={{ fontWeight: 700, fontSize: 16, marginTop: 8 }}>{total.toLocaleString()} Ks</div>
+                <div style={{ marginBottom: 4 }}>{money(subtotal)}</div>
+                <div style={{ color: 'var(--danger)', marginBottom: 4 }}>-{money(form.discount)}</div>
+                {form.taxRate > 0 && <div style={{ marginBottom: 4 }}>+{money(tax)}</div>}
+                <div style={{ fontWeight: 700, fontSize: 16, marginTop: 8 }}>{money(total)}</div>
               </div>
             </div>
           </div>
