@@ -63,6 +63,13 @@ if(sSnap.exists())setSettings(s=>({...s,...sSnap.data()}))
 load()
 },[])
 
+useEffect(()=>{
+const codes=(settings.currencies||[]).map(c=>c.code).filter(Boolean)
+if(codes.length>0&&!codes.includes(settings.baseCurrency)){
+setSettings(s=>({...s,baseCurrency:codes[0]}))
+}
+},[settings.currencies])
+
 const save=async()=>{
 setSaving(true)
 await setDoc(doc(db,'companies',companyId,'_config','invoiceSettings'),settings)
